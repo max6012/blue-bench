@@ -1,0 +1,44 @@
+# ── Python runtime / build ──────────────────────────────────────
+__pycache__/
+*.pyc
+*.egg-info/
+.venv/
+build/
+dist/
+.pytest_cache/
+
+# ── OS / editor cruft ───────────────────────────────────────────
+.DS_Store
+.vscode/
+.idea/
+
+# ── Secrets / env ───────────────────────────────────────────────
+*.env
+.env
+.env.*
+# Allow the template through — it ships without secrets.
+!.env.example
+
+# ── Agent / assistant state (personal to contributor) ──────────
+.claude/
+.plandb.db
+CLAUDE.md
+
+# ── Internal planning, design specs, board narrative ───────────
+# Anything under docs/internal/ is private and must not be published.
+docs/internal/
+
+# ── Run artifacts ──────────────────────────────────────────────
+# Scored traces, BLUFs, and run metadata reference scenario-specific
+# answers (ground truth) and judging justifications. Never publish.
+results/
+
+# ── Data / evidence / forensic samples ─────────────────────────
+# Raw telemetry and forensic samples may carry licensing constraints
+# (AIT-ADS, Brim, NIST CFReDS) and are not redistributed by this repo.
+data/raw/
+data/evidence/
+
+# ── Model weights ──────────────────────────────────────────────
+models/
+*.gguf

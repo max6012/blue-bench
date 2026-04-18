@@ -1,0 +1,61 @@
+name: phase2
+version: 1
+description: |
+  Phase 2 scoring rubric for Blue-Bench. Applied by Claude (not self-scoring)
+  to each trace produced by blue_bench_eval.qualify. Four dimensions, each
+  scored 0-3; aggregation produces overall %, tool usage %, findings %, and
+  a categorical PASS/PARTIAL/FAIL per prompt.
+
+threshold:
+  overall_pct: 80
+  tool_usage_pct: 85
+  findings_pct: 95
+
+dimensions:
+  tool_usage:
+    description: Were the expected tool categories invoked, in a reasonable order, with reasonable arguments?
+    scale:
+      0: No expected tool was called, OR every call failed, OR the model hallucinated a tool that doesn't exist.
+      1: At least one expected tool was called but most were skipped, OR excessive redundant calls (same tool >3× with no new information).
+      2: Most expected tools called; arguments mostly correct; no catastrophic misuse. Minor order issues OK.
+      3: All expected tools called in a sensible order with well-formed arguments. No redundant looping. Tool chaining where the question called for it.
+
+  findings:
+    description: Did the final answer identify the correct security findings? Scored against the prompt's expected_findings synonym sets.
+    scale:
+      0: Core finding missed entirely, OR a material hallucination (fabricated IP/hostname/CVE presented as real).
+      1: Some findings identified but primary conclusion wrong or critically incomplete.
+      2: Primary finding correct; one or more secondary findings missed or unclear.
+      3: All expected finding synonym sets matched in the answer (fuzzy match against the synonym list). No hallucinations.
+
+  reasoning:
+    description: Is the analysis coherent, well-structured, and appropriately cautious where data is thin?
+    scale:
+      0: Incoherent, contradictory, or wild speculation with no grounding in tool output.
+      1: Reasoning present but jumps conclusions or ignores tool output that contradicts it.
+      2: Sound reasoning; minor gaps or over-reach; mostly grounded in tool output.
+      3: Tight, well-sourced reasoning. Tool outputs cited inline. Uncertainty surfaced where appropriate.
+
+  response_quality:
+    description: Does the response follow the prompt_style from the profile (terse vs verbose) and actually deliver what the analyst asked for?
+    scale:
+      0: Didn't answer the question, OR massively over/under-length for the profile style.
+      1: Answered tangentially OR style-mismatched.
+      2: Answered the question; style roughly matches profile.
+      3: Directly answers the question; style matches profile exactly; actionable and appropriately complete.
+
+aggregation:
+  # Per-prompt: each dimension scored 0-3 → dimension_pct = (score / 3) * 100.
+  # Overall per prompt: simple average of the 4 dimension percentages.
+  # Corpus percentages: arithmetic mean across prompts per dimension.
+  # Categorical verdict per prompt:
+  verdict:
+    PASS: all dimensions ≥ 2 AND tool_usage ≥ 2 AND findings ≥ 2
+    PARTIAL: no dimension is 0 AND at least one dimension is 1
+    FAIL: any dimension is 0 OR tool_usage == 0 OR findings == 0
+
+notes:
+  - Findings synonyms are fuzzy-matched (substring match, case-insensitive). A match anywhere in the final_answer counts.
+  - Tool usage does NOT penalize calling extra tools beyond expected — it penalizes missing expected tools and redundant looping.
+  - Hallucinated tools (tools not in the registered set) score 0 on tool_usage automatically.
+  - The judge (Claude) writes per-dimension justifications in the scored JSON so every number has a cited reason. Prevents inflation.

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blue-Bench — Analyst Console</title>
+    <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-dot"></span>
+            <h1>Blue-Bench <span class="brand-sub">Analyst Console</span></h1>
+        </div>
+        <div class="topbar-status" id="status-line">
+            <span class="chip chip-muted" id="status-mcp">MCP: idle</span>
+            <span class="chip chip-muted" id="status-model">Model: idle</span>
+        </div>
+    </header>
+
+    <section class="config-panel" aria-label="endpoint configuration">
+        <button class="config-toggle" id="config-toggle" aria-expanded="true">
+            <span class="caret">&#x25BE;</span> Endpoints
+        </button>
+        <div class="config-body" id="config-body">
+            <div class="config-row">
+                <label for="cfg-mcp">MCP server</label>
+                <input type="url" id="cfg-mcp" spellcheck="false" />
+            </div>
+            <div class="config-row">
+                <label for="cfg-ollama">Ollama</label>
+                <input type="url" id="cfg-ollama" spellcheck="false" />
+            </div>
+            <div class="config-row">
+                <label for="cfg-anthropic">Anthropic proxy</label>
+                <input type="url" id="cfg-anthropic" spellcheck="false" />
+            </div>
+            <div class="config-row config-actions">
+                <button id="cfg-save" class="btn btn-primary">Save &amp; reconnect</button>
+                <button id="cfg-reset" class="btn btn-ghost">Reset</button>
+            </div>
+        </div>
+    </section>
+
+    <div id="banner" class="banner" hidden></div>
+
+    <main class="layout">
+        <section class="col col-main">
+            <div class="controls">
+                <div class="control-group">
+                    <label for="profile-select">Profile</label>
+                    <select id="profile-select"></select>
+                </div>
+                <div class="control-group" id="model-override-group" hidden>
+                    <label for="model-override">Model override</label>
+                    <input
+                        id="model-override"
+                        list="ollama-models"
+                        placeholder="(use profile default)"
+                        spellcheck="false"
+                    />
+                    <datalist id="ollama-models"></datalist>
+                </div>
+                <div class="control-group control-profile-meta">
+                    <div class="meta-line" id="profile-meta"></div>
+                </div>
+            </div>
+
+            <div class="conversation" id="conversation" aria-live="polite"></div>
+
+            <div class="suggestions" id="suggestions" hidden>
+                <span class="suggestions-label">Try one:</span>
+                <div class="suggestions-list" id="suggestions-list"></div>
+            </div>
+
+            <form class="prompt-row" id="prompt-form">
+                <textarea
+                    id="prompt-input"
+                    rows="2"
+                    placeholder="Ask the analyst… (enter to run, shift+enter for newline, esc to stop)"
+                    autofocus
+                ></textarea>
+                <div class="prompt-actions">
+                    <button type="submit" id="run-btn" class="btn btn-primary">Run</button>
+                    <button type="button" id="stop-btn" class="btn btn-danger" hidden>
+                        <span class="spinner"></span> Stop
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <aside class="col col-side">
+            <div class="side-card">
+                <header class="side-header">
+                    <h2>Tool categories</h2>
+                    <button id="tools-refresh" class="btn btn-ghost btn-sm" title="Refresh">&#x27F3;</button>
+                </header>
+                <p class="muted side-hint" id="category-hint">
+                    Check the tools you plan to use — suggestions below will filter to match.
+                </p>
+                <ul class="category-list" id="category-list"></ul>
+                <p class="muted" id="tool-status" hidden>Connecting…</p>
+            </div>
+        </aside>
+    </main>
+
+    <footer class="footbar">
+        <span id="progress-note" class="muted"></span>
+    </footer>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>

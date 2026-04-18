@@ -1,0 +1,16 @@
+id: p2-07
+category: recon
+archive_id: 21
+title: Targeted port scan
+question: |
+  We suspect the compromised host 10.10.5.22 is running a backdoor listener. Scan it for open ports — check the full range, not just the top 100. What services are exposed?
+expected_tools:
+  - nmap_scan
+expected_findings:
+  - synonyms: ["10.10.5.22"]
+  - synonyms: ["port", "ports"]
+  - synonyms: ["open"]
+  - synonyms: ["service", "services"]
+pass_criteria: Uses nmap_scan with a custom port range (not just quick_scan) and identifies open services
+tags: [Recon, nmap]
+max_turns: 10

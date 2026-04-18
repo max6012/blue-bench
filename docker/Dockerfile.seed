@@ -1,0 +1,5 @@
+# ES seed job — loads Blue-Bench Phase 2 sample data into Elasticsearch.
+FROM python:3.12-slim
+RUN pip install --no-cache-dir httpx
+COPY docker/seed_elasticsearch.py /seed.py
+ENTRYPOINT ["python", "/seed.py"]

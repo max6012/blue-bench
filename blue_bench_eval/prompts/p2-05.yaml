@@ -1,0 +1,18 @@
+id: p2-05
+category: account
+archive_id: 11
+title: SSH brute force investigation
+question: |
+  Wazuh is showing repeated SSH login failures on web-server-01. Is this a brute force attack? Has anyone succeeded in logging in?
+expected_tools:
+  - get_agent_alerts
+  - wazuh_list_agents
+expected_findings:
+  - synonyms: ["web-server-01"]
+  - synonyms: ["SSH", "sshd"]
+  - synonyms: ["brute force", "bruteforce", "brute-force", "credential stuffing"]
+  - synonyms: ["non-existent user", "invalid user", "failed login"]
+  - synonyms: ["login", "authentication", "PAM"]
+pass_criteria: Identifies the brute force pattern (8 failed logins) and checks whether any login succeeded (PAM login opened)
+tags: [TH, account]
+max_turns: 10

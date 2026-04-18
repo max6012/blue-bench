@@ -1,0 +1,17 @@
+id: p2-10
+category: forensic
+archive_id: 32
+title: Malware string analysis
+question: |
+  We've got a suspicious executable called suspicious_beacon.exe in our forensic samples. Can you identify what kind of file it is and pull any readable indicators from it — I'm looking for C2 addresses, commands, or persistence mechanisms.
+expected_tools:
+  - file_metadata
+  - strings_extract
+expected_findings:
+  - synonyms: ["PE", "PE file", "Portable Executable", "MZ"]
+  - synonyms: ["203.0.113.45"]
+  - synonyms: ["beacon", "beaconing"]
+  - synonyms: ["C2", "command and control"]
+pass_criteria: Identifies the file as a PE executable and surfaces readable indicators (C2 IP/URL, commands, and/or persistence mechanisms) from the binary.
+tags: [FR, forensic, malware-triage, rewrite1]
+max_turns: 10

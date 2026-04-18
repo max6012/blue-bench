@@ -1,0 +1,19 @@
+name: claude-opus-4-7
+model_id: claude-opus-4-7
+tool_protocol: anthropic-native
+prompt_style: terse
+context_size: 200000
+generation: {}
+coaching_hints:
+  - Frontier cloud model. Minimal coaching; Blue-Bench-specific context only.
+  - Higher reasoning budget than Sonnet; appropriate for correlation-heavy prompts.
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+  - correlation
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+  coaching: claude.md

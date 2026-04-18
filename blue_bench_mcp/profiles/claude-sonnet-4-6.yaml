@@ -1,0 +1,22 @@
+name: claude-sonnet-4-6
+model_id: claude-sonnet-4-6
+tool_protocol: anthropic-native
+prompt_style: terse
+context_size: 200000
+generation:
+  temperature: 0.3
+  top_p: 0.9
+coaching_hints:
+  - Frontier cloud model. Minimal coaching; Blue-Bench-specific context only.
+  - Tool-calling works through the Anthropic Messages API's structured tool_use blocks.
+  - Free to extend investigation across multiple tools; higher context budget than local models.
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+  - correlation
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+  coaching: claude.md

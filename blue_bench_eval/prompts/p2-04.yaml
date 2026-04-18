@@ -1,0 +1,18 @@
+id: p2-04
+category: lateral
+archive_id: 9
+title: Internal scanning detection
+question: |
+  I see SSH scan alerts from 10.10.3.15. What hosts were targeted and on what ports? Is this an internal threat?
+expected_tools:
+  - search_alerts
+  - get_connections
+expected_findings:
+  - synonyms: ["10.10.3.15"]
+  - synonyms: ["scan", "scanning", "port scan"]
+  - synonyms: ["3389", "RDP", "remote desktop"]
+  - synonyms: ["80", "HTTP"]
+  - synonyms: ["internal", "internal-to-internal", "east-west"]
+pass_criteria: Identifies scanning activity from 10.10.3.15 and notes targeted ports including RDP (3389)
+tags: [TH, lateral, iter3]
+max_turns: 10

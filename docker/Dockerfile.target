@@ -1,0 +1,26 @@
+# Nmap target — simple multi-service host with known open ports for p2-07.
+# Aliased as 10.10.5.22 on the blue-bench network so nmap scans look realistic.
+#
+# Exposed ports (intentionally):
+#   22    SSH       (OpenSSH)
+#   80    HTTP      (nginx default page)
+#   8080  HTTP-alt  (simple python http server serving /srv)
+#
+# This is deliberately not hardened. Do NOT expose outside the docker network.
+
+FROM alpine:3.20
+
+RUN apk add --no-cache openssh-server nginx bash python3 \
+ && ssh-keygen -A \
+ && adduser -D -s /bin/bash scanme \
+ && echo "scanme:scanme" | chpasswd \
+ && mkdir -p /run/nginx /srv /usr/share/nginx/html \
+ && echo "Blue-Bench nmap target — services on 22/80/8080" > /srv/index.html \
+ && echo "welcome to nmap target" > /usr/share/nginx/html/index.html
+
+COPY docker/target_entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 22 80 8080
+
+ENTRYPOINT ["/entrypoint.sh"]

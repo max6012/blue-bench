@@ -1,0 +1,19 @@
+id: p2-02
+category: malware
+archive_id: 4
+title: C2 beacon investigation
+question: |
+  Suricata flagged Cobalt Strike beacon activity. Investigate the source host and the C2 server. What's the full picture?
+expected_tools:
+  - search_alerts
+  - get_connections
+  - count_by_field
+expected_findings:
+  - synonyms: ["10.10.5.22"]
+  - synonyms: ["203.0.113.45"]
+  - synonyms: ["beacon", "beaconing", "periodic callback"]
+  - synonyms: ["port 443", "443/tcp", ":443", "HTTPS"]
+  - synonyms: ["multiple connections", "repeated connections", "persistent connections"]
+pass_criteria: Maps the C2 relationship 10.10.5.22 -> 203.0.113.45 and identifies the beacon pattern
+tags: [TH, malware, c2]
+max_turns: 10

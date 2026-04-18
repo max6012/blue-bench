@@ -1,0 +1,21 @@
+# Exclude from docker build context — keeps image lean and avoids leaking secrets.
+.git
+.github
+.venv
+.env
+.envrc
+.claude
+.plandb.db
+.pytest_cache
+.mypy_cache
+__pycache__
+*.pyc
+*.pyo
+results/
+data/raw/
+data/evidence/
+docs/internal/
+build/
+dist/
+*.egg-info
+.DS_Store

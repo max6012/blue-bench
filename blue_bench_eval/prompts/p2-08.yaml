@@ -1,0 +1,23 @@
+id: p2-08
+category: correlation
+archive_id: 18
+title: Full incident timeline
+question: |
+  Build me a timeline of the entire incident involving 10.10.5.22. Pull from every relevant data source we have — network, endpoint, host — and correlate them to reconstruct the attack chain from initial compromise to data exfiltration.
+expected_tools:
+  - search_alerts
+  - get_connections
+  - get_agent_alerts
+  - get_detections
+expected_findings:
+  - synonyms: ["10.10.5.22"]
+  - synonyms: ["Cobalt Strike", "cobaltstrike"]
+  - synonyms: ["C2", "command and control"]
+  - synonyms: ["203.0.113.45"]
+  - synonyms: ["DNS tunnel", "DNS tunneling", "TXT exfil"]
+  - synonyms: ["exfiltration", "exfil", "data exfil"]
+  - synonyms: ["198.51.100.77"]
+  - synonyms: ["timeline", "attack chain", "sequence"]
+pass_criteria: Reconstructs the attack chain across all four data sources — initial compromise → C2 → DNS tunnel → exfil
+tags: [Correlation, multi-source, rewrite1]
+max_turns: 15

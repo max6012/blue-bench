@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "prompts": [
+    {
+      "id": "p2-01",
+      "category": "triage",
+      "title": "Initial alert triage",
+      "question": "I just started my shift. What's the current alert situation look like? I want the severity breakdown and what's the most urgent thing I need to look at first.",
+      "expected_tools": [
+        "search_alerts",
+        "count_by_field"
+      ],
+      "tags": [
+        "triage",
+        "TH",
+        "aggregation",
+        "rewrite1",
+        "iter3"
+      ]
+    },
+    {
+      "id": "p2-02",
+      "category": "malware",
+      "title": "C2 beacon investigation",
+      "question": "Suricata flagged Cobalt Strike beacon activity. Investigate the source host and the C2 server. What's the full picture?",
+      "expected_tools": [
+        "search_alerts",
+        "get_connections",
+        "count_by_field"
+      ],
+      "tags": [
+        "TH",
+        "malware",
+        "c2"
+      ]
+    },
+    {
+      "id": "p2-03",
+      "category": "exfil",
+      "title": "Data exfiltration assessment",
+      "question": "Alert says 'Possible Data Exfiltration - Large Outbound Transfer' from 10.10.5.22 to 198.51.100.77. How much data was transferred? Is this related to the C2 activity?",
+      "expected_tools": [
+        "search_alerts",
+        "get_connections"
+      ],
+      "tags": [
+        "TH",
+        "exfil"
+      ]
+    },
+    {
+      "id": "p2-04",
+      "category": "lateral",
+      "title": "Internal scanning detection",
+      "question": "I see SSH scan alerts from 10.10.3.15. What hosts were targeted and on what ports? Is this an internal threat?",
+      "expected_tools": [
+        "search_alerts",
+        "get_connections"
+      ],
+      "tags": [
+        "TH",
+        "lateral",
+        "iter3"
+      ]
+    },
+    {
+      "id": "p2-05",
+      "category": "account",
+      "title": "SSH brute force investigation",
+      "question": "Wazuh is showing repeated SSH login failures on web-server-01. Is this a brute force attack? Has anyone succeeded in logging in?",
+      "expected_tools": [
+        "get_agent_alerts",
+        "wazuh_list_agents"
+      ],
+      "tags": [
+        "TH",
+        "account"
+      ]
+    },
+    {
+      "id": "p2-06",
+      "category": "detection",
+      "title": "Sigma rule for C2 beacons",
+      "question": "I need a Sigma rule to detect the Cobalt Strike beacon pattern we just identified \u2014 regular HTTPS connections to 203.0.113.45 on port 443. Make sure it's a valid, deployable rule.",
+      "expected_tools": [
+        "validate_sigma_rule"
+      ],
+      "tags": [
+        "DR",
+        "detection-engineering",
+        "sigma",
+        "g4-known-weakness",
+        "rewrite1"
+      ]
+    },
+    {
+      "id": "p2-07",
+      "category": "recon",
+      "title": "Targeted port scan",
+      "question": "We suspect the compromised host 10.10.5.22 is running a backdoor listener. Scan it for open ports \u2014 check the full range, not just the top 100. What services are exposed?",
+      "expected_tools": [
+        "nmap_scan"
+      ],
+      "tags": [
+        "Recon",
+        "nmap"
+      ]
+    },
+    {
+      "id": "p2-08",
+      "category": "correlation",
+      "title": "Full incident timeline",
+      "question": "Build me a timeline of the entire incident involving 10.10.5.22. Pull from every relevant data source we have \u2014 network, endpoint, host \u2014 and correlate them to reconstruct the attack chain from initial compromise to data exfiltration.",
+      "expected_tools": [
+        "search_alerts",
+        "get_connections",
+        "get_agent_alerts",
+        "get_detections"
+      ],
+      "tags": [
+        "Correlation",
+        "multi-source",
+        "rewrite1"
+      ]
+    },
+    {
+      "id": "p2-09",
+      "category": "forensic",
+      "title": "Evidence inventory and integrity",
+      "question": "IR team just dropped off forensic evidence. Can you catalog what we received, and get integrity hashes for suspicious_beacon.exe so we can submit for IOC matching?",
+      "expected_tools": [
+        "list_evidence",
+        "file_hash"
+      ],
+      "tags": [
+        "FR",
+        "forensic",
+        "filesystem",
+        "rewrite1"
+      ]
+    },
+    {
+      "id": "p2-10",
+      "category": "forensic",
+      "title": "Malware string analysis",
+      "question": "We've got a suspicious executable called suspicious_beacon.exe in our forensic samples. Can you identify what kind of file it is and pull any readable indicators from it \u2014 I'm looking for C2 addresses, commands, or persistence mechanisms.",
+      "expected_tools": [
+        "file_metadata",
+        "strings_extract"
+      ],
+      "tags": [
+        "FR",
+        "forensic",
+        "malware-triage",
+        "rewrite1"
+      ]
+    }
+  ]
+}

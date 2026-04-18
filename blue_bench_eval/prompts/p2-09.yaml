@@ -1,0 +1,17 @@
+id: p2-09
+category: forensic
+archive_id: 31
+title: Evidence inventory and integrity
+question: |
+  IR team just dropped off forensic evidence. Can you catalog what we received, and get integrity hashes for suspicious_beacon.exe so we can submit for IOC matching?
+expected_tools:
+  - list_evidence
+  - file_hash
+expected_findings:
+  - synonyms: ["evidence", "evidence files"]
+  - synonyms: ["hash", "hashes", "digest"]
+  - synonyms: ["MD5", "md5"]
+  - synonyms: ["SHA", "sha256", "sha1", "SHA-256"]
+pass_criteria: Enumerates the available evidence files and produces at least one integrity hash of suspicious_beacon.exe suitable for IOC submission.
+tags: [FR, forensic, filesystem, rewrite1]
+max_turns: 10

@@ -1,0 +1,24 @@
+name: gemma3-tools-12b
+model_id: bluebench/gemma3-tools:12b
+tool_protocol: text-embedded
+prompt_style: verbose-ok
+context_size: 131072
+generation:
+  temperature: 0.2
+  top_p: 0.95
+  top_k: 64
+coaching_hints:
+  - This variant is fine-tuned to emit JSON tool calls. Format is exact — one JSON object per call.
+  - No preamble when calling a tool. Emit the JSON directly. Reasoning comes AFTER tool results arrive.
+  - Prefer aggregation (count_by_field, top-N) over raw reads during triage.
+  - Validate Sigma/YARA syntax against the published schema before returning rules.
+  - Chain tools across three-plus data sources for correlation prompts.
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+  coaching: gemma3-tools.md

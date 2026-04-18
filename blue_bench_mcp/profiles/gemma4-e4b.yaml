@@ -1,0 +1,24 @@
+name: gemma4-e4b
+model_id: gemma4:e4b
+tool_protocol: native
+prompt_style: terse
+context_size: 131072
+generation:
+  temperature: 0.3
+  top_p: 0.9
+  top_k: 64
+coaching_hints:
+  - For Sigma rules, use published keys only (logsource, detection, condition) — do not invent block names like exclude_if or filter_by
+  - For YARA rules, include required imports (pe, hash, math) explicitly and validate syntax before returning
+  - Flag data inconsistencies honestly (timestamps, source mismatches) rather than fabricating around them
+  - Prefer aggregation (count_by_field, top-N) over reading raw alerts during triage
+  - Chain tools across at least three data sources for correlation prompts
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+  coaching: gemma4.md

@@ -1,0 +1,22 @@
+# Blue-Bench — dev / MVP aggregator compose
+#
+# Brings up all three tiers on a single dev host with one command:
+#   docker compose -f docker/compose.all.yml up -d
+#
+# This file uses the `include:` feature (Docker Compose v2.20+) to pull in
+# each tier's self-contained compose file. Each tier keeps its own networks,
+# volumes, and service definitions — `include:` does not merge them into a
+# single network. If you want cross-tier service DNS on a shared dev host,
+# colocate explicitly via the `blue-bench-llm-net` network or use host
+# networking.
+#
+# Minimum Docker Compose version: 2.20.
+#
+# For production, do NOT use this file — deploy each tier independently via
+# its own compose file onto its appropriate host type (CPU for tools, GPU
+# for LLM, static host / CDN for frontend).
+
+include:
+  - path: compose.tools.yml
+  - path: compose.llm.yml
+  - path: compose.frontend.yml

@@ -1,0 +1,17 @@
+id: p2-06
+category: detection
+archive_id: 15
+title: Sigma rule for C2 beacons
+question: |
+  I need a Sigma rule to detect the Cobalt Strike beacon pattern we just identified — regular HTTPS connections to 203.0.113.45 on port 443. Make sure it's a valid, deployable rule.
+expected_tools:
+  - validate_sigma_rule
+expected_findings:
+  - synonyms: ["title:", "title"]
+  - synonyms: ["logsource:", "logsource"]
+  - synonyms: ["detection:", "detection"]
+  - synonyms: ["443"]
+  - synonyms: ["Cobalt Strike", "cobaltstrike", "cobalt-strike"]
+pass_criteria: Produces a syntactically valid, deployable Sigma rule targeting the observed C2 pattern, with the validation step completed (the validator reports VALID).
+tags: [DR, detection-engineering, sigma, g4-known-weakness, rewrite1]
+max_turns: 10

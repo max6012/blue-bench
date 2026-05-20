@@ -1,0 +1,68 @@
+name: phase1
+version: 1
+prompt_prefix: "p1-"
+description: |
+  Phase 1 scoring rubric — no-tool prompts evaluated on 5 dimensions.
+  Data is embedded in the question; the model produces a written analysis.
+  Scored by Claude judge, not self-scoring.
+
+threshold:
+  overall_pct: 74
+  technical_accuracy_pct: 70
+  operational_utility_pct: 70
+
+key_dimensions:
+  - technical_accuracy
+  - operational_utility
+
+dimensions:
+  technical_accuracy:
+    description: Are the facts, syntax (for rule prompts), and logical conclusions correct?
+    scale:
+      0: Fundamentally wrong — incorrect facts, invalid syntax, broken logic, or wrong technique IDs.
+      1: Partially correct — major errors (wrong IP, wrong technique, invalid YAML/YARA syntax) but some correct elements.
+      2: Mostly correct — minor factual errors or syntax issues that wouldn't prevent use with small corrections.
+      3: Fully correct — facts, syntax, and technique IDs all accurate. Rule prompts produce valid, deployable output.
+
+  completeness:
+    description: Does the response address all required aspects of the prompt?
+    scale:
+      0: Addresses less than 25% of what was asked.
+      1: Addresses 25-75% — misses key sections (e.g., persistence skipped in FR-1, no false positive assessment in TH-2).
+      2: Addresses 75-95% — minor gaps (e.g., misses one of three finding categories, omits one remediation step).
+      3: Addresses 100% of the prompt — all sections present and substantive.
+
+  operational_utility:
+    description: Could a real analyst use this output as-is, or with only minor editing?
+    scale:
+      0: Not usable — requires full rewrite, or output is actively misleading.
+      1: Usable after major edits — significant gaps or incorrect guidance that would require substantial correction.
+      2: Usable after minor edits — mostly solid, small corrections needed.
+      3: Analyst-ready — could be used directly in a report or deployed (for rule prompts) without edits.
+
+  reasoning_quality:
+    description: Is the analytical thinking sound, well-structured, and appropriately cautious?
+    scale:
+      0: Incoherent, contradictory, or wild speculation with no grounding in the provided data.
+      1: Reasoning present but jumps to conclusions, ignores contradictory evidence, or mixes benign and malicious indicators carelessly.
+      2: Sound reasoning with minor gaps — generally grounded in provided data, minor over-reach.
+      3: Tight, well-sourced reasoning — evidence cited inline, uncertainty flagged where data is ambiguous, conclusions follow logically.
+
+  hallucination_rate:
+    description: Did the model fabricate data not present in the provided input (IPs, CVEs, tool names, registry keys, etc.)?
+    scale:
+      0: Severe fabrication — invented IPs, CVEs, file paths, or tool names presented as fact.
+      1: Significant fabrication — one or more invented facts that would materially mislead an analyst.
+      2: Minor fabrication — one invented detail, clearly peripheral, would not mislead.
+      3: No hallucinations — all facts grounded in the provided data or well-established knowledge.
+
+aggregation:
+  verdict:
+    PASS: all dimensions >= 2 AND technical_accuracy >= 2 AND operational_utility >= 2
+    PARTIAL: no dimension is 0 AND at least one dimension is 1
+    FAIL: any dimension is 0
+
+notes:
+  - Phase 1 prompts have no tool calls. expected_tools is always empty.
+  - The hallucination_rate dimension is inverted (3=no hallucinations, 0=severe) consistent with Phase 2 treatment.
+  - For detection rule prompts (DR-1, DR-2, DR-3), technical_accuracy covers syntax validity as well as correctness.

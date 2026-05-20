@@ -1,0 +1,189 @@
+# Blue-Bench Tier 1 — tool tier
+#
+# Services:
+#   mcp            :8765  — Blue-Bench MCP server (SSE transport, tool surface)
+#   elasticsearch  :9200  — search_alerts, count_by_field, get_connections, get_agent_alerts (ES fallback)
+#   wazuh          :55000 — wazuh_list_agents, get_agent_alerts (primary)
+#   openedr        :9443  — get_detections (FastAPI mock)
+#   target         (internal, aliased as 10.10.5.22) — nmap_scan target
+#   scanner        (internal) — long-running nmap sidecar (unused when `mcp` runs in-network)
+#   seed           (profile: seed) — one-shot Elasticsearch seeder
+#
+# Scope: Tier 1 is the MCP server + its backend data stores. Independently
+# deployable to a CPU host. The LLM tier (Ollama + Anthropic proxy) and the
+# frontend tier (nginx) live in separate compose files and are reached by
+# the browser / clients directly over the network — no shared compose network.
+#
+# Usage:
+#   docker compose -f docker/compose.tools.yml up -d
+#   docker compose -f docker/compose.tools.yml --profile seed up seed
+#   docker compose -f docker/compose.tools.yml ps
+#   docker compose -f docker/compose.tools.yml down
+
+services:
+  mcp:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.mcp
+    image: blue-bench-mcp:latest
+    container_name: blue-bench-mcp
+    hostname: mcp
+    restart: unless-stopped
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+      openedr:
+        condition: service_healthy
+      wazuh:
+        condition: service_started
+      scanner:
+        condition: service_started
+      target:
+        condition: service_started
+    environment:
+      # Backend URLs resolved via service DNS on blue-bench-net. These feed
+      # the ${VAR:-default} interpolation in /app/config.yaml.
+      - BLUE_BENCH_ES_URL=http://elasticsearch:9200
+      - BLUE_BENCH_WAZUH_URL=https://wazuh:55000
+      - BLUE_BENCH_OPENEDR_URL=http://openedr:9443
+      # Container is already on blue-bench-net and has nmap installed; skip
+      # the docker-exec-to-scanner-sidecar dispatch path.
+      - BLUE_BENCH_NMAP_SCANNER=
+      # Default CORS allowlist for browser MCP clients. Deployers override
+      # at `docker compose up` time via their own .env.
+      - BLUE_BENCH_CORS_ORIGINS=http://localhost:*,http://127.0.0.1:*
+      # Secrets are NOT baked in. Deployers pass --env-file or populate .env.
+      - BLUE_BENCH_ELASTIC_USER=${BLUE_BENCH_ELASTIC_USER:-}
+      - BLUE_BENCH_ELASTIC_PASS=${BLUE_BENCH_ELASTIC_PASS:-}
+      - BLUE_BENCH_WAZUH_USER=${BLUE_BENCH_WAZUH_USER:-}
+      - BLUE_BENCH_WAZUH_PASS=${BLUE_BENCH_WAZUH_PASS:-}
+      - BLUE_BENCH_OPENEDR_USER=${BLUE_BENCH_OPENEDR_USER:-}
+      - BLUE_BENCH_OPENEDR_PASS=${BLUE_BENCH_OPENEDR_PASS:-}
+    ports:
+      - "8765:8765"
+    volumes:
+      # Forensic fixtures are read-only into the container.
+      - ../data/evidence:/app/data/evidence:ro
+      # Operators can supply their own config.yaml by bind-mounting at this
+      # path. If the default (baked-in) config is fine, no override needed.
+      - ../config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8765/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    networks:
+      - blue-bench-net
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: blue-bench-elasticsearch
+    hostname: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - cluster.name=blue-bench
+      - node.name=elasticsearch
+      - network.host=0.0.0.0
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    networks:
+      - blue-bench-net
+    deploy:
+      resources:
+        limits:
+          memory: 1536m
+
+  wazuh:
+    image: wazuh/wazuh-manager:4.9.2
+    container_name: blue-bench-wazuh
+    environment:
+      - WAZUH_MANAGER_CONFIG=yes
+    ports:
+      - "55000:55000"
+      - "1514:1514/udp"
+      - "1515:1515"
+    volumes:
+      - wazuh_data:/var/ossec/data
+      - wazuh_logs:/var/ossec/logs
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf -k https://localhost:55000/ || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+    networks:
+      - blue-bench-net
+
+  openedr:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.openedr
+    container_name: blue-bench-openedr
+    hostname: openedr
+    ports:
+      - "9443:9443"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:9443/api/v1/endpoints', timeout=2)\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - blue-bench-net
+
+  target:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.target
+    container_name: blue-bench-target
+    networks:
+      blue-bench-net:
+        ipv4_address: 10.10.5.22
+        aliases:
+          - target.blue-bench.local
+
+  scanner:
+    # Long-running nmap sidecar on blue-bench-net. NmapTool dispatches via
+    # `docker exec` so scans run inside the network and reach 10.10.5.22.
+    image: instrumentisto/nmap:latest
+    container_name: blue-bench-scanner
+    entrypoint: ["sleep", "infinity"]
+    networks:
+      - blue-bench-net
+
+  seed:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.seed
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    environment:
+      - ES_URL=http://elasticsearch:9200
+    networks:
+      - blue-bench-net
+    profiles:
+      - seed
+
+volumes:
+  es_data:
+  wazuh_data:
+  wazuh_logs:
+
+networks:
+  blue-bench-net:
+    name: blue-bench-net
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.0.0/16
+          gateway: 10.10.0.1

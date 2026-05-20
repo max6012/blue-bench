@@ -1,0 +1,61 @@
+# Source of truth for MCP tool categories.
+#
+# A user-facing grouping of related MCP tool names. Both the browser
+# frontend and the analyst CLI consume this file to render gate
+# checkboxes / slash-command groupings and to filter the model's
+# tool surface.
+#
+# Edit this file, then regenerate the consumer modules:
+#
+#     python scripts/emit_tool_categories.py
+#
+# Generated files:
+#   blue_bench_frontend/_tool_categories_data.js  (frontend, ESM)
+#   blue_bench_cli/_tool_categories.py            (CLI, Python)
+#
+# Both are committed; do not edit them by hand.
+
+categories:
+  - id: elastic
+    label: Elastic (Suricata / Zeek)
+    description: Network alerts, flows, aggregations
+    tools:
+      - search_alerts
+      - get_connections
+      - count_by_field
+
+  - id: wazuh
+    label: Wazuh HIDS
+    description: Host agents and endpoint alerts
+    tools:
+      - wazuh_list_agents
+      - get_agent_alerts
+
+  - id: openedr
+    label: OpenEDR
+    description: Endpoint inventory and detections
+    tools:
+      - list_endpoints
+      - get_detections
+
+  - id: evidence
+    label: Evidence (files)
+    description: File inventory, hashing, strings, metadata
+    tools:
+      - list_evidence
+      - file_hash
+      - file_metadata
+      - strings_extract
+
+  - id: nmap
+    label: Nmap
+    description: Active network scanning
+    tools:
+      - nmap_scan
+      - nmap_quick_scan
+
+  - id: sigma
+    label: Sigma
+    description: Detection-rule authoring / validation
+    tools:
+      - validate_sigma_rule

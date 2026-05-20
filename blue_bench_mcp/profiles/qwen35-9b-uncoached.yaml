@@ -1,0 +1,20 @@
+name: qwen35-9b-uncoached
+model_id: qwen3.5:9b
+tool_protocol: native
+prompt_style: terse
+context_size: 32768
+generation:
+  temperature: 0.3
+  top_p: 0.9
+  think: false
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+  - correlation
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+
+require_task_class: false

@@ -1,0 +1,22 @@
+id: p1-04
+category: detection_rules
+title: Sigma Rule from Natural Language
+question: |
+  Write a Sigma detection rule for the following attack pattern:
+
+  An attacker uses PowerShell to download a script from an external HTTP server on a non-standard port (not 80 or 443), saves it to the user's Temp directory, and immediately executes it. The PowerShell process is spawned by Microsoft Word.
+
+  The rule should target Windows process creation logs (Sysmon Event ID 1). Include appropriate metadata (title, description, status, level, tags with MITRE ATT&CK references).
+expected_tools: []
+expected_findings:
+  - synonyms: ["Sigma rule", "sigma", "logsource", "detection", "condition"]
+  - synonyms: ["powershell.exe", "Image endswith powershell", "PowerShell process"]
+  - synonyms: ["WINWORD", "winword.exe", "Microsoft Word", "ParentImage", "parent process"]
+  - synonyms: ["download", "Invoke-WebRequest", "wget", "curl", "DownloadString", "CommandLine"]
+  - synonyms: ["non-standard port", "not 80", "not 443", "unusual port"]
+  - synonyms: ["T1059.001", "T1059", "Command and Scripting Interpreter", "PowerShell technique"]
+  - synonyms: ["T1105", "Ingress Tool Transfer", "remote download"]
+  - synonyms: ["MITRE", "ATT&CK", "tags", "attack.t1059"]
+pass_criteria: Produces a valid Sigma rule with correct logsource (process_creation/windows), detects powershell.exe spawned by WINWORD with download indicators, excludes standard ports, and includes MITRE ATT&CK tags
+tags: [detection-rules, sigma, powershell, phase1]
+max_turns: 1

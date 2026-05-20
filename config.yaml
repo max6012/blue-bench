@@ -1,0 +1,39 @@
+limits:
+  query_timeout: 30
+  max_result_chars: 8000
+
+evidence:
+  evidence_dir: data/evidence
+
+# Backend URLs — same file works on host and in the compose.tools.yml tool tier.
+# `${VAR:-default}` expands at load time (see blue_bench_mcp/config.py). The
+# `mcp` service in docker/compose.tools.yml sets these to service DNS names
+# (elasticsearch, wazuh, openedr); on the host the localhost defaults apply.
+elastic:
+  url: ${BLUE_BENCH_ES_URL:-http://localhost:9200}
+
+wazuh:
+  api_url: ${BLUE_BENCH_WAZUH_URL:-https://localhost:55000}
+
+openedr:
+  url: ${BLUE_BENCH_OPENEDR_URL:-http://localhost:9443}
+
+nmap:
+  # Host mode: dispatch via `docker exec` against the scanner sidecar so nmap
+  # reaches targets on the internal Docker network (e.g. 10.10.5.22).
+  # In-container mode: the MCP container is already on blue-bench-net and has
+  # the nmap binary installed, so the compose file sets this to empty (the
+  # `-` form without colon keeps the explicit empty value).
+  scanner_container: ${BLUE_BENCH_NMAP_SCANNER-blue-bench-scanner}
+
+transport:
+  # SSE transport settings (used when --transport sse is passed to the server).
+  # Origins are a CORS allowlist for browser-based MCP clients; wildcard entries
+  # like "http://localhost:*" are honored. Set BLUE_BENCH_CORS_ORIGINS to
+  # override at runtime (comma-separated; "*" allows any origin).
+  sse:
+    host: 127.0.0.1
+    port: 8765
+    origins:
+      - "http://localhost:*"
+      - "http://127.0.0.1:*"

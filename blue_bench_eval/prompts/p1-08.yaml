@@ -1,0 +1,26 @@
+id: p1-08
+category: forensics
+title: Registry Artifact Interpretation
+question: |
+  I found the following Windows Registry entries during an investigation:
+
+  Key: HKLM\SYSTEM\CurrentControlSet\Services\WinSock2\Parameters\Protocol_Catalog9\Catalog_Entries64\000000000001
+  Value: PackedCatalogItem (binary data)
+  Modified: 2026-01-15T14:25:33Z
+
+  And this entry:
+  Key: HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe
+  Value: Debugger = "C:\Windows\System32\cmd.exe"
+  Modified: 2026-01-15T15:02:17Z
+
+  Explain what each registry entry means, what attack technique each represents, assess the severity, and recommend immediate remediation steps.
+expected_tools: []
+expected_findings:
+  - synonyms: ["T1547", "T1543", "Winsock LSP", "LSP hijacking", "DLL injection", "Layered Service Provider", "persistence via Winsock"]
+  - synonyms: ["T1546.008", "sethc.exe", "IFEO", "Image File Execution Options", "sticky keys", "accessibility feature backdoor", "T1546"]
+  - synonyms: ["RDP backdoor", "remote access", "sticky keys at login screen", "pre-authentication access"]
+  - synonyms: ["CRITICAL", "critical severity", "high severity", "high risk", "immediately"]
+  - synonyms: ["remove registry key", "delete the key", "restore sethc.exe", "remediation", "revert"]
+pass_criteria: Correctly identifies the WinSock2 entry as an LSP persistence technique and the sethc.exe IFEO entry as a T1546.008 sticky keys backdoor, assesses critical severity, and provides actionable remediation
+tags: [forensics, registry-analysis, persistence, phase1]
+max_turns: 1

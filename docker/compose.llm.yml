@@ -1,0 +1,94 @@
+# Blue-Bench Tier 2 — LLM tier
+#
+# Services:
+#   anthropic-proxy :8766  — thin HTTPS forwarder to api.anthropic.com
+#                            (holds ANTHROPIC_API_KEY server-side so browsers
+#                            never see it). Built from docker/Dockerfile.proxy.
+#   ollama          :11434 — Ollama LLM runtime. Containerized here so the
+#                            LLM tier can be deployed independently onto a
+#                            GPU host. For MVP / dev, most people run Ollama
+#                            on the host instead; this service is the range /
+#                            production deployment target.
+#
+# Scope: Tier 2 is the LLM serving layer. Independently deployable to a GPU
+# host. No shared network with the tool tier — the browser MCP client and
+# the qualify runner reach these services over their exposed ports.
+#
+# GPU passthrough:
+#   The `ollama` service ships with an NVIDIA GPU reservation block (commented
+#   below) for range / production deployment. On a host without the NVIDIA
+#   container runtime, uncomment nothing and Ollama runs CPU-only. On dev
+#   laptops you typically don't run this service at all — run Ollama on the
+#   host so it can use Metal / CUDA directly.
+#
+# Usage:
+#   # Bring up proxy only (MVP dev, Ollama on host):
+#   docker compose -f docker/compose.llm.yml up -d anthropic-proxy
+#   # Bring up both (range / GPU host):
+#   docker compose -f docker/compose.llm.yml up -d
+#
+# Env:
+#   ANTHROPIC_API_KEY   — required for anthropic-proxy (from repo-root .env)
+#   FRONTEND_ORIGIN     — optional CORS override (default: localhost + 127.0.0.1)
+#   OLLAMA_ORIGINS      — browser CORS for Ollama (default: localhost + 127.0.0.1)
+
+services:
+  anthropic-proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.proxy
+    image: blue-bench-anthropic-proxy:latest
+    container_name: blue-bench-anthropic-proxy
+    hostname: anthropic-proxy
+    restart: unless-stopped
+    environment:
+      # Required. Proxy fails fast at startup if unset.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set in .env}
+      # Optional CORS allow-list override. Comma-separated origins or "*".
+      - FRONTEND_ORIGIN=${FRONTEND_ORIGIN:-}
+    ports:
+      - "8766:8766"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8766/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 5s
+    networks:
+      - blue-bench-llm-net
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: blue-bench-ollama
+    hostname: ollama
+    restart: unless-stopped
+    environment:
+      # Browser CORS: allow http://localhost:* and http://127.0.0.1:* by default.
+      # Override with OLLAMA_ORIGINS in .env (comma-separated or "*" for dev).
+      - OLLAMA_ORIGINS=${OLLAMA_ORIGINS:-http://localhost:*,http://127.0.0.1:*}
+    ports:
+      - "11434:11434"
+    volumes:
+      # Persist model cache on the host so `ollama pull` survives restarts.
+      - ./data/ollama:/root/.ollama
+    networks:
+      - blue-bench-llm-net
+    # -------------------------------------------------------------------------
+    # GPU passthrough (NVIDIA). Requires the `nvidia-container-toolkit` on the
+    # host. Uncomment for range / production GPU deployment. On a CPU-only
+    # host, leave commented and Ollama will run (slowly) on CPU.
+    # -------------------------------------------------------------------------
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+networks:
+  # Optional shared network for colocated dev hosts. Scoped to this compose
+  # file — the tool tier uses its own `blue-bench-net`.
+  blue-bench-llm-net:
+    name: blue-bench-llm-net
+    driver: bridge

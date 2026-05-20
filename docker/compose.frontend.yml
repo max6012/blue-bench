@@ -1,0 +1,32 @@
+# Blue-Bench Tier 3 — frontend tier
+#
+# Services:
+#   frontend :5173 → 80 — nginx serving the browser MCP client as static files.
+#
+# Scope: Tier 3 is a pure static asset server. Independently deployable to
+# any host (or, in production, replaced by any static CDN). The browser
+# reaches Tier 1 (MCP SSE on :8765) and Tier 2 (Anthropic proxy on :8766,
+# Ollama on :11434) directly — no reverse proxy, no backend network.
+#
+# Usage:
+#   docker compose -f docker/compose.frontend.yml up -d
+#   # Then open http://localhost:5173 in a browser.
+
+services:
+  frontend:
+    image: nginx:alpine
+    container_name: blue-bench-frontend
+    hostname: frontend
+    restart: unless-stopped
+    ports:
+      # 5173 matches the dev default referenced elsewhere (Ollama CORS guide,
+      # anthropic-proxy CORS default). Container always listens on 80.
+      - "5173:80"
+    volumes:
+      - ../blue_bench_frontend:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s

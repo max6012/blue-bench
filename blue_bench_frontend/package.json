@@ -1,0 +1,22 @@
+{
+  "name": "blue-bench-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Browser-side MCP client for the Blue-Bench tool server (vanilla ESM).",
+  "type": "module",
+  "main": "./mcp_client.js",
+  "exports": {
+    ".": "./mcp_client.js",
+    "./loop": "./loop.js",
+    "./json_rpc": "./json_rpc.js"
+  },
+  "scripts": {
+    "test": "node --test tests/mcp_client.test.mjs tests/loop.test.mjs",
+    "test:client": "node --test tests/mcp_client.test.mjs",
+    "test:loop": "node --test tests/loop.test.mjs",
+    "test:integration": "BLUE_BENCH_RUN_INTEGRATION=1 node --experimental-eventsource --test tests/mcp_client.integration.test.mjs tests/loop.integration.test.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

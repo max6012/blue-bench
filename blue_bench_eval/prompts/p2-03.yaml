@@ -1,0 +1,18 @@
+id: p2-03
+category: exfil
+archive_id: 8
+title: Data exfiltration assessment
+question: |
+  Alert says 'Possible Data Exfiltration - Large Outbound Transfer' from 10.10.5.22 to 198.51.100.77. How much data was transferred? Is this related to the C2 activity?
+expected_tools:
+  - search_alerts
+  - get_connections
+expected_findings:
+  - synonyms: ["10.10.5.22"]
+  - synonyms: ["198.51.100.77"]
+  - synonyms: ["large transfer", "large outbound", "significant volume", "high byte count"]
+  - synonyms: ["exfiltration", "exfil", "data exfil", "data loss"]
+  - synonyms: ["Cobalt Strike", "same host", "already compromised"]
+pass_criteria: Quantifies the data transfer and links it to existing C2 compromise on the same host
+tags: [TH, exfil]
+max_turns: 10

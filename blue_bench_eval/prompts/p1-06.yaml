@@ -1,0 +1,32 @@
+id: p1-06
+category: detection_rules
+title: Sigma Rule Refinement
+question: |
+  The following Sigma rule is generating too many false positives in our environment because it triggers on legitimate IT admin scripts. Refine it to reduce false positives while maintaining detection of actual threats.
+
+  Current rule:
+  title: Suspicious PowerShell Download
+  status: test
+  logsource:
+      category: process_creation
+      product: windows
+  detection:
+      selection:
+          Image|endswith: '\powershell.exe'
+          CommandLine|contains:
+              - 'Invoke-WebRequest'
+              - 'wget'
+              - 'curl'
+      condition: selection
+  level: medium
+
+  Context: Our IT admins regularly use PowerShell to download patches and tools from our internal update server (updates.corp.eadrcc.int). They also use signed scripts from C:\Admin\Scripts\. Attackers would not be using these paths or internal servers.
+expected_tools: []
+expected_findings:
+  - synonyms: ["updates.corp.eadrcc.int", "internal update server", "exclusion for internal server", "filter"]
+  - synonyms: ["C:\\Admin\\Scripts\\", "Admin Scripts", "signed scripts", "exclusion for admin path"]
+  - synonyms: ["Invoke-WebRequest", "wget", "curl", "core detection preserved", "detection logic maintained"]
+  - synonyms: ["valid Sigma", "logsource", "detection", "condition", "filter section", "not filter"]
+pass_criteria: Produces valid Sigma with the core detection logic intact and adds exclusions for both updates.corp.eadrcc.int and C:\\Admin\\Scripts\\ without breaking Sigma syntax
+tags: [detection-rules, sigma, false-positive-reduction, refinement, phase1]
+max_turns: 1

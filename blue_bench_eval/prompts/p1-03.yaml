@@ -1,0 +1,135 @@
+id: p1-03
+category: threat_hunting
+title: Cross-Source Correlation
+question: |
+  You are performing threat hunting across multiple data sources. I'll provide Zeek connection logs and Suricata alerts from the same time window. Correlate events across both sources to identify any attack activity that spans multiple indicators. Build a narrative of what you think happened.
+
+  Zeek logs:
+  #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes
+  1737000001.461383	Cpfx7toRpmF7OTy	10.10.5.40	63238	13.107.42.14	8080	tcp	http	9.139257	2839	61446	SF	0	ShADadfF	18	3559	32	62726
+  1737000164.967781	CKWprqEnhPcQ5qN	10.10.5.35	51766	142.250.80.46	443	tcp	ssl	13.010607	3313	36934	SF	0	ShADadfF	18	4033	27	38014
+  1737000271.385598	CZd13KAY5wRrtwp	10.10.5.60	50809	8.8.4.4	8080	tcp	http	12.556811	964	99271	SF	0	ShADadfF	11	1404	14	99831
+  1737000335.047744	CXu2tH3UagQ8mef	10.10.5.22	51364	10.10.3.1	53	udp	dns	0.008047	186	81	SF	0	Dd	1	228	1	123
+  1737000355.196456	CnemR7dxqSEDbeM	10.10.5.22	61240	10.10.3.1	53	udp	dns	0.007903	226	139	SF	0	Dd	1	268	1	181
+  1737000416.422133	C026Ao0tGgOeD9s	10.10.5.22	54620	10.10.3.1	53	udp	dns	0.001215	208	141	SF	0	Dd	1	250	1	183
+  1737000458.803869	Cw2ZmJ518y2BtU5	10.10.5.40	50459	151.101.1.140	443	tcp	ssl	3.230140	2244	87916	SF	0	ShADadfF	7	2524	26	88956
+  1737000473.608314	C7w491H1Pszvpej	10.10.5.22	50163	10.10.3.1	53	udp	dns	0.008722	144	77	SF	0	Dd	1	186	1	119
+  1737000495.355941	CMYq6Fk4E9MoyF0	10.10.5.22	56736	10.10.3.1	53	udp	dns	0.001555	176	76	SF	0	Dd	1	218	1	118
+  1737000530.474264	CMrePoAuvGaK7gD	10.10.5.22	64721	13.107.42.14	8080	tcp	http	12.761092	796	60192	SF	0	ShADadfF	17	1476	40	61792
+  1737000543.446645	CRDfTcDzE11mfci	10.10.5.22	64517	10.10.3.1	53	udp	dns	0.022668	49	263	SF	0	Dd	1	91	1	305
+  1737000578.969470	CTU8Zf9ohZLWumv	10.10.5.55	58596	185.199.108.133	443	tcp	ssl	12.222134	4706	5309	SF	0	ShADadfF	18	5426	9	5669
+  1737000600.329416	CZUlwoEFqRso42U	10.10.5.22	61076	203.0.113.45	443	tcp	ssl	2.118556	252	796	SF	0	ShADadfF	6	492	8	1116
+  1737000660.248219	CrYk6TXxypztqgo	10.10.5.22	53786	203.0.113.45	443	tcp	ssl	3.750239	259	1071	SF	0	ShADadfF	6	499	8	1391
+  1737000719.770219	C6VvL9JSwfhtgp2	10.10.5.22	61008	203.0.113.45	443	tcp	ssl	1.054692	259	584	SF	0	ShADadfF	6	499	8	904
+  1737000732.809658	CsTAZN0H6oJ5SrZ	10.10.5.60	58590	1.1.1.1	443	tcp	ssl	13.224615	4170	16415	SF	0	ShADadfF	4	4330	19	17175
+  1737000780.354095	CvyKbZpObRubhTy	10.10.5.22	61496	203.0.113.45	443	tcp	ssl	1.462758	226	1109	SF	0	ShADadfF	6	466	8	1429
+  1737000822.576868	CTTP7qdFFauXID7	10.10.5.40	64012	10.10.3.1	53	udp	dns	0.020538	76	84	SF	0	Dd	1	118	1	126
+  1737000828.426208	CTbjtFSuKIh8g4z	10.10.5.40	55382	13.107.42.14	8080	tcp	http	3.834339	1320	82845	SF	0	ShADadfF	7	1600	6	83085
+  1737000838.795244	ChxG1IWwkAQHaHD	10.10.5.35	49244	10.10.3.1	53	udp	dns	0.014586	39	93	SF	0	Dd	1	81	1	135
+  1737000839.907047	CcRXg7yxIPn2iG0	10.10.5.22	55509	203.0.113.45	443	tcp	ssl	2.103523	326	851	SF	0	ShADadfF	6	566	8	1171
+  1737000850.567856	CvoKveuvb5inm1m	10.10.5.35	57539	10.10.3.1	53	udp	dns	0.010666	68	99	SF	0	Dd	1	110	1	141
+  1737000864.306019	CorAdIOqAry9aIE	10.10.5.22	62725	10.10.3.1	53	udp	dns	0.003750	179	114	SF	0	Dd	1	221	1	156
+  1737000897.113807	Clsfzh3udQPnvgm	10.10.5.22	53521	185.199.108.133	443	tcp	ssl	10.046908	4778	78547	SF	0	ShADadfF	14	5338	32	79827
+  1737000901.053498	CbfzF4y25ZYXXFN	10.10.5.22	58492	203.0.113.45	443	tcp	ssl	1.251625	221	679	SF	0	ShADadfF	6	461	8	999
+  1737000906.908689	CYe6752AjG8R9he	10.10.5.22	55944	10.10.3.1	53	udp	dns	0.002582	129	167	SF	0	Dd	1	171	1	209
+  1737000925.092304	C1s87xWxAhcppky	10.10.5.55	60251	142.250.80.46	80	tcp	http	7.078138	816	18949	SF	0	ShADadfF	28	1936	18	19669
+  1737000950.342046	CvnQtiaAE24hzkJ	10.10.5.55	50816	142.250.80.46	80	tcp	http	9.550838	2466	6278	SF	0	ShADadfF	4	2626	25	7278
+  1737000959.456055	CxIRzrIrbAEPzit	10.10.5.22	52398	203.0.113.45	443	tcp	ssl	3.517529	346	743	SF	0	ShADadfF	6	586	8	1063
+  1737000988.550809	COrrDZhZMa4kr1v	10.10.5.22	56835	142.250.80.46	443	tcp	ssl	5.104128	4624	11061	SF	0	ShADadfF	8	4944	13	11581
+  1737001020.083314	CHOnmDzehnjsSAV	10.10.5.22	52795	203.0.113.45	443	tcp	ssl	3.328518	240	708	SF	0	ShADadfF	6	480	8	1028
+  1737001066.487268	CirH1e2jdbLD6dy	10.10.5.40	59056	1.1.1.1	80	tcp	http	10.649475	1236	36454	SF	0	ShADadfF	5	1436	7	36734
+  1737001080.211991	C8Egf9iYdn8PBwV	10.10.5.22	55289	203.0.113.45	443	tcp	ssl	2.993114	201	936	SF	0	ShADadfF	6	441	8	1256
+  1737001104.446844	Cekg895I1jWqv7v	10.10.5.22	52508	10.10.3.1	53	udp	dns	0.005454	148	90	SF	0	Dd	1	190	1	132
+  1737001123.046080	C0lH8wVaWfV0yG7	10.10.5.75	62149	104.16.132.229	443	tcp	ssl	1.232348	2189	13856	SF	0	ShADadfF	26	3229	23	14776
+  1737001140.698823	CChyKwcrnyDwcSC	10.10.5.22	52548	203.0.113.45	443	tcp	ssl	3.314504	265	536	SF	0	ShADadfF	6	505	8	856
+  1737001167.417844	CNe2nIIuhuakW9I	10.10.5.22	50203	13.107.42.14	443	tcp	ssl	6.077355	742	28153	SF	0	ShADadfF	22	1622	24	29113
+  1737001170.051004	C6FsevqoexFNqSk	10.10.5.55	60778	13.107.42.14	443	tcp	ssl	5.171049	2463	73348	SF	0	ShADadfF	4	2623	37	74828
+  1737001180.405257	CgYPUEbXhzDXlCE	10.10.5.22	49664	10.10.3.1	53	udp	dns	0.006061	226	131	SF	0	Dd	1	268	1	173
+  1737001194.843753	CVEh30s5nxfHMIx	10.10.5.22	63697	10.10.3.1	53	udp	dns	0.009708	201	145	SF	0	Dd	1	243	1	187
+  1737001195.180934	C18EwQmYEUph7m3	10.10.5.22	52419	185.199.108.133	8080	tcp	http	13.665581	325	95192	SF	0	ShADadfF	8	645	30	96392
+  1737001199.098409	CYydCoR1CoQxbYb	10.10.5.22	50525	203.0.113.45	443	tcp	ssl	1.946787	259	927	SF	0	ShADadfF	6	499	8	1247
+  1737001242.446190	CX1ZTd4X9xoJ7H7	10.10.5.60	61512	199.232.69.194	443	tcp	ssl	13.999499	1745	91922	SF	0	ShADadfF	11	2185	40	93522
+  1737001242.622280	CgTN9DM6vvRHeaI	10.10.5.22	58433	10.10.3.1	53	udp	dns	0.034233	67	184	SF	0	Dd	1	109	1	226
+  1737001261.369436	Ce5gxtElyhTEoTl	10.10.5.22	60261	203.0.113.45	443	tcp	ssl	3.921171	307	1108	SF	0	ShADadfF	6	547	8	1428
+  1737001302.669688	CgYTVUKfHf4Vtyy	10.10.5.55	52620	10.10.3.1	53	udp	dns	0.012923	67	162	SF	0	Dd	1	109	1	204
+  1737001314.728723	CN13dCE53iC5T7k	10.10.5.22	65138	10.10.3.1	53	udp	dns	0.001858	130	89	SF	0	Dd	1	172	1	131
+  1737001354.299860	CU6k2JuDFbalZNf	10.10.5.55	60322	10.10.3.1	53	udp	dns	0.008713	49	244	SF	0	Dd	1	91	1	286
+  1737001369.371704	Cx3eQeYpxs058h4	10.10.5.22	58936	151.101.1.140	443	tcp	ssl	12.816374	3632	71045	SF	0	ShADadfF	27	4712	38	72565
+  1737001442.546792	CHvlxNgbb19Smlt	10.10.5.22	50908	52.96.166.146	443	tcp	ssl	2.323044	4810	40324	SF	0	ShADadfF	6	5050	19	41084
+  1737001502.673516	CABSphgzPVR6sGy	10.10.5.22	54062	10.10.3.1	53	udp	dns	0.005760	177	166	SF	0	Dd	1	219	1	208
+  1737001543.626632	CTbDWAIy7feqZ0e	10.10.5.22	61893	10.10.3.1	53	udp	dns	0.005407	155	83	SF	0	Dd	1	197	1	125
+  1737001547.021881	C9PKJi7OZLnaBmM	10.10.5.22	51936	10.10.3.1	53	udp	dns	0.007094	162	179	SF	0	Dd	1	204	1	221
+  1737001573.147097	C4VVvsnqlLPiN8S	10.10.5.22	53732	10.10.3.1	53	udp	dns	0.004391	164	118	SF	0	Dd	1	206	1	160
+  1737001573.986552	C8YxV6uMffCIUdc	10.10.5.22	59394	10.10.3.1	53	udp	dns	0.003517	150	76	SF	0	Dd	1	192	1	118
+  1737001613.790771	CCw1gc7DdYqe4EF	10.10.5.40	52725	10.10.3.1	53	udp	dns	0.023148	44	217	SF	0	Dd	1	86	1	259
+  1737001625.350109	CArDEBUfRehs2jP	10.10.5.35	51250	13.107.42.14	443	tcp	ssl	0.413410	4737	30661	SF	0	ShADadfF	22	5617	18	31381
+  1737001644.608926	CSrBzYA1w84uz3w	10.10.5.40	61757	13.107.42.14	443	tcp	ssl	1.689134	3324	75463	SF	0	ShADadfF	15	3924	40	77063
+  1737001702.702595	C1DooDtxGLhILc2	10.10.5.55	52242	13.107.42.14	80	tcp	http	9.918843	3102	56019	SF	0	ShADadfF	17	3782	33	57339
+  1737001703.737760	COsTu6qLtRkvl8z	10.10.5.60	63094	151.101.1.140	8080	tcp	http	5.028790	3917	36009	SF	0	ShADadfF	13	4437	20	36809
+  1737001736.998477	C1RwZ5fyRSk9eJh	10.10.5.55	64119	13.107.42.14	8080	tcp	http	2.255165	1761	79061	SF	0	ShADadfF	20	2561	12	79541
+  1737001752.017082	CDkf0J7ELkpOH3P	10.10.5.35	56285	142.250.80.46	80	tcp	http	8.729786	4641	8489	SF	0	ShADadfF	27	5721	24	9449
+  1737001756.610947	CaGn2br4CxSXJgj	10.10.5.60	51394	8.8.8.8	443	tcp	ssl	9.504299	2554	30317	SF	0	ShADadfF	27	3634	9	30677
+  1737001776.657006	CX9g81AsqhQnGac	10.10.5.22	54160	8.8.4.4	443	tcp	ssl	11.901983	3658	78672	SF	0	ShADadfF	6	3898	28	79792
+  1737001879.734387	CILbiZBVFlUXSYF	10.10.5.22	62203	10.10.3.1	53	udp	dns	0.005003	189	73	SF	0	Dd	1	231	1	115
+  1737001917.296452	CbcETaZnRZ7K6cq	10.10.5.35	60757	10.10.3.1	53	udp	dns	0.004532	77	70	SF	0	Dd	1	119	1	112
+  1737001989.766298	C06pvZ0OrAfXmpm	10.10.5.22	56263	10.10.3.1	53	udp	dns	0.009615	128	167	SF	0	Dd	1	170	1	209
+  1737002022.060174	Cu1s8lVjNoNG0Wv	10.10.5.75	53157	10.10.3.1	53	udp	dns	0.021130	72	300	SF	0	Dd	1	114	1	342
+  1737002066.760015	CqBQv5VLIoEt8Fg	10.10.5.55	50012	10.10.3.1	53	udp	dns	0.030841	72	272	SF	0	Dd	1	114	1	314
+  1737002130.813992	CXNUvXuzPFBh9Vo	10.10.5.75	51902	8.8.8.8	443	tcp	ssl	2.121922	3982	24319	SF	0	ShADadfF	5	4182	20	25119
+  1737002140.268953	COYpSTuEc99ENQ5	10.10.5.60	62889	8.8.4.4	8080	tcp	http	8.521881	2791	34679	SF	0	ShADadfF	10	3191	24	35639
+  1737002173.369107	CjvKgbR9by8dZTG	10.10.5.22	56653	8.8.4.4	8080	tcp	http	8.848132	369	100738	SF	0	ShADadfF	25	1369	21	101578
+  1737002189.870725	ChU9gclGr0ovsNb	10.10.5.22	53287	10.10.3.1	53	udp	dns	0.014476	70	209	SF	0	Dd	1	112	1	251
+  1737002192.385694	CJaXblkh51ZC8ry	10.10.5.22	57106	10.10.3.1	53	udp	dns	0.003725	184	144	SF	0	Dd	1	226	1	186
+  1737002270.977054	ChpNPu2FbrEiDhf	10.10.5.22	64488	10.10.3.1	53	udp	dns	0.005943	240	156	SF	0	Dd	1	282	1	198
+  1737002288.106382	CwczkTP5RbujpUe	10.10.5.55	63422	1.1.1.1	443	tcp	ssl	11.033550	2412	81228	SF	0	ShADadfF	29	3572	38	82748
+  1737002301.936475	CFaBNfBMohNkyAx	10.10.5.22	57176	142.250.80.46	443	tcp	ssl	2.179115	1039	89196	SF	0	ShADadfF	27	2119	38	90716
+  1737002321.376515	CzFNn8DU9wMziky	10.10.5.22	62198	10.10.3.1	53	udp	dns	0.014518	37	277	SF	0	Dd	1	79	1	319
+  1737002513.301822	CF0lyth8Xizm1jr	10.10.5.40	54246	142.250.80.46	443	tcp	ssl	14.362475	2957	13896	SF	0	ShADadfF	6	3197	28	15016
+  1737002812.438979	CHpiNrvKluHy7GB	10.10.5.75	50168	8.8.8.8	443	tcp	ssl	3.070474	366	81939	SF	0	ShADadfF	8	686	19	82699
+  1737002850.544070	CLlf7byz8FoCr9g	10.10.5.22	63888	10.10.3.1	53	udp	dns	0.045543	66	226	SF	0	Dd	1	108	1	268
+  1737002853.070106	COncp3cRhE69S7q	10.10.5.35	51739	1.1.1.1	8080	tcp	http	13.075510	2172	65730	SF	0	ShADadfF	22	3052	13	66250
+  1737002888.046500	CNycSxOBLU17RnY	10.10.5.75	57894	13.107.42.14	443	tcp	ssl	11.831880	1085	50640	SF	0	ShADadfF	5	1285	34	52000
+  1737003160.834557	Co6Kgl75uqsYpX3	10.10.5.22	65076	8.8.4.4	80	tcp	http	14.671969	4563	100879	SF	0	ShADadfF	8	4883	12	101359
+  1737003171.111025	CAySp6IHGiQlsMn	10.10.5.35	58490	151.101.1.140	443	tcp	ssl	6.628950	4650	92714	SF	0	ShADadfF	13	5170	37	94194
+  1737003361.206450	Cxkz5bdSYQhbl3t	10.10.5.55	56518	8.8.4.4	443	tcp	ssl	13.635331	1365	9859	SF	0	ShADadfF	5	1565	14	10419
+  1737003384.947233	CsSTZYSHa6p3mSh	10.10.5.75	55608	20.190.159.23	443	tcp	ssl	6.526331	2904	82178	SF	0	ShADadfF	14	3464	11	82618
+  1737003385.050810	ConcroHCC9HOhYX	10.10.5.22	56813	20.190.159.23	443	tcp	ssl	0.472867	4799	43492	SF	0	ShADadfF	23	5719	18	44212
+  1737003411.324721	CEAbkSOrrcq5wmo	10.10.5.35	56066	20.190.159.23	443	tcp	ssl	9.940379	1486	31939	SF	0	ShADadfF	9	1846	39	33499
+  1737003417.770766	C2ozm6RqNbOW8W3	10.10.5.75	62885	10.10.3.1	53	udp	dns	0.029780	76	99	SF	0	Dd	1	118	1	141
+  1737003433.737339	ClJvhwgAUB52zTD	10.10.5.75	55006	142.250.80.46	8080	tcp	http	13.698155	2644	110819	SF	0	ShADadfF	24	3604	36	112259
+  1737003532.138874	CCkVwb9H3LCbgyq	10.10.5.60	50056	151.101.1.140	80	tcp	http	13.167872	2339	23905	SF	0	ShADadfF	22	3219	20	24705
+  1737010897.066465	CKjyYBqKNLR2CmP	10.10.5.22	53166	198.51.100.77	443	tcp	ssl	33.842669	12734211	914	SF	0	ShADadfF	502	12742211	51	4114
+  1737010849.439065	CIM2gnxx9wWhe4f	10.10.5.22	64848	198.51.100.77	443	tcp	ssl	35.488116	9693862	3637	SF	0	ShADadfF	597	9701862	37	6837
+
+  Suricata alerts:
+  {"timestamp": "2026-01-15T14:01:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.35", "src_port": 50006, "dest_ip": "13.107.42.14", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024000, "rev": 1, "signature": "ET POLICY TLS SNI Check - Microsoft", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:01:30.000000+0000", "event_type": "alert", "src_ip": "10.10.5.40", "src_port": 56328, "dest_ip": "142.250.80.46", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024001, "rev": 1, "signature": "ET POLICY TLS SNI Check - Google", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:02:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 49152, "dest_ip": "203.0.113.45", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2028765, "rev": 3, "signature": "ET MALWARE Cobalt Strike Beacon Activity", "category": "A Network Trojan was detected", "severity": 1}}
+  {"timestamp": "2026-01-15T14:02:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.35", "src_port": 58357, "dest_ip": "151.101.1.140", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024002, "rev": 1, "signature": "ET POLICY TLS SNI Check - Fastly CDN", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:03:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 49200, "dest_ip": "203.0.113.45", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2028765, "rev": 3, "signature": "ET MALWARE Cobalt Strike Beacon Activity", "category": "A Network Trojan was detected", "severity": 1}}
+  {"timestamp": "2026-01-15T14:05:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 49210, "dest_ip": "203.0.113.45", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2034562, "rev": 1, "signature": "ET TROJAN Suspected Cobalt Strike C2 Channel", "category": "A Network Trojan was detected", "severity": 1}}
+  {"timestamp": "2026-01-15T14:05:20.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 49215, "dest_ip": "203.0.113.45", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2036334, "rev": 2, "signature": "ET MALWARE SSL Certificate Associated with Cobalt Strike", "category": "A Network Trojan was detected", "severity": 1}}
+  {"timestamp": "2026-01-15T14:07:30.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 55123, "dest_ip": "10.10.3.1", "dest_port": 53, "proto": "UDP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2027863, "rev": 1, "signature": "ET DNS Excessive DNS Queries for TXT Records (Possible DNS Tunnel)", "category": "Potentially Bad Traffic", "severity": 2}}
+  {"timestamp": "2026-01-15T14:10:00.000000+0000", "event_type": "alert", "src_ip": "10.10.3.15", "src_port": 40959, "dest_ip": "10.10.5.208", "dest_port": 3389, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2002911, "rev": 6, "signature": "ET SCAN Potential SSH Scan", "category": "Attempted Information Leak", "severity": 2}}
+  {"timestamp": "2026-01-15T14:10:05.000000+0000", "event_type": "alert", "src_ip": "10.10.3.15", "src_port": 48674, "dest_ip": "10.10.5.92", "dest_port": 80, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2002911, "rev": 6, "signature": "ET SCAN Potential SSH Scan", "category": "Attempted Information Leak", "severity": 2}}
+  {"timestamp": "2026-01-15T14:10:10.000000+0000", "event_type": "alert", "src_ip": "10.10.3.15", "src_port": 42615, "dest_ip": "10.10.5.26", "dest_port": 80, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2002911, "rev": 6, "signature": "ET SCAN Potential SSH Scan", "category": "Attempted Information Leak", "severity": 2}}
+  {"timestamp": "2026-01-15T14:15:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.35", "src_port": 57885, "dest_ip": "20.190.159.23", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2025000, "rev": 1, "signature": "ET POLICY Observed HTTP User-Agent with Suspicious Characteristics", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:17:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 56341, "dest_ip": "20.190.159.23", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2025001, "rev": 1, "signature": "ET POLICY Observed HTTP User-Agent with Suspicious Characteristics", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:19:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.55", "src_port": 60778, "dest_ip": "20.190.159.23", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2025002, "rev": 1, "signature": "ET POLICY Observed HTTP User-Agent with Suspicious Characteristics", "category": "Not Suspicious Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:20:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.35", "src_port": 54922, "dest_ip": "104.16.132.229", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024100, "rev": 1, "signature": "ET POLICY External IP Lookup", "category": "Potentially Bad Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:21:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.55", "src_port": 59572, "dest_ip": "185.199.108.133", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024101, "rev": 1, "signature": "ET POLICY External IP Lookup", "category": "Potentially Bad Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:22:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.55", "src_port": 50076, "dest_ip": "185.199.108.133", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024102, "rev": 1, "signature": "ET POLICY External IP Lookup", "category": "Potentially Bad Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:23:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.55", "src_port": 53808, "dest_ip": "104.16.132.229", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024103, "rev": 1, "signature": "ET POLICY External IP Lookup", "category": "Potentially Bad Traffic", "severity": 3}}
+  {"timestamp": "2026-01-15T14:30:00.000000+0000", "event_type": "alert", "src_ip": "10.10.5.22", "src_port": 49300, "dest_ip": "198.51.100.77", "dest_port": 443, "proto": "TCP", "alert": {"action": "allowed", "gid": 1, "signature_id": 2024897, "rev": 1, "signature": "ET POLICY Possible Data Exfiltration - Large Outbound Transfer", "category": "Potential Corporate Privacy Violation", "severity": 2}}
+expected_tools: []
+expected_findings:
+  - synonyms: ["10.10.5.22", "compromised host", "single host", "infected host"]
+  - synonyms: ["C2 beaconing", "Cobalt Strike", "beacon", "CS beacon", "command and control"]
+  - synonyms: ["203.0.113.45", "C2 server", "C2 IP", "attacker infrastructure"]
+  - synonyms: ["correlated", "cross-source", "both sources", "Zeek and Suricata", "confirmed by both"]
+  - synonyms: ["DNS tunneling", "DNS tunnel", "data over DNS", "cdn-sync.data-analytics-corp.xyz"]
+  - synonyms: ["data exfiltration", "large outbound", "198.51.100.77", "exfil"]
+  - synonyms: ["attack narrative", "timeline", "sequence of events", "chain of events"]
+pass_criteria: Correlates 10.10.5.22 activity across Zeek and Suricata to identify C2 beaconing, DNS tunneling, and exfiltration as a unified attack narrative
+tags: [threat-hunting, correlation, multi-source, zeek, suricata, phase1]
+max_turns: 1

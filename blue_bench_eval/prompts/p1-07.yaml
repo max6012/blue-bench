@@ -1,0 +1,50 @@
+id: p1-07
+category: forensics
+title: Forensic Timeline Reconstruction
+question: |
+  You are a DFIR analyst. Analyze the following forensic artifact timeline and reconstruct what happened on this system. Provide a narrative including: initial compromise vector, attacker actions in chronological order, persistence mechanisms, and any lateral movement or data exfiltration indicators.
+
+  2026-01-15T14:18:05Z | EMAIL_RECV | jsmith@corp.eadrcc.int received email from hr-benefits@eadrcc-updates.com | Subject: Q4 Bonus Report | Attachment: Q4_Report.pdf.exe
+  2026-01-15T14:19:42Z | FILE_CREATE | C:\Users\jsmith\Downloads\Q4_Report.pdf.exe | Size: 284672 | MD5: a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6
+  2026-01-15T14:20:01Z | FILE_CREATE | C:\Users\jsmith\Downloads\Q4_Report.pdf | Size: 45321 | (decoy PDF dropped by exe)
+  2026-01-15T14:20:02Z | PREFETCH | Q4_REPORT.PDF.EXE-A1B2C3D4.pf | Run count: 1 | Last run: 2026-01-15T14:20:01Z
+  2026-01-15T14:20:08Z | FILE_CREATE | C:\Users\jsmith\AppData\Local\Temp\svchost.exe | Size: 184320 | MD5: d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9
+  2026-01-15T14:20:09Z | PREFETCH | SVCHOST.EXE-E5F6A7B8.pf | Run count: 1 | Path: C:\Users\jsmith\AppData\Local\Temp\svchost.exe
+  2026-01-15T14:20:10Z | PROCESS | PID: 4892 | C:\Users\jsmith\AppData\Local\Temp\svchost.exe | Parent: Q4_Report.pdf.exe (PID: 3156) | User: jsmith
+  2026-01-15T14:20:15Z | REG_SET | HKCU\Software\Microsoft\Windows\CurrentVersion\Run\SysHealthCheck | Data: C:\Users\jsmith\AppData\Local\Temp\svchost.exe
+  2026-01-15T14:20:16Z | REG_SET | HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\sethc.exe | Debugger: C:\Windows\System32\cmd.exe
+  2026-01-15T14:22:30Z | NETWORK | svchost.exe (PID: 4892) → 203.0.113.45:443 | Bytes sent: 256 | Bytes recv: 12480 | Duration: 2.1s
+  2026-01-15T14:23:31Z | NETWORK | svchost.exe (PID: 4892) → 203.0.113.45:443 | Bytes sent: 312 | Bytes recv: 8960 | Duration: 1.8s
+  2026-01-15T14:24:32Z | NETWORK | svchost.exe (PID: 4892) → 203.0.113.45:443 | Bytes sent: 280 | Bytes recv: 15360 | Duration: 2.4s
+  2026-01-15T14:25:30Z | DNS | Query: cdn-sync.data-analytics-corp.xyz | Type: TXT | Response: 485 bytes | Process: svchost.exe
+  2026-01-15T14:25:31Z | DNS | Query: a8f3e2d1c0b9.cdn-sync.data-analytics-corp.xyz | Type: A | Response: 127 bytes | Process: svchost.exe
+  2026-01-15T14:28:00Z | PROCESS | PID: 5104 | C:\Windows\System32\whoami.exe /all | Parent: svchost.exe (PID: 4892) | User: jsmith
+  2026-01-15T14:28:05Z | PROCESS | PID: 5108 | C:\Windows\System32\net.exe view /domain | Parent: svchost.exe (PID: 4892) | User: jsmith
+  2026-01-15T14:28:12Z | PROCESS | PID: 5112 | C:\Windows\System32\nltest.exe /dclist:corp.eadrcc.int | Parent: svchost.exe (PID: 4892) | User: jsmith
+  2026-01-15T14:28:20Z | PROCESS | PID: 5116 | C:\Windows\System32\net.exe localgroup administrators | Parent: svchost.exe (PID: 4892) | User: jsmith
+  2026-01-15T14:35:00Z | PROCESS | PID: 5200 | C:\Windows\System32\rundll32.exe comsvcs.dll MiniDump | Parent: svchost.exe (PID: 4892) | User: jsmith
+  2026-01-15T14:35:05Z | FILE_CREATE | C:\Users\jsmith\AppData\Local\Temp\debug.dmp | Size: 52428800 | (LSASS memory dump)
+  2026-01-15T14:45:10Z | NETWORK | svchost.exe (PID: 4892) → 10.10.5.35:445 | SMB Session Setup | User: admin-jsmith
+  2026-01-15T14:45:15Z | NETWORK | svchost.exe (PID: 4892) → 10.10.5.35:135 | RPC Endpoint Mapper
+  2026-01-15T14:45:20Z | FILE_CREATE_REMOTE | \\10.10.5.35\C$\Windows\Temp\update.exe | Size: 184320 | Source: 10.10.5.22
+  2026-01-15T14:45:25Z | PROCESS_REMOTE | 10.10.5.35 | PID: 2048 | C:\Windows\Temp\update.exe | Created via: WMI | User: admin-jsmith
+  2026-01-15T15:10:00Z | PROCESS | PID: 5400 | C:\Windows\System32\cmd.exe /c dir C:\Users /s /b > C:\Users\jsmith\AppData\Local\Temp\files.txt | Parent: svchost.exe
+  2026-01-15T15:12:00Z | FILE_CREATE | C:\Users\jsmith\AppData\Local\Temp\collected.7z | Size: 8945664 | (staged data archive)
+  2026-01-15T15:15:00Z | NETWORK | svchost.exe (PID: 4892) → 198.51.100.77:443 | Bytes sent: 8945920 | Bytes recv: 1024 | Duration: 45.2s
+  2026-01-15T15:20:00Z | FILE_DELETE | C:\Users\jsmith\AppData\Local\Temp\debug.dmp | (LSASS dump deleted)
+  2026-01-15T15:20:05Z | FILE_DELETE | C:\Users\jsmith\AppData\Local\Temp\files.txt | (file listing deleted)
+  2026-01-15T15:20:10Z | REG_SET | HKLM\SYSTEM\CurrentControlSet\Services\EventLog\Security | MaxSize changed from 20971520 to 1048576 | (security log size reduced)
+expected_tools: []
+expected_findings:
+  - synonyms: ["phishing", "Q4_Report.pdf.exe", "spearphishing attachment", "T1566", "initial access via email"]
+  - synonyms: ["svchost.exe in Temp", "payload dropped", "masquerading", "T1036", "fake svchost"]
+  - synonyms: ["203.0.113.45", "C2 communication", "command and control", "beaconing"]
+  - synonyms: ["cdn-sync.data-analytics-corp.xyz", "DNS tunneling", "DNS tunnel", "T1071.004"]
+  - synonyms: ["LSASS dump", "comsvcs.dll MiniDump", "credential dumping", "T1003.001"]
+  - synonyms: ["lateral movement", "10.10.5.35", "SMB", "WMI", "T1021", "admin-jsmith"]
+  - synonyms: ["198.51.100.77", "data exfiltration", "exfil", "collected.7z", "T1041"]
+  - synonyms: ["T1547.001", "Run key", "HKCU Run", "SysHealthCheck", "persistence", "registry run key"]
+  - synonyms: ["T1546.008", "sethc.exe", "IFEO", "Image File Execution Options", "sticky keys", "accessibility feature backdoor"]
+pass_criteria: Reconstructs the full attack chain from phishing email through C2, credential dumping, lateral movement, and exfiltration, identifying both persistence mechanisms
+tags: [forensics, dfir, timeline, lateral-movement, phase1]
+max_turns: 1

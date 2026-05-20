@@ -1,0 +1,17 @@
+id: p2-01
+category: triage
+archive_id: 1
+title: Initial alert triage
+question: |
+  I just started my shift. What's the current alert situation look like? I want the severity breakdown and what's the most urgent thing I need to look at first.
+expected_tools:
+  - search_alerts
+  - count_by_field
+expected_findings:
+  - synonyms: ["Cobalt Strike", "cobaltstrike", "cobalt-strike", "CS beacon"]
+  - synonyms: ["10.10.5.22"]
+  - synonyms: ["severity 1", "sev 1", "sev-1", "critical"]
+  - synonyms: ["C2", "command and control", "command-and-control"]
+pass_criteria: Identifies Cobalt Strike alerts as highest priority, mentions 10.10.5.22
+tags: [triage, TH, aggregation, rewrite1, iter3]
+max_turns: 10

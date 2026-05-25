@@ -213,6 +213,22 @@ def test_unknown_tier_raises():
         build_topology("XL")  # type: ignore[arg-type]
 
 
+# --- seed varies users, not hosts (added after code-review feedback) ---
+
+
+def test_seed_changes_user_names_but_not_hosts():
+    a = build_topology("M", seed=0)
+    b = build_topology("M", seed=7)
+    # Hosts/IPs/services are seed-invariant.
+    assert a.hosts == b.hosts
+    assert a.services == b.services
+    assert a.vlans == b.vlans
+    # User names vary (at least one regular user has a different username).
+    a_regular = sorted(u.username for u in a.users if u.role == "user")
+    b_regular = sorted(u.username for u in b.users if u.role == "user")
+    assert a_regular != b_regular, "seed change did not vary regular usernames"
+
+
 # --- helpers ---
 
 

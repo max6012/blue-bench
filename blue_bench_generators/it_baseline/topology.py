@@ -329,15 +329,22 @@ def _make_hosts(tier: Literal["S", "M", "L"]) -> tuple[Host, ...]:
     return tuple(hosts)
 
 
-def _name_at(index: int) -> tuple[str, str]:
+def _name_at(index: int, seed: int = 0) -> tuple[str, str]:
     """Pick (first, last) deterministically from the pools.
 
     Uses 2D indexing (first cycles, last advances every full first cycle)
     so the pair space is ``|first| * |last| = 900`` unique combinations
     before wrap-around -- comfortably above any tier's user count.
+
+    ``seed`` shifts the combined-index by a stride coprime to 900 so
+    different seeds produce different (first, last) selections without
+    breaking determinism within a single (tier, seed) pair. The shift
+    affects only user names; hosts/IPs/services are seed-invariant
+    (their identity is fixed by tier).
     """
-    first = _FIRST_NAMES[index % len(_FIRST_NAMES)]
-    last = _LAST_NAMES[(index // len(_FIRST_NAMES)) % len(_LAST_NAMES)]
+    combined = (index + seed * 17) % (len(_FIRST_NAMES) * len(_LAST_NAMES))
+    first = _FIRST_NAMES[combined % len(_FIRST_NAMES)]
+    last = _LAST_NAMES[(combined // len(_FIRST_NAMES)) % len(_LAST_NAMES)]
     return first, last
 
 
@@ -356,7 +363,11 @@ def _dept_for(index: int) -> str:
     return _DEPARTMENT_WEIGHTS[-1][0]
 
 
-def _make_users(tier: Literal["S", "M", "L"], hosts: tuple[Host, ...]) -> tuple[User, ...]:
+def _make_users(
+    tier: Literal["S", "M", "L"],
+    hosts: tuple[Host, ...],
+    seed: int = 0,
+) -> tuple[User, ...]:
     workstations = [h for h in hosts if h.role == "workstation"]
     admin_workstations = [h for h in hosts if h.role == "admin-workstation"]
     servers = [h for h in hosts if h.role not in ("workstation", "admin-workstation")]
@@ -368,7 +379,7 @@ def _make_users(tier: Literal["S", "M", "L"], hosts: tuple[Host, ...]) -> tuple[
     if not workstations:
         raise ValueError(f"tier {tier} has no workstations -- cannot place regular users")
     for i in range(regular_count):
-        first, last = _name_at(i)
+        first, last = _name_at(i, seed=seed)
         username = f"{first}.{last}"
         display_name = f"{first.capitalize()} {last.capitalize()}"
         host = workstations[i % len(workstations)]
@@ -382,11 +393,12 @@ def _make_users(tier: Literal["S", "M", "L"], hosts: tuple[Host, ...]) -> tuple[
             )
         )
 
-    # Admin users: one per admin-workstation, names from a different
-    # slice of the pool so they don't collide with regular users.
+    # Admin users: one per admin-workstation. The ``.adm`` username
+    # suffix differentiates them from regular users at every seed value,
+    # so the name-pool slice does not need to be disjoint.
     admin_offset = len(_FIRST_NAMES) // 2
     for j, host in enumerate(admin_workstations):
-        first, last = _name_at(admin_offset + j)
+        first, last = _name_at(admin_offset + j, seed=seed)
         username = f"{first}.{last}.adm"
         display_name = f"{first.capitalize()} {last.capitalize()} (Admin)"
         users.append(
@@ -460,12 +472,15 @@ def build_topology(
     """Deterministic topology builder.
 
     Args:
-        tier: corpus tier -- "S", "M", or "L".
-        seed: integer seed reserved for future stochastic variations; the
-            current implementation does not use it (population, naming,
-            and IP allocation are all index-driven). Accepted and
-            recorded on the Topology so future tier changes can vary
-            shape without breaking the call contract.
+        tier: corpus tier -- "S", "M", or "L". Drives host/user/service
+            populations from a fixed per-tier table.
+        seed: shifts the user-name selection. Hosts, IPs, VLANs, OUs,
+            and service-endpoint assignments are seed-INVARIANT (their
+            identity is fixed by tier so cross-corpus comparisons stay
+            stable). User names (first.last for regulars, first.last.adm
+            for admins) vary deterministically with seed -- useful for
+            generating multiple distinguishable tenant variants from the
+            same topology shape.
 
     Returns:
         Topology dataclass (frozen, hashable, tuple-only collections).
@@ -481,7 +496,7 @@ def build_topology(
         for name, vid, cidr, gw in VLAN_SPECS
     )
     hosts = _make_hosts(tier)
-    users = _make_users(tier, hosts)
+    users = _make_users(tier, hosts, seed=seed)
     services = _make_services(hosts)
 
     log.info(

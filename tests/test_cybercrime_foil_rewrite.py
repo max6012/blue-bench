@@ -163,3 +163,52 @@ def test_subnet_too_small_raises():
 
 def test_empty_event_list_returns_empty():
     assert rewrite_events([], incident_id="x", target_epoch=datetime.now(timezone.utc), target_subnet="10.42.0.0/16") == []
+
+
+# --- regression: _parse_iso must round-trip the writer's own +0000 offset ---
+
+
+def test_parse_iso_accepts_no_colon_offset():
+    """rewrite._parse_iso must accept ``+HHMM`` (no colon) because the
+    matching writer emits Suricata timestamps in that format. Python
+    3.10's fromisoformat rejects it without normalisation; this test
+    pins the normalisation behaviour.
+    """
+    from datetime import datetime as _dt, timezone as _tz
+    from blue_bench_generators.cybercrime_foil.rewrite import _parse_iso
+
+    expected = _dt(2026, 6, 10, 14, 32, 7, 123456, tzinfo=_tz.utc)
+    parsed = _parse_iso("2026-06-10T14:32:07.123456+0000")
+    assert parsed == expected
+    # Also accepts the standard colonised form.
+    assert _parse_iso("2026-06-10T14:32:07.123456+00:00") == expected
+    # And ``Z`` suffix.
+    assert _parse_iso("2026-06-10T14:32:07.123456Z") == expected
+
+
+def test_ipv6_address_logs_warning_and_passes_through(caplog):
+    """v1 does not rewrite IPv6; it must log a warning per unique
+    address rather than silently passing through.
+    """
+    import logging
+    from blue_bench_generators.cybercrime_foil.rewrite import rewrite_events
+
+    events = [
+        {
+            "_log": "conn",
+            "ts": "1700000000.000000",
+            "id.orig_h": "10.5.5.5",
+            "id.resp_h": "2001:db8::1",  # IPv6
+        }
+    ]
+    caplog.set_level(logging.WARNING, logger="blue_bench_generators.cybercrime_foil.rewrite")
+    out = rewrite_events(
+        events,
+        incident_id="ipv6-warn-test",
+        target_epoch=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        target_subnet="10.42.0.0/24",
+    )
+    # IPv6 token survives unchanged.
+    assert out[0]["id.resp_h"] == "2001:db8::1"
+    # And a warning was emitted.
+    assert any("IPv6" in r.message for r in caplog.records)

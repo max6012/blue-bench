@@ -53,9 +53,20 @@ def _seed_for(incident_id: str) -> int:
 
 
 def _parse_iso(ts: str) -> datetime:
-    """Parse an ISO-8601 timestamp; tolerate trailing ``Z``."""
+    """Parse an ISO-8601 timestamp; tolerate ``Z`` and offset variants.
+
+    Python 3.10's ``datetime.fromisoformat`` does NOT accept the
+    ``+HHMM`` offset (no colon) shape -- only ``+HH:MM``. The matching
+    writer in ``_set_event_ts`` emits Suricata-style ``+0000`` offsets
+    by convention, so the writer's own output isn't round-trippable on
+    3.10. Normalise both shapes before delegating to
+    ``fromisoformat``. (3.11+ accepts the no-colon form; this code still
+    works there.)
+    """
     if ts.endswith("Z"):
         ts = ts[:-1] + "+00:00"
+    elif len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
+        ts = ts[:-2] + ":" + ts[-2:]
     return datetime.fromisoformat(ts)
 
 
@@ -121,6 +132,21 @@ def _is_private(addr: str) -> bool:
     return any(ip in net for net in _RFC1918)
 
 
+def _looks_like_ipv6(addr: str) -> bool:
+    """True if the token parses as IPv6 (regardless of scope).
+
+    Used to surface IPv6 in MTA captures rather than silently passing
+    through. v1 does NOT rewrite IPv6 -- those addresses survive the
+    rewrite step unchanged, which may or may not be desired downstream.
+    Emitting a one-time WARN per unique address makes the gap visible.
+    """
+    try:
+        ipaddress.IPv6Address(addr)
+        return True
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+
+
 def _build_ip_map(
     events: Iterable[dict],
     target_subnet: ipaddress.IPv4Network,
@@ -134,6 +160,7 @@ def _build_ip_map(
     """
     private_ips: list[str] = []
     seen: set[str] = set()
+    ipv6_warned: set[str] = set()
     for ev in events:
         for field in ZEEK_IP_FIELDS + SURICATA_IP_FIELDS:
             v = ev.get(field)
@@ -141,9 +168,18 @@ def _build_ip_map(
                 continue
             # Some Zeek fields are space-separated lists (tx_hosts, rx_hosts).
             for token in re.split(r"[\s,]+", str(v)):
-                if token and _is_private(token) and token not in seen:
+                if not token:
+                    continue
+                if _is_private(token) and token not in seen:
                     seen.add(token)
                     private_ips.append(token)
+                elif token not in ipv6_warned and _looks_like_ipv6(token):
+                    log.warning(
+                        "rewrite: IPv6 address %r passes through unchanged "
+                        "(v1 only remaps IPv4 RFC1918 addresses)",
+                        token,
+                    )
+                    ipv6_warned.add(token)
     # Stable ordering: sort before shuffling so the RNG draw order is
     # independent of dict-iteration order across Python versions.
     private_ips.sort()

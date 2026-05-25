@@ -180,6 +180,12 @@ def _classify_role(event: dict, profile: C2Profile) -> str:
     keep the heuristic narrow: DNS -> discovery (name resolution is
     discovery-tactic shaped), files -> delivery, alerts -> other (the
     alert is meta-evidence, not a TTP-evidencing event of its own).
+
+    KNOWN-LIMITED v1 STUB. Like ``cybercrime_foil/bundle.py``, this
+    classifier only produces 4 of the 10 schema roles. The other six
+    (lateral, execution, persistence, initial-access, impact, exfil)
+    require chain-context the synthetic generator does not model in v1.
+    TODO(orchestrator): refine once ``t-9pwe`` lands.
     """
     log_name = str(event.get("_log", "")).lower()
     event_type = str(event.get("event_type", "")).lower()
@@ -253,9 +259,13 @@ def build_ground_truth(
                 },
             },
             "role": _classify_role(ev, profile),
-            # Per-event TTP linking: synthetic C2 evidences the same set
-            # the profile declares. The orchestrator can refine per-event
-            # later if needed; v1 attributes the whole profile TTP set.
+            # KNOWN-LIMITED v1 STUB: every event links to the SAME
+            # single TTP (the profile's first declared TTP). The schema
+            # intent is "TTPs THIS specific event evidences" which would
+            # require per-event chain analysis. Schema rule 11 still
+            # passes (required ⊆ ttps as a set); only per-event
+            # attribution granularity is approximate.
+            # TODO(orchestrator): chain-aware refinement in t-9pwe.
             "ttp_links": [profile.ttps[0]] if profile.ttps else [],
         })
 
@@ -325,7 +335,7 @@ def build_ground_truth(
         },
         "scoring": {
             "detection": {
-                "found_threshold": 0.7,
+                "found_threshold": 0.8,
                 "partial_threshold": 0.3,
             },
             "attribution": {

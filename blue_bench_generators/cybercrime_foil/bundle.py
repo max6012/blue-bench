@@ -66,9 +66,20 @@ class SchemaValidationError(ValueError):
 def _classify_role(event: dict) -> str:
     """Best-effort mapping from a Zeek/Suricata event to a schema role.
 
-    This is a coarse heuristic — the orchestrator will refine when it
-    cross-references against the catalogue's per-incident chain knowledge.
-    For v1 we map by log name + obvious port hints.
+    KNOWN-LIMITED v1 STUB. This heuristic only ever produces four of the
+    ten schema-defined roles (``delivery``, ``c2``, ``discovery``,
+    ``other``). It NEVER produces ``lateral``, ``execution``,
+    ``persistence``, ``initial-access``, ``impact``, or ``exfil`` --
+    because those roles cannot be inferred from a single network event
+    in isolation; they require chain-context (host telemetry, parent
+    process, prior auth, etc.) that the orchestrator (``t-9pwe``) will
+    supply by cross-referencing the catalogue's per-incident chain
+    knowledge and any companion Sysmon/EVTX events.
+
+    TODO(orchestrator): replace this single-event heuristic with a
+    chain-aware classifier once ``t-9pwe`` lands. Until then, the role
+    field on per-event pointers is approximate and should not be used
+    as the primary classification signal.
     """
     log_name = str(event.get("_log", "")).lower()
     event_type = str(event.get("event_type", "")).lower()  # Suricata field
@@ -162,6 +173,15 @@ def build_ground_truth(
                 },
             },
             "role": _classify_role(ev),
+            # KNOWN-LIMITED v1 STUB: every event currently links to the
+            # SAME single TTP (the catalogue entry's first required TTP).
+            # The schema's intent is "which TTPs this specific event
+            # evidences" -- which requires per-event chain analysis the
+            # orchestrator (t-9pwe) will supply. Schema rule 11
+            # (required ⊆ ttps) still passes because the SET intersection
+            # is correct; only per-event attribution is approximate.
+            # TODO(orchestrator): replace with chain-aware per-event TTP
+            # linking once t-9pwe lands.
             "ttp_links": list(entry.ttps_required[:1]) or list(entry.attribution_required[:1]),
         })
 
@@ -221,7 +241,7 @@ def build_ground_truth(
         },
         "scoring": {
             "detection": {
-                "found_threshold": 0.7,
+                "found_threshold": 0.8,
                 "partial_threshold": 0.3,
             },
             "attribution": {
@@ -355,8 +375,17 @@ def validate_bundle(gt: dict, *, expected_build_hash: str | None = None) -> None
 
 
 def _parse_iso(ts: str) -> datetime:
+    """ISO-8601 parse that tolerates ``Z`` and ``+HHMM`` (no-colon) offsets.
+
+    Python 3.10's ``fromisoformat`` rejects ``+HHMM``; our writers in
+    ``rewrite.py`` emit Suricata-style ``+0000``. Normalise so the
+    validator's rule 9 (duration_seconds == end - start) round-trips
+    on the project's declared minimum.
+    """
     if ts.endswith("Z"):
         ts = ts[:-1] + "+00:00"
+    elif len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
+        ts = ts[:-2] + ":" + ts[-2:]
     return datetime.fromisoformat(ts)
 
 

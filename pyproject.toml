@@ -37,6 +37,7 @@ packages = [
     "blue_bench_client",
     "blue_bench_cli",
     "blue_bench_eval",
+    "blue_bench_generators",
 ]
 
 [tool.pytest.ini_options]

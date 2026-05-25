@@ -69,25 +69,29 @@ class C2Profile(Protocol):
 
 # --- shared computed properties (free functions; profiles call these) ---
 #
-# Log-coverage matrix per task spec (t-c2-gen, "Components to build" >
-# "Zeek emitter"):
+# Log-coverage matrix is TAP-REALISTIC (updated 2026-05-25 in c9cca8d:
+# the prior "commodity TLS-visibility hand-wave" was dropped because it
+# inverted the polarity of correct reasoning -- a model that flagged
+# "http body visible on TLS-port traffic is anomalous" was right in
+# reality and wrong against the synthetic data). Only records a passive
+# network tap could actually produce are emitted:
 #
-#     commodity  (any transport)  -> all five: conn, dns, http, ssl, files
-#         "loud traffic with full visibility" -- the spec rule covers the
-#         realism hand-wave that commodity captures are typically taken
-#         with TLS-key-export or MITM visibility, so http + files are
-#         observable even on TLS-encrypted commodity C2.
+#     commodity http   -> conn, dns, http, files
+#     commodity https  -> conn, dns, ssl
+#     stealth   https  -> conn, dns, ssl
+#     stealth   dns    -> conn, dns
 #
-#     stealth-HTTPS  -> conn + ssl ONLY
-#         "TLS-encrypted, no HTTP content visible". Note the explicit
-#         exclusion of dns: stealth profiles are presumed to resolve
-#         endpoints via mechanisms that don't surface a dns.log
-#         (cached resolution, hosts-file pinning, DoH bypass) or via
-#         resolvers outside the captured perimeter.
+# Commodity-HTTPS and stealth-HTTPS emit the SAME log types by design.
+# Discrimination signal comes from cadence, payload size, SNI pattern,
+# JA3-shape hint, and Suricata alert presence -- the features actually
+# available to a passive tap. That is the harder, more valid RQ3 space.
 #
-#     stealth-DNS  -> conn + dns ONLY
-#         "small queries, no HTTP at all". DNS is the C2 transport
-#         itself.
+# Predicates are TRANSPORT-DRIVEN, not kind-driven. If a downstream
+# consumer ever needs the prior TLS-visibility shape (analyst has MITM
+# keys or host-side capture), introduce that as an explicit profile
+# attribute or a separate authoring path -- do NOT loosen the
+# predicates back to kind-driven dispatch. See the c2/zeek_emit.py
+# module docstring for the full rationale.
 #
 # These rules drive both the Zeek emitter and the Suricata emitter so
 # the on-the-wire visibility is consistent across both observers.

@@ -296,15 +296,20 @@ def _gt_for(preset_name: str, duration_s: int = 3600, seed: int = 5) -> dict:
 
 
 def test_commodity_https_bundle_populates_iocs():
+    """Tap-realistic commodity-HTTPS: callback IPs + SNI domains, NO URLs.
+
+    URLs would require visibility into the HTTP request line over TLS,
+    which an unaided tap does not have. SNI / cert subject ARE
+    visible to the tap and surface as domain IOCs.
+    """
     gt = _gt_for("cobalt-strike-default")
     iocs = gt["expected_findings"]["iocs"]
     # Callback IPs surface as ipv4 IOCs.
     assert set(iocs["ipv4"]) >= set(CALLBACKS)
     # The TLS SNI we generated must appear as a domain IOC.
     assert iocs["domains"]
-    # Cobalt Strike default profile uses HTTPS transport -> URLs are https://.
-    assert iocs["urls"]
-    assert all(u.startswith("https://") for u in iocs["urls"])
+    # No URLs: HTTPS is opaque to a passive tap.
+    assert iocs["urls"] == [], iocs["urls"]
     # No host-side IOC types (process / file / registry) for network-only synthetic.
     assert iocs["sha256"] == []
     assert iocs["process_names"] == []

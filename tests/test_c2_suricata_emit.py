@@ -68,11 +68,15 @@ def test_stealth_profiles_emit_zero_alerts():
         )
 
 
-def test_stealth_https_emits_flow_and_tls_only():
-    """Stealth-HTTPS: conn (flow) + ssl (tls) only -- no dns event type."""
+def test_stealth_https_emits_flow_dns_tls():
+    """Tap-realistic: stealth-HTTPS -> flow + dns + tls.
+
+    DNS is now included (real implants do DNS lookups before
+    connecting); no http event type because HTTPS is opaque to the tap.
+    """
     events = _events_for("lotl-https-cloudfront", duration_s=86400 * 7)
     types = _event_types(events)
-    assert types == {"flow", "tls"}, types
+    assert types == {"flow", "dns", "tls"}, types
 
 
 def test_stealth_dns_emits_flow_and_dns_only():
@@ -81,12 +85,18 @@ def test_stealth_dns_emits_flow_and_dns_only():
     assert types == {"flow", "dns"}, types
 
 
-def test_commodity_https_emits_flow_dns_http_tls_alert():
-    """Spec: commodity emits all five log types -- HTTPS commodity carries
-    flow + dns + http + tls + alert in eve.json."""
+def test_commodity_https_emits_flow_dns_tls_alert_no_http():
+    """Tap-realistic: commodity-HTTPS -> flow + dns + tls + alert.
+
+    No http event type: an unaided tap cannot reconstruct HTTP
+    request/response bodies on TLS-encrypted traffic. Discrimination
+    from stealth-HTTPS comes from the alert presence + cadence + SNI
+    pattern, not from http body visibility.
+    """
     events = _events_for("cobalt-strike-default")
     types = _event_types(events)
-    assert types == {"flow", "dns", "http", "tls", "alert"}, types
+    assert types == {"flow", "dns", "tls", "alert"}, types
+    assert "http" not in types
 
 
 def test_commodity_http_emits_flow_dns_http_alert_no_tls():

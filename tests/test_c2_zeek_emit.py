@@ -32,27 +32,49 @@ def _log_kinds(events: list[dict]) -> set[str]:
     return {ev["_log"] for ev in events}
 
 
-def test_commodity_emits_all_five_log_types():
-    """Spec: commodity emits to all five log types (full visibility).
+def test_commodity_http_emits_conn_dns_http_files():
+    """Tap-realistic: commodity-HTTP -> conn + dns + http + files."""
+    kinds = _log_kinds(_events_for("icedid-http"))
+    assert kinds == {"conn", "dns", "http", "files"}, kinds
+    assert "ssl" not in kinds
 
-    Commodity HTTPS gets conn + dns + http + ssl + files. Commodity HTTP
-    does NOT have ssl (no TLS handshake on the wire). We assert the
-    "all 5 where applicable" rule: HTTPS -> {conn, dns, http, ssl, files};
-    HTTP -> {conn, dns, http, files}.
+
+def test_commodity_https_emits_conn_dns_ssl():
+    """Tap-realistic: commodity-HTTPS -> conn + dns + ssl.
+
+    No ``http`` or ``files`` records: an unaided network tap cannot
+    reconstruct HTTP request bodies or carve files out of TLS-encrypted
+    traffic. Discrimination from stealth-HTTPS comes from cadence,
+    payload size, SNI pattern, and Suricata alert presence.
     """
-    https_kinds = _log_kinds(_events_for("cobalt-strike-default"))
-    assert https_kinds == {"conn", "dns", "http", "ssl", "files"}, https_kinds
-    http_kinds = _log_kinds(_events_for("icedid-http"))
-    assert http_kinds == {"conn", "dns", "http", "files"}, http_kinds
-
-
-def test_stealth_https_emits_only_conn_and_ssl():
-    """Spec: stealth-HTTPS -> conn + ssl only (TLS-encrypted, no HTTP)."""
-    kinds = _log_kinds(_events_for("lotl-https-cloudfront", duration_s=86400 * 7))
-    assert kinds == {"conn", "ssl"}, kinds
-    assert "dns" not in kinds
+    kinds = _log_kinds(_events_for("cobalt-strike-default"))
+    assert kinds == {"conn", "dns", "ssl"}, kinds
     assert "http" not in kinds
     assert "files" not in kinds
+
+
+def test_stealth_https_emits_conn_dns_ssl():
+    """Tap-realistic: stealth-HTTPS -> conn + dns + ssl.
+
+    DNS is now included (real implants do a DNS lookup before
+    connecting). The prior matrix excluded dns because the SNI
+    duplicates the DNS query content, but both records exist on the
+    wire and the tap sees both.
+    """
+    kinds = _log_kinds(_events_for("lotl-https-cloudfront", duration_s=86400 * 7))
+    assert kinds == {"conn", "dns", "ssl"}, kinds
+    assert "http" not in kinds
+    assert "files" not in kinds
+
+
+def test_commodity_https_and_stealth_https_emit_same_log_types():
+    """Discrimination contract: HTTPS-commodity and HTTPS-stealth emit
+    the SAME log types by design. The model must discriminate by
+    behaviour (cadence, payload, SNI, alerts), not by log presence.
+    """
+    commodity_kinds = _log_kinds(_events_for("cobalt-strike-default"))
+    stealth_kinds = _log_kinds(_events_for("lotl-https-cloudfront", duration_s=86400 * 7))
+    assert commodity_kinds == stealth_kinds == {"conn", "dns", "ssl"}
 
 
 def test_stealth_dns_emits_only_conn_and_dns():

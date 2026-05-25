@@ -3,25 +3,26 @@
 For each ``BeaconEvent`` we emit one record per applicable Zeek log.
 Per-log inclusion is governed by the predicates in ``profiles.py``
 (``emits_dns_log``, ``emits_http_log``, ``emits_ssl_log``,
-``emits_files_log``). The matrix in practice:
+``emits_files_log``). The default dispatch is **tap-realistic**: only
+records a passive network tap could actually produce are emitted, so
+a model that reasons "http body visible on TLS-port traffic is
+anomalous" is correct against both reality and the synthetic data.
+
+Matrix:
 
     * ``conn``  -- always
-    * ``dns``   -- commodity (any transport) and stealth-dns;
-                   NOT stealth-https (the SNI is the only DNS-shaped
-                   artefact and lives in the ssl record)
-    * ``http``  -- ALL commodity profiles (http AND https). The
-                   commodity hand-wave: the analyst is assumed to have
-                   TLS visibility (MITM / exported keys / host-side
-                   process capture) so HTTP request shape is observable
-                   even on TLS-transport commodity captures. Stealth
-                   never emits http (would broadcast C2 in cleartext).
-    * ``ssl``   -- any HTTPS transport (commodity and stealth alike)
-    * ``files`` -- ALL commodity profiles (same TLS-visibility
-                   hand-wave). Stealth never emits files.
+    * ``dns``   -- always (every profile does DNS lookups; for
+                   stealth-dns DNS IS the transport)
+    * ``http``  -- cleartext HTTP transports only (commodity-http).
+                   HTTPS is opaque to an unaided tap.
+    * ``ssl``   -- any HTTPS transport (commodity-https, stealth-https)
+    * ``files`` -- cleartext HTTP transports only -- file bytes are
+                   only carve-able when the wire is cleartext.
 
-If the commodity TLS-visibility hand-wave proves problematic for a
-downstream consumer, tighten the ``emits_*`` predicates in
-``profiles.py`` -- this module reads from them.
+If a downstream consumer needs the prior "TLS-visibility" shape
+(analyst has MITM keys / host-side capture), introduce that as an
+explicit profile attribute or a separate authoring path; do NOT
+loosen the predicates back to kind-driven dispatch.
 
 The records use the same field shape that ``zeek_replay.parse_zeek_log_text``
 produces in the cybercrime_foil module, with one addition: the
@@ -211,16 +212,19 @@ def emit_for_profile(
 ) -> list[dict]:
     """Emit the full set of Zeek records for a beacon stream.
 
-    Per-profile log selection (derived from the ``emits_*`` predicates
-    in ``profiles.py``):
+    Tap-realistic per-profile log selection (derived from the
+    ``emits_*`` predicates in ``profiles.py``):
 
         commodity http   -> conn, dns, http, files
-        commodity https  -> conn, dns, http, ssl, files
-        stealth   https  -> conn, ssl
+        commodity https  -> conn, dns, ssl
+        stealth   https  -> conn, dns, ssl
         stealth   dns    -> conn, dns
 
-    The commodity hand-wave (http + files emitted even on HTTPS) assumes
-    the analyst has TLS-payload visibility. See module docstring.
+    Commodity-HTTPS and stealth-HTTPS emit the SAME log types by
+    design; discrimination comes from cadence, payload size, SNI
+    pattern, JA3-shape hint, and Suricata alert presence -- the
+    signals that are actually available to a passive tap. See module
+    docstring for the rationale.
     """
     out: list[dict] = []
     for b in beacons:

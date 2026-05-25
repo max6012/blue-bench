@@ -94,47 +94,50 @@ class C2Profile(Protocol):
 
 
 def emits_http_log(profile: C2Profile) -> bool:
-    """Whether to emit an ``http.log`` / Suricata ``http`` event.
+    """Emit ``http``-shaped records only on cleartext HTTP transports.
 
-    Commodity gets it always (full-visibility hand-wave). Stealth never
-    does -- it would advertise the C2 in cleartext fields.
+    Tap-realistic: an unaided network tap can only reconstruct HTTP
+    request/response bodies when the wire is cleartext. HTTPS C2
+    (commodity or stealth) is opaque to the tap and gets no http
+    record. If you ever need to model an analyst with TLS visibility
+    (host-side capture, MITM with key export, decrypting proxy),
+    introduce that as an explicit profile attribute or a separate
+    authoring path -- the default here keeps the bench valid for
+    unaided-tap reasoning so a model that flags "http body visible on
+    TLS-port traffic" as anomalous isn't wrongly penalised.
     """
-    return profile.kind() == "commodity"
+    return profile.transport == "http"
 
 
 def emits_ssl_log(profile: C2Profile) -> bool:
-    """Whether to emit an ``ssl.log`` / Suricata ``tls`` event.
+    """Emit ``ssl`` / ``tls`` records on every HTTPS transport.
 
-    Commodity HTTPS gets it; commodity HTTP doesn't (no TLS handshake).
-    Stealth HTTPS gets it; stealth DNS doesn't.
+    Both commodity-HTTPS and stealth-HTTPS produce a TLS handshake on
+    the wire; a passive tap sees the SSL record (server_name, cipher,
+    JA3-shape hint) regardless of profile kind.
     """
-    if profile.kind() == "commodity":
-        return profile.transport == "https"
-    # stealth
     return profile.transport == "https"
 
 
 def emits_dns_log(profile: C2Profile) -> bool:
-    """Whether to emit a ``dns.log`` / Suricata ``dns`` event.
+    """Emit ``dns`` records on every profile.
 
-    Per spec:
-        commodity any   -> YES (full visibility)
-        stealth https   -> NO  (conn + ssl only)
-        stealth dns     -> YES (DNS *is* the transport)
+    Real implants do DNS lookups before connecting (whether commodity
+    or stealth), and for DNS-tunneled stealth profiles DNS IS the
+    transport. A tap-realistic view shows the DNS query/response for
+    every profile shape.
     """
-    if profile.kind() == "commodity":
-        return True
-    # stealth
-    return profile.transport == "dns"
+    return True
 
 
 def emits_files_log(profile: C2Profile) -> bool:
-    """Whether to emit a ``files.log`` / files extraction event.
+    """Emit ``files`` records only on cleartext HTTP transports.
 
-    Commodity gets it (full-visibility hand-wave; even on TLS the
-    realism assumption is MITM / key-export). Stealth never does.
+    A tap can carve files out of HTTP because the bytes are visible on
+    the wire. HTTPS is opaque; no files record. Same rationale as
+    ``emits_http_log``: keep the bench valid for unaided-tap reasoning.
     """
-    return profile.kind() == "commodity"
+    return profile.transport == "http"
 
 
 @dataclass(frozen=True)

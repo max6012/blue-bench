@@ -85,10 +85,10 @@ def emit_flow_record(beacon: BeaconEvent, profile: C2Profile, seed: int) -> dict
 
 
 def emit_http_record(beacon: BeaconEvent, profile: C2Profile, seed: int) -> dict:
-    """``http`` eve record. Emitted for ALL commodity profiles (both
-    HTTP and HTTPS transports) under the commodity TLS-visibility
-    hand-wave -- see ``zeek_emit.py`` module docstring. Stealth never
-    emits http records.
+    """``http`` eve record. Tap-realistic: cleartext HTTP transports
+    only (commodity-http). HTTPS is opaque to an unaided tap so no
+    ``http`` event_type is emitted on TLS-bound commodity or stealth
+    profiles. See ``zeek_emit.py`` module docstring for rationale.
     """
     return {
         "_log": "eve",

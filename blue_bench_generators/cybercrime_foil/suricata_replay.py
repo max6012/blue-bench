@@ -8,10 +8,17 @@ Runs::
 
     suricata -r <pcap> --runmode=single -k none -l <out>
 
-Optional ruleset path via ``ruleset_dir`` argument or the
-``BLUE_BENCH_SURICATA_RULES`` env var. Default is to run without
-rules — Suricata still emits ``flow`` / ``dns`` / ``http`` / ``tls`` /
+Optional single-file ruleset via ``ruleset_file`` argument or the
+``BLUE_BENCH_SURICATA_RULES`` env var. Default is to run without rules
+— Suricata still emits ``flow`` / ``dns`` / ``http`` / ``tls`` /
 ``fileinfo`` events without any alert rules loaded.
+
+Note on ``-S``: Suricata's ``-S`` flag (``--sig-file``) takes ONE
+signature file, not a directory. If you need a directory of rule files
+(e.g. an unpacked ET-Open ruleset), point this wrapper at a top-level
+``rules.rules`` aggregator OR switch the runner to ``-c <suricata.yaml>``
+with ``rule-files:`` declared in the YAML. Directory inputs are rejected
+fast with a clear error rather than silently failing inside Suricata.
 """
 
 from __future__ import annotations
@@ -34,7 +41,7 @@ def run_suricata(
     out_dir: Path,
     *,
     suricata_binary: str = "suricata",
-    ruleset_dir: Path | None = None,
+    ruleset_file: Path | None = None,
 ) -> Path:
     """Run Suricata against a PCAP, return path to the produced ``eve.json``.
 
@@ -42,21 +49,30 @@ def run_suricata(
         pcap: absolute path to the PCAP file (must exist).
         out_dir: directory Suricata writes ``eve.json`` and rotated logs into.
         suricata_binary: override path to the ``suricata`` binary.
-        ruleset_dir: optional path to a ruleset directory; if None, falls
-            back to ``BLUE_BENCH_SURICATA_RULES`` env var; if still unset,
-            runs alert-less.
+        ruleset_file: optional path to a SINGLE signature file (passed
+            verbatim to Suricata's ``-S`` / ``--sig-file``). Suricata's
+            ``-S`` does not accept directories — see module docstring.
+            If ``None``, falls back to the ``BLUE_BENCH_SURICATA_RULES``
+            env var; if still unset, runs alert-less.
 
     Raises:
-        SuricataError: binary missing or replay non-zero exit.
+        SuricataError: binary missing, ruleset path is a directory, or
+            replay non-zero exit.
     """
     if not pcap.is_file():
         raise SuricataError(f"pcap not found: {pcap}")
     out_dir.mkdir(parents=True, exist_ok=True)
-    rules = ruleset_dir or (
+    rules = ruleset_file or (
         Path(os.environ["BLUE_BENCH_SURICATA_RULES"])
         if "BLUE_BENCH_SURICATA_RULES" in os.environ
         else None
     )
+    if rules is not None and rules.is_dir():
+        raise SuricataError(
+            f"ruleset_file {rules} is a directory; Suricata -S takes a "
+            "single signature file. Aggregate into one .rules file or "
+            "switch to a suricata.yaml-based runner."
+        )
     cmd = [
         suricata_binary,
         "-r",

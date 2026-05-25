@@ -34,6 +34,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+from blue_bench_generators._isotime import parse_iso
 from blue_bench_generators.c2 import profiles
 from blue_bench_generators.c2.beacon import generate_beacons
 from blue_bench_generators.c2.bundle import (
@@ -61,9 +62,13 @@ DEFAULT_CALLBACKS = ("203.0.113.42", "203.0.113.99")
 
 
 def _parse_iso(s: str) -> datetime:
-    if s.endswith("Z"):
-        s = s[:-1] + "+00:00"
-    dt = datetime.fromisoformat(s)
+    """CLI-side wrapper around the shared parser.
+
+    Adds a UTC default when the user passes a naive timestamp -- the
+    shared ``parse_iso`` preserves whatever timezone is supplied (or
+    none), and the rest of the pipeline assumes tz-aware datetimes.
+    """
+    dt = parse_iso(s)
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt
@@ -116,7 +121,6 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     profile = profiles.get_preset(args.preset)
     callbacks = _parse_callbacks(args.callbacks)
     start = _parse_iso(args.start)
-    end = start.replace() + (start - start)  # placeholder, recomputed below
 
     beacons = generate_beacons(
         profile=profile,

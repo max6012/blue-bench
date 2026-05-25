@@ -66,12 +66,31 @@ def _sha256_of(path: Path) -> str:
     return h.hexdigest()
 
 
+_HTTP_TIMEOUT_SECONDS = 60
+
+
 def _http_get(url: str, dest: Path) -> None:
+    """Fetch ``url`` to ``dest`` via stdlib urllib.
+
+    Notes:
+        * ``urllib`` raises ``HTTPError`` on 4xx/5xx by default, so an
+          error body is never saved as the artefact -- good.
+        * Sharp edge if the downloader is ever pointed at non-MTA
+          upstreams: a CDN that redirects an invalid path to a 200-OK
+          HTML error page (rather than returning a 4xx) would have its
+          HTML saved as ``.zip`` and fail later at unzip with a confusing
+          message. MTA itself returns clean 4xx; this is documented
+          rather than fixed here.
+        * ``timeout`` is bounded so a hung server cannot block
+          indefinitely.
+    """
     log.info("downloading %s -> %s", url, dest)
     dest.parent.mkdir(parents=True, exist_ok=True)
     # Use stdlib urllib so we don't add a new dep just for downloads.
     # MTA serves static HTTPS; no auth needed.
-    with urllib.request.urlopen(url) as resp:  # noqa: S310 — MTA is the documented source.
+    with urllib.request.urlopen(  # noqa: S310 — MTA is the documented source.
+        url, timeout=_HTTP_TIMEOUT_SECONDS
+    ) as resp:
         with dest.open("wb") as f:
             while True:
                 chunk = resp.read(1 << 16)

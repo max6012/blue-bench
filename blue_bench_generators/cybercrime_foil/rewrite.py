@@ -24,6 +24,8 @@ import re
 from datetime import datetime, timezone
 from typing import Iterable
 
+from blue_bench_generators._isotime import parse_iso as _parse_iso
+
 log = logging.getLogger(__name__)
 
 
@@ -52,22 +54,6 @@ def _seed_for(incident_id: str) -> int:
     return int.from_bytes(digest[:8], "big")
 
 
-def _parse_iso(ts: str) -> datetime:
-    """Parse an ISO-8601 timestamp; tolerate ``Z`` and offset variants.
-
-    Python 3.10's ``datetime.fromisoformat`` does NOT accept the
-    ``+HHMM`` offset (no colon) shape -- only ``+HH:MM``. The matching
-    writer in ``_set_event_ts`` emits Suricata-style ``+0000`` offsets
-    by convention, so the writer's own output isn't round-trippable on
-    3.10. Normalise both shapes before delegating to
-    ``fromisoformat``. (3.11+ accepts the no-colon form; this code still
-    works there.)
-    """
-    if ts.endswith("Z"):
-        ts = ts[:-1] + "+00:00"
-    elif len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
-        ts = ts[:-2] + ":" + ts[-2:]
-    return datetime.fromisoformat(ts)
 
 
 def _parse_event_ts(event: dict) -> datetime | None:

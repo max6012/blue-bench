@@ -85,7 +85,11 @@ def emit_flow_record(beacon: BeaconEvent, profile: C2Profile, seed: int) -> dict
 
 
 def emit_http_record(beacon: BeaconEvent, profile: C2Profile, seed: int) -> dict:
-    """``http`` eve record. Cleartext HTTP profiles only."""
+    """``http`` eve record. Emitted for ALL commodity profiles (both
+    HTTP and HTTPS transports) under the commodity TLS-visibility
+    hand-wave -- see ``zeek_emit.py`` module docstring. Stealth never
+    emits http records.
+    """
     return {
         "_log": "eve",
         "timestamp": _eve_ts(beacon),

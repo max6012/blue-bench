@@ -1,14 +1,27 @@
 """Zeek-format event emission for synthetic C2 beacons.
 
-For each ``BeaconEvent`` we emit one record per applicable Zeek log:
+For each ``BeaconEvent`` we emit one record per applicable Zeek log.
+Per-log inclusion is governed by the predicates in ``profiles.py``
+(``emits_dns_log``, ``emits_http_log``, ``emits_ssl_log``,
+``emits_files_log``). The matrix in practice:
 
     * ``conn``  -- always
-    * ``dns``   -- when the profile resolves a hostname
-                   (https/dns transport) or for dns-tunneled streams
-    * ``http``  -- only when transport is cleartext http
-    * ``ssl``   -- only when transport is https
-    * ``files`` -- only when transport is http (the only case the
-                   contents are observable to a tap)
+    * ``dns``   -- commodity (any transport) and stealth-dns;
+                   NOT stealth-https (the SNI is the only DNS-shaped
+                   artefact and lives in the ssl record)
+    * ``http``  -- ALL commodity profiles (http AND https). The
+                   commodity hand-wave: the analyst is assumed to have
+                   TLS visibility (MITM / exported keys / host-side
+                   process capture) so HTTP request shape is observable
+                   even on TLS-transport commodity captures. Stealth
+                   never emits http (would broadcast C2 in cleartext).
+    * ``ssl``   -- any HTTPS transport (commodity and stealth alike)
+    * ``files`` -- ALL commodity profiles (same TLS-visibility
+                   hand-wave). Stealth never emits files.
+
+If the commodity TLS-visibility hand-wave proves problematic for a
+downstream consumer, tighten the ``emits_*`` predicates in
+``profiles.py`` -- this module reads from them.
 
 The records use the same field shape that ``zeek_replay.parse_zeek_log_text``
 produces in the cybercrime_foil module, with one addition: the
@@ -198,11 +211,16 @@ def emit_for_profile(
 ) -> list[dict]:
     """Emit the full set of Zeek records for a beacon stream.
 
-    Per-profile log selection:
+    Per-profile log selection (derived from the ``emits_*`` predicates
+    in ``profiles.py``):
+
         commodity http   -> conn, dns, http, files
-        commodity https  -> conn, dns, ssl
-        stealth   https  -> conn, dns, ssl
+        commodity https  -> conn, dns, http, ssl, files
+        stealth   https  -> conn, ssl
         stealth   dns    -> conn, dns
+
+    The commodity hand-wave (http + files emitted even on HTTPS) assumes
+    the analyst has TLS-payload visibility. See module docstring.
     """
     out: list[dict] = []
     for b in beacons:

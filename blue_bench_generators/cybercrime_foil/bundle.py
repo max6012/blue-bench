@@ -32,6 +32,7 @@ from typing import Iterable
 
 import yaml
 
+from blue_bench_generators._isotime import parse_iso as _parse_iso
 from blue_bench_generators.cybercrime_foil.catalogue import CatalogueEntry
 
 log = logging.getLogger(__name__)
@@ -372,21 +373,6 @@ def validate_bundle(gt: dict, *, expected_build_hash: str | None = None) -> None
         raise SchemaValidationError(
             f"rule 11: ttp_attribution.required {extra} not a subset of ttps {sorted(ttps_set)}"
         )
-
-
-def _parse_iso(ts: str) -> datetime:
-    """ISO-8601 parse that tolerates ``Z`` and ``+HHMM`` (no-colon) offsets.
-
-    Python 3.10's ``fromisoformat`` rejects ``+HHMM``; our writers in
-    ``rewrite.py`` emit Suricata-style ``+0000``. Normalise so the
-    validator's rule 9 (duration_seconds == end - start) round-trips
-    on the project's declared minimum.
-    """
-    if ts.endswith("Z"):
-        ts = ts[:-1] + "+00:00"
-    elif len(ts) >= 5 and ts[-5] in "+-" and ts[-3] != ":":
-        ts = ts[:-2] + ":" + ts[-2:]
-    return datetime.fromisoformat(ts)
 
 
 # --- writer ---

@@ -540,6 +540,15 @@ def generate(
                 logon_type = _pick_logon_type(target_host, rng)
                 auth_pkg = _pick_auth_package(logon_type, rng)
 
+                # NOTE on TargetLogonId scope: the counter is keyed on
+                # the ITERATION host (the one whose hour-rate produced
+                # this emission), not the target_host whose name lands
+                # on the event. Consequence: a workstation's outbound
+                # network logons to a server share counter-space with
+                # the workstation's local logons, and two events with
+                # the same TargetLogonId may name different HostNames.
+                # Composer-level correlation should treat TargetLogonId
+                # as a within-stream id, NOT a per-target global id.
                 logon_counters[host.name] = logon_counters[host.name] + 1
                 counter = logon_counters[host.name]
                 target_logon_id = (

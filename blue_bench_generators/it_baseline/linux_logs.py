@@ -33,6 +33,7 @@ Public entry point: :func:`generate`.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from datetime import datetime, timedelta
@@ -150,16 +151,23 @@ def _rate_to_count(rate_per_hour: float, rng: random.Random) -> int:
 
 
 def _iter_hours(start: datetime, end: datetime) -> Iterator[datetime]:
-    """Yield hour-aligned cursors from start (inclusive) to end (exclusive).
+    """Yield hour-aligned cursors from ``start`` to ``end`` (exclusive).
 
-    The first cursor is the hour-floor of ``start``; later cursors step
-    by 1 hour. A cursor is yielded only if it is strictly less than
-    ``end`` AND not before ``start`` (so events stay inside the window).
+    For non-hour-aligned starts (e.g. ``start = 09:30``) the first
+    cursor is ``start`` itself rather than the hour-floor — otherwise
+    the floored cursor would fall before ``start`` and the entire
+    ``[start, hour_ceiling)`` partial bucket would emit zero events.
+    The convention here matches ``network_zeek`` and ``suricata_noise``:
+    partial hours are real buckets, not silently dropped.
     """
     cursor = start.replace(minute=0, second=0, microsecond=0)
+    if cursor < start:
+        # Use the actual start for the leading partial bucket so it
+        # produces events; subsequent cursors step on the hour.
+        yield start
+        cursor = cursor + timedelta(hours=1)
     while cursor < end:
-        if cursor >= start:
-            yield cursor
+        yield cursor
         cursor = cursor + timedelta(hours=1)
 
 
@@ -481,9 +489,16 @@ def generate(
     events: list[dict] = []
 
     for host in linux_hosts:
-        # Stable per-host RNG. Mix host name into the seed so different
-        # hosts' streams don't share random draws.
-        host_seed = (seed * 1_000_003) ^ (hash(host.name) & 0xFFFFFFFF)
+        # Stable per-host RNG. Mix host name into the seed via blake2b
+        # (NOT ``hash()`` — ``hash(str)`` is salted under
+        # ``PYTHONHASHSEED=random`` and would shift the host's entire
+        # event stream across processes). This RNG drives every Linux
+        # event for the host, so non-determinism here is corpus-wide.
+        name_hash = int.from_bytes(
+            hashlib.blake2b(host.name.encode("utf-8"), digest_size=4).digest(),
+            "little",
+        )
+        host_seed = (seed * 1_000_003) ^ name_hash
         rng = random.Random(host_seed)
 
         ssh_users = _ssh_user_pool(host, users)

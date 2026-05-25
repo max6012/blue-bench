@@ -299,6 +299,47 @@ def test_tgt_before_tgs_for_same_user():
     assert checked > 0, "no users had both TGT and TGS events to check"
 
 
+def test_tgt_before_tgs_per_user_holds_at_corpus_scope():
+    """Cross-hour invariant added after code review (PR2 comment on
+    identity.py:326). Independent Bernoulli draws on tgt_count and
+    tgs_count could produce 0 TGT + 1 TGS in a low-rate hour, putting
+    first-TGS in hour N and first-TGT in hour N+1 for the same user.
+    The disjoint hour-slots only enforced ordering WITHIN one hour.
+
+    Pin a weekend (low time-of-day multiplier, ~0.1) over a 36-hour
+    window so the cross-hour leak would surface if the bug regressed.
+    """
+    # Saturday 2026-05-09 (weekday() == 5)
+    sat_00_00 = datetime(2026, 5, 9, 0, 0, 0)
+    assert sat_00_00.weekday() == 5
+    topo = build_topology("M")
+    model = build_activity_model(topo)
+    events = list(
+        generate(topo, model, sat_00_00, sat_00_00 + timedelta(hours=36), seed=11)
+    )
+    first_tgt: dict[str, datetime] = {}
+    first_tgs: dict[str, datetime] = {}
+    for ev in events:
+        u = ev.get("TargetUserName")
+        if not u:
+            continue
+        ts = datetime.fromisoformat(ev["timestamp"])
+        if ev["event_id"] == 4768 and u not in first_tgt:
+            first_tgt[u] = ts
+        if ev["event_id"] == 4769 and u not in first_tgs:
+            first_tgs[u] = ts
+    # Every user with a TGS must have a TGT at or before that TGS.
+    leaks: list[tuple[str, datetime, datetime | None]] = []
+    for u, tgs_ts in first_tgs.items():
+        tgt_ts = first_tgt.get(u)
+        if tgt_ts is None or tgt_ts > tgs_ts:
+            leaks.append((u, tgs_ts, tgt_ts))
+    assert not leaks, (
+        f"cross-hour TGT-before-TGS invariant broken for {len(leaks)} users: "
+        f"first 3 leaks = {leaks[:3]!r}"
+    )
+
+
 def test_tgs_service_names_match_topology_services():
     topo = build_topology("M")
     model = build_activity_model(topo)

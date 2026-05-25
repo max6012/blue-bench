@@ -193,18 +193,25 @@ def _ts_str(ts: datetime) -> str:
 
 
 def _spread_in_hour(
-    rng: random.Random, hour_start: datetime, count: int
+    rng: random.Random,
+    hour_start: datetime,
+    count: int,
+    bucket_seconds: int = 3600,
 ) -> list[datetime]:
-    """Deterministically scatter ``count`` timestamps inside the hour.
+    """Deterministically scatter ``count`` timestamps across a bucket.
 
-    Uniform across the hour; sorted ascending so the emitted stream is
-    chronologically clean per (host, class).
+    Default bucket length is one hour. For partial-hour buckets at
+    window edges, callers pass the clipped bucket length so events
+    don't get drawn outside the actual emit interval (the prior
+    behaviour drew across a full hour and relied on a downstream
+    ``_in_window`` filter to drop the strays, which silently
+    under-emitted any non-hour-aligned window).
     """
     if count <= 0:
         return []
     offsets = sorted(rng.random() for _ in range(count))
     return [
-        hour_start + timedelta(seconds=int(off * 3600)) for off in offsets
+        hour_start + timedelta(seconds=int(off * bucket_seconds)) for off in offsets
     ]
 
 
@@ -380,17 +387,22 @@ def _emit_dns_traffic(
     seed: int,
     sequence_base: int,
     dns_servers: list[Host],
+    hour_scale: float = 1.0,
+    bucket_seconds: int = 3600,
 ) -> Iterator[dict]:
     if not dns_servers:
         return
-    rate = model.rate(host, "dns_query", hour_start)
+    # Rate scales with bucket length: a partial-hour bucket emits
+    # proportionally fewer events. Mirrors ``suricata_noise``'s
+    # convention so the two emitters agree on partial-hour volume.
+    rate = model.rate(host, "dns_query", hour_start) * hour_scale
     if rate <= 0.0:
         return
     rng = _rng_for(seed, "dns", _host_index(topology, host), int(hour_start.timestamp()))
     count = _draw_count(rng, rate)
     if count <= 0:
         return
-    timestamps = _spread_in_hour(rng, hour_start, count)
+    timestamps = _spread_in_hour(rng, hour_start, count, bucket_seconds)
     host_idx = _host_index(topology, host)
     for i, ts in enumerate(timestamps):
         # Round-robin DNS server deterministically from host+sequence
@@ -419,6 +431,8 @@ def _emit_smb_traffic(
     seed: int,
     sequence_base: int,
     file_servers: list[Host],
+    hour_scale: float = 1.0,
+    bucket_seconds: int = 3600,
 ) -> Iterator[dict]:
     """Workstation -> file-server SMB conn + files events.
 
@@ -434,14 +448,18 @@ def _emit_smb_traffic(
     if host.role not in ("workstation", "admin-workstation"):
         return
     raw_rate = model.rate(host, "file_access", hour_start)
-    rate = raw_rate * SMB_CONN_OBSERVABILITY_FRACTION
+    rate = raw_rate * SMB_CONN_OBSERVABILITY_FRACTION * hour_scale
     if rate <= 0.0:
         return
-    rng = _rng_for(topology.seed ^ seed, "smb", _host_index(topology, host), int(hour_start.timestamp()))
+    # NOTE: mix topology.seed in as a labeled component, NOT via XOR.
+    # XOR collides on (topology.seed=0, seed=0) ≡ (topology.seed=1, seed=1)
+    # — exactly the pitfall ``_rng_for``'s own docstring warns about.
+    # Other emitters in this module use the labeled form; mirror them.
+    rng = _rng_for(seed, "smb", topology.seed, _host_index(topology, host), int(hour_start.timestamp()))
     count = _draw_count(rng, rate)
     if count <= 0:
         return
-    timestamps = _spread_in_hour(rng, hour_start, count)
+    timestamps = _spread_in_hour(rng, hour_start, count, bucket_seconds)
     host_idx = _host_index(topology, host)
     for i, ts in enumerate(timestamps):
         fs = file_servers[(host_idx + i) % len(file_servers)]
@@ -480,6 +498,8 @@ def _emit_outbound_web_traffic(
     seed: int,
     sequence_base: int,
     proxy_servers: list[Host],
+    hour_scale: float = 1.0,
+    bucket_seconds: int = 3600,
 ) -> Iterator[dict]:
     """Workstation -> proxy outbound web (conn + http or ssl).
 
@@ -493,14 +513,14 @@ def _emit_outbound_web_traffic(
         return
     if host.role not in ("workstation", "admin-workstation"):
         return
-    rate = model.rate(host, "http_request", hour_start)
+    rate = model.rate(host, "http_request", hour_start) * hour_scale
     if rate <= 0.0:
         return
     rng = _rng_for(seed, "web", _host_index(topology, host), int(hour_start.timestamp()))
     count = _draw_count(rng, rate)
     if count <= 0:
         return
-    timestamps = _spread_in_hour(rng, hour_start, count)
+    timestamps = _spread_in_hour(rng, hour_start, count, bucket_seconds)
     host_idx = _host_index(topology, host)
     for i, ts in enumerate(timestamps):
         proxy = proxy_servers[(host_idx + i) % len(proxy_servers)]
@@ -550,6 +570,8 @@ def _emit_server_to_dc_traffic(
     seed: int,
     sequence_base: int,
     dcs: list[Host],
+    hour_scale: float = 1.0,
+    bucket_seconds: int = 3600,
 ) -> Iterator[dict]:
     """server-VLAN non-DC host -> DC Kerberos + LDAP, low constant cadence."""
     if not dcs:
@@ -562,8 +584,8 @@ def _emit_server_to_dc_traffic(
     rng = _rng_for(seed, "srv-dc", _host_index(topology, host), int(hour_start.timestamp()))
     host_idx = _host_index(topology, host)
     # Kerberos tcp/88
-    krb_count = _draw_count(rng, SERVER_TO_DC_KERBEROS_PER_HOUR)
-    for i, ts in enumerate(_spread_in_hour(rng, hour_start, krb_count)):
+    krb_count = _draw_count(rng, SERVER_TO_DC_KERBEROS_PER_HOUR * hour_scale)
+    for i, ts in enumerate(_spread_in_hour(rng, hour_start, krb_count, bucket_seconds)):
         dc = dcs[(host_idx + i) % len(dcs)]
         yield _emit_conn_record(
             ts=ts,
@@ -578,8 +600,8 @@ def _emit_server_to_dc_traffic(
             bytes_resp=2048,
         )
     # LDAP tcp/389
-    ldap_count = _draw_count(rng, SERVER_TO_DC_LDAP_PER_HOUR)
-    for i, ts in enumerate(_spread_in_hour(rng, hour_start, ldap_count)):
+    ldap_count = _draw_count(rng, SERVER_TO_DC_LDAP_PER_HOUR * hour_scale)
+    for i, ts in enumerate(_spread_in_hour(rng, hour_start, ldap_count, bucket_seconds)):
         dc = dcs[(host_idx + i + 1) % len(dcs)]
         yield _emit_conn_record(
             ts=ts,
@@ -602,6 +624,8 @@ def _emit_dc_replication_traffic(
     seed: int,
     sequence_base: int,
     dcs: list[Host],
+    hour_scale: float = 1.0,
+    bucket_seconds: int = 3600,
 ) -> Iterator[dict]:
     """DC <-> DC replication on tcp/389. Only when 2+ DCs."""
     if len(dcs) < 2:
@@ -613,8 +637,8 @@ def _emit_dc_replication_traffic(
         for dst in dcs:
             if src is dst:
                 continue
-            count = _draw_count(rng, DC_REPLICATION_PER_HOUR)
-            for ts in _spread_in_hour(rng, hour_start, count):
+            count = _draw_count(rng, DC_REPLICATION_PER_HOUR * hour_scale)
+            for ts in _spread_in_hour(rng, hour_start, count, bucket_seconds):
                 yield _emit_conn_record(
                     ts=ts,
                     src=src,
@@ -685,21 +709,28 @@ def generate(
         len(dcs),
     )
 
-    # Iterate by hour. Per-hour, per-host emission keeps memory bounded
-    # and lets the seeded RNG be derived from (seed, host_index, hour).
+    # Iterate by hour. Per-bucket, per-host emission keeps memory
+    # bounded and lets the seeded RNG be derived from
+    # (seed, host_index, bucket_start). Partial-hour buckets at window
+    # edges (e.g. start=10:30, end=11:30) scale rates and timestamp
+    # spreads by their actual length so the per-hour rate contract
+    # holds end-to-end. Mirrors the convention in
+    # ``suricata_noise._emit_host_hour``.
     cursor = _hour_floor(start)
-    # Start from the first hour fully or partially inside the window;
-    # any event we emit will then be filtered to fall inside [start, end).
-    if cursor < start:
-        # cursor is already a floor(<=start); only equal when start is on
-        # the hour boundary, so this branch is currently unreachable, but
-        # left explicit for future contributors.
-        pass
-
     one_hour = timedelta(hours=1)
     sequence_counter = 0
 
     while cursor < end:
+        next_hour = cursor + one_hour
+        clip_start = max(cursor, start)
+        clip_end = min(next_hour, end)
+        clip_seconds = (clip_end - clip_start).total_seconds()
+        if clip_seconds <= 0:
+            cursor = next_hour
+            continue
+        hour_scale = clip_seconds / 3600.0
+        bucket_seconds = int(clip_seconds)
+
         for host in topology.hosts:
             host_idx = _host_index(topology, host)
             # Use a wide-enough sequence stride per host+hour to avoid
@@ -711,10 +742,12 @@ def generate(
                 topology=topology,
                 model=activity_model,
                 host=host,
-                hour_start=cursor,
+                hour_start=clip_start,
                 seed=seed,
                 sequence_base=base,
                 dns_servers=dns_servers,
+                hour_scale=hour_scale,
+                bucket_seconds=bucket_seconds,
             ):
                 if _in_window(ev, start, end):
                     yield ev
@@ -723,10 +756,12 @@ def generate(
                 topology=topology,
                 model=activity_model,
                 host=host,
-                hour_start=cursor,
+                hour_start=clip_start,
                 seed=seed,
                 sequence_base=base + 20_000,
                 file_servers=file_servers,
+                hour_scale=hour_scale,
+                bucket_seconds=bucket_seconds,
             ):
                 if _in_window(ev, start, end):
                     yield ev
@@ -735,10 +770,12 @@ def generate(
                 topology=topology,
                 model=activity_model,
                 host=host,
-                hour_start=cursor,
+                hour_start=clip_start,
                 seed=seed,
                 sequence_base=base + 40_000,
                 proxy_servers=proxy_servers,
+                hour_scale=hour_scale,
+                bucket_seconds=bucket_seconds,
             ):
                 if _in_window(ev, start, end):
                     yield ev
@@ -746,29 +783,33 @@ def generate(
             for ev in _emit_server_to_dc_traffic(
                 topology=topology,
                 host=host,
-                hour_start=cursor,
+                hour_start=clip_start,
                 seed=seed,
                 sequence_base=base + 60_000,
                 dcs=dcs,
+                hour_scale=hour_scale,
+                bucket_seconds=bucket_seconds,
             ):
                 if _in_window(ev, start, end):
                     yield ev
 
             _ = host_idx  # reserved for future per-host metrics
 
-        # DC<->DC replication, once per hour, independent of per-host loop.
+        # DC<->DC replication, once per bucket, independent of per-host loop.
         for ev in _emit_dc_replication_traffic(
             topology=topology,
-            hour_start=cursor,
+            hour_start=clip_start,
             seed=seed,
             sequence_base=sequence_counter,
             dcs=dcs,
+            hour_scale=hour_scale,
+            bucket_seconds=bucket_seconds,
         ):
             if _in_window(ev, start, end):
                 yield ev
         sequence_counter += 100_000
 
-        cursor = cursor + one_hour
+        cursor = next_hour
 
 
 def _in_window(event: dict, start: datetime, end: datetime) -> bool:

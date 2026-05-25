@@ -41,6 +41,7 @@ sorted user inner loop keep ordering stable across runs.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import random
 from datetime import datetime, timedelta
@@ -324,6 +325,21 @@ def _emit(
             # rounded probabilistically. Capped by SPN-eligible services.
             tgs_rate = attempt_rate * 1.5
             tgs_count = _count_from_rate(tgs_rate, rng)
+            # Couple TGS to TGT so the disjoint-hour-slot ordering also
+            # holds ACROSS hours. Independent Bernoulli draws on
+            # (attempt_rate, attempt_rate * 1.5) can produce 0 TGT + 1
+            # TGS in low-rate hours (weekend baseline at multiplier 0.1),
+            # putting first-TGS in hour N and first-TGT in hour N+1 for
+            # the same user. Disjoint slots only enforced ordering
+            # within one hour; this clamp makes ordering corpus-wide.
+            # Guard against missing SPN-eligible services too -- _make_4769
+            # would crash on rng.randrange of an empty list.
+            if tgt_count == 0 or not spn_eligible:
+                tgs_count = 0
+            else:
+                # tgs_rate ~ 1.5x tgt_rate, so a 3x cap is generous in
+                # expectation while still blocking the cross-hour leak.
+                tgs_count = min(tgs_count, tgt_count * 3)
             # LDAP volume: workstation users only during business hours
             # (08-18 weekday); admins/services anytime. Modest fraction
             # of TGS volume.
@@ -492,6 +508,15 @@ def _make_4769(
     # Pick a service the user touches. Service users with role "service"
     # are biased toward their own service endpoint via primary_host;
     # regular and admin users pick from any SPN-eligible service.
+    if not services:
+        # Defensive: caller (generate()) clamps tgs_count to 0 when
+        # spn_eligible is empty, so this path should never run. Fail
+        # loud if it ever does — silently fabricating a service would
+        # break SPN→topology consistency.
+        raise ValueError(
+            "_make_4769 called with no SPN-eligible services; "
+            "caller must short-circuit tgs_count=0"
+        )
     service = services[rng.randrange(len(services))]
     endpoint = service.endpoint_hosts[
         rng.randrange(len(service.endpoint_hosts))
@@ -509,7 +534,10 @@ def _make_4769(
         "TargetUserName": user.username,
         "TargetDomainName": domain_netbios,
         "ServiceName": f"{spn_class}/{endpoint_fqdn}",
-        "ServiceSid": f"S-1-5-21-{abs(hash(endpoint)) % (10**9):09d}-1104",
+        # blake2b instead of hash() so the SID is stable across processes
+        # under PYTHONHASHSEED=random. Downstream consumers diffing
+        # event dicts across corpus rebuilds will see no spurious diffs.
+        "ServiceSid": f"S-1-5-21-{int.from_bytes(hashlib.blake2b(endpoint.encode('utf-8'), digest_size=4).digest(), 'little'):09d}-1104",
         "TicketOptions": "0x40810000",
         "TicketEncryptionType": enc,
         "IpAddress": client_ip,
@@ -537,7 +565,11 @@ def _make_4771(
         "host": dc.fqdn,
         "timestamp": ts.isoformat(),
         "TargetUserName": user.username,
-        "TargetSid": f"S-1-5-21-{abs(hash(user.username)) % (10**9):09d}-1108",
+        # blake2b instead of hash() — TargetSid is the user-identifier
+        # field downstream identity-correlation analysis keys off, so
+        # process-salted non-determinism here would break consumer-side
+        # cross-run diffs across the full identity stream.
+        "TargetSid": f"S-1-5-21-{int.from_bytes(hashlib.blake2b(user.username.encode('utf-8'), digest_size=4).digest(), 'little'):09d}-1108",
         "ServiceName": f"krbtgt/{domain_netbios}",
         "TicketOptions": "0x40810010",
         "Status": status,

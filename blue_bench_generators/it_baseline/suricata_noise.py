@@ -303,13 +303,21 @@ def _make_alert(
     host: Host,
     ts: datetime,
     flow_id: int,
+    src_port: int,
     signature: str,
     dest_ip: str,
     dest_port: int,
     proto: str,
     rng: random.Random,
 ) -> dict:
-    src_port = 30000 + rng.randrange(0, 35000)
+    """Build an ``alert`` eve record. ``flow_id`` and ``src_port`` are
+    threaded in from the anchor flow so the 5-tuple correlation key an
+    analyst would use (alert.flow_id == flow.flow_id AND matching
+    src_port) actually resolves to the flow record that exists in this
+    same emit batch. ``rng`` is unused on the alert hot-path; kept in
+    the signature for symmetry with the other ``_make_*`` helpers.
+    """
+    _ = rng
     return {
         "_log": "eve",
         "timestamp": _eve_ts(ts),
@@ -537,25 +545,34 @@ def _emit_host_hour(
         if sig in alerts_emitted:
             continue
         alerts_emitted.add(sig)
-        # Anchor to the corresponding flow record where possible.
+        # Anchor to the corresponding flow record where possible. The
+        # alert MUST inherit flow_id + src_port from the anchor (not
+        # synthesise its own) so the 5-tuple correlation key analysts
+        # use resolves to a flow record that exists in this batch.
         if idx < len(flow_records):
             anchor = flow_records[idx]
             ts_anchor = flow_times[idx]
             dest_ip = anchor["dest_ip"]
             dest_port = anchor["dest_port"]
             proto = anchor["proto"]
+            fid = anchor["flow_id"]
+            src_port = anchor["src_port"]
         else:
             # Defensive: shouldn't happen because n_flows == len(flow_records).
+            # Falls back to a synthetic alert flow_id; downstream tests
+            # exercise the primary anchor path.
             ts_anchor = hour_start
             dest_ip = _EXTERNAL_DESTS[0]
             dest_port = 443
             proto = "TCP"
-        fid = _flow_id(seed, host.name, hour_index, "alert", idx)
+            fid = _flow_id(seed, host.name, hour_index, "alert", idx)
+            src_port = 30000 + (idx % 35000)
         alert_records.append(
             _make_alert(
                 host=host,
                 ts=ts_anchor,
                 flow_id=fid,
+                src_port=src_port,
                 signature=sig,
                 dest_ip=dest_ip,
                 dest_port=dest_port,

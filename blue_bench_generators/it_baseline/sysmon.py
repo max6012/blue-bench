@@ -193,6 +193,14 @@ _CHAIN_MULTIPLIERS: dict[int, float] = {
 }
 
 
+# Boot-tree timing. Boot events space at 50ms intervals; with 5 events
+# the last lands at start + 200ms. Role-template children must clamp
+# past this window (+ a small buffer) so a low-rate uniform draw
+# cannot place a child inside the boot interval and sort ahead of its
+# supposed parent after events.sort(key=UtcTime, event_id).
+_BOOT_STEP_MS = 50
+_BOOT_WINDOW_MS = 250
+
 _HOST_BOOT_TREE: tuple[tuple[str, str], ...] = (
     # (parent_image, child_image). The first entry must be the boot
     # root (parent_image == ""), whose ProcessGuid is self-parented.
@@ -205,8 +213,15 @@ _HOST_BOOT_TREE: tuple[tuple[str, str], ...] = (
 
 
 def _host_rng(seed: int, host: Host) -> random.Random:
-    """Per-host isolated RNG. Adding a host won't reshuffle others."""
-    return random.Random(hash((seed, host.name)) & 0xFFFFFFFF)
+    """Per-host isolated RNG. Adding a host won't reshuffle others.
+
+    Uses a blake2b digest of ``host.name`` rather than ``hash()`` because
+    ``hash(str)`` is randomized across processes under
+    ``PYTHONHASHSEED=random``. This RNG seeds every Sysmon event for the
+    host, so a salted hash would shift the entire stream across runs.
+    """
+    digest = hashlib.blake2b(host.name.encode("utf-8"), digest_size=8).digest()
+    return random.Random(seed ^ int.from_bytes(digest, "little"))
 
 
 def _stable_hash_hex(*parts: str) -> str:
@@ -624,6 +639,13 @@ def _generate_for_host(
             # Jitter inside the hour, deterministic per (rng) ordering.
             offset_seconds = rng.uniform(0.0, hour_fraction * 3600.0)
             child_ts = cursor + timedelta(seconds=offset_seconds)
+            # First-hour cursor == start; boot tree occupies start..start+200ms.
+            # Clamp role-template children so they cannot land inside the
+            # boot window after events.sort() runs (else a child could
+            # iterate ahead of its supposed parent under low-rate templates).
+            min_ts = start + timedelta(milliseconds=_BOOT_WINDOW_MS)
+            if child_ts < min_ts:
+                child_ts = min_ts
             if child_ts >= end:
                 child_ts = end - timedelta(microseconds=1)
 

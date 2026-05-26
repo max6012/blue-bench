@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators.ot_protocols._uid import link_uid
 from blue_bench_generators.ot_protocols.topology import (
     Device,
     MasterSlaveLink,
@@ -147,13 +148,11 @@ def _link_hour_rng(seed: int, link: MasterSlaveLink, hour_epoch: int) -> random.
 
 
 def _link_hour_uid(seed: int, link: MasterSlaveLink, hour_epoch: int) -> str:
-    """UID shared by the (link, hour) conn record and every modbus PDU it carries.
-
-    Same key shape as ``_link_hour_rng`` so the conn<->modbus pairing
-    is reproducible without holding state across yields.
-    """
-    payload = f"{seed}|{link.master}|{link.slave}|{hour_epoch}|uid".encode()
-    return "C" + hashlib.blake2b(payload, digest_size=12).hexdigest()[:12]
+    """UID shared by the (link, hour) conn record and every modbus PDU
+    it carries. Delegates to the canonical ``link_uid`` helper -- same
+    key shape as ``_link_hour_rng`` so the conn<->modbus pairing is
+    reproducible without holding state across yields."""
+    return link_uid(seed, link.master, link.slave, hour_epoch, "uid")
 
 
 def _ephemeral_port(seed: int, link: MasterSlaveLink, hour_epoch: int) -> int:
@@ -428,23 +427,24 @@ def _emit_anomaly_safety_register_read(
     if overlap_end <= overlap_start:
         return
 
-    # Pick a non-canonical controller deterministically: first
-    # controller whose name != link.master in the device list.
-    rogue: Device | None = None
-    for d in network.devices:
-        if d.role in ("controller", "safety-controller") and d.name != link.master:
-            rogue = d
-            break
-    if rogue is None:
-        return  # no rogue source available; skip emission silently
-
     hour_epoch = int(hour_start.timestamp())
     payload = f"{seed}|{link.master}|{link.slave}|{hour_epoch}|safety_register".encode()
     rng = random.Random(int.from_bytes(hashlib.blake2b(payload, digest_size=8).digest(), "little"))
 
+    # Pick a non-canonical controller via the per-hour RNG so multiple
+    # safety-register windows against different RTUs spread the rogue
+    # source across the controller pool rather than always reusing the
+    # first non-master in device order.
+    candidates = [
+        d for d in network.devices
+        if d.role in ("controller", "safety-controller") and d.name != link.master
+    ]
+    if not candidates:
+        return  # no rogue source available; skip emission silently
+    rogue = rng.choice(candidates)
+
     # Distinct uid + source port for the rogue session.
-    uid_payload = f"{seed}|{rogue.name}|{link.slave}|{hour_epoch}|safety_uid".encode()
-    rogue_uid = "C" + hashlib.blake2b(uid_payload, digest_size=12).hexdigest()[:12]
+    rogue_uid = link_uid(seed, rogue.name, link.slave, hour_epoch, "safety_uid")
     port_payload = f"{seed}|{rogue.name}|{link.slave}|{hour_epoch}|safety_port".encode()
     rogue_port = 49152 + (
         int.from_bytes(hashlib.blake2b(port_payload, digest_size=4).digest(), "little")
@@ -537,6 +537,28 @@ def generate(
         return
 
     devices = _devices_by_name(network)
+
+    # All v1 anomaly kinds are slave-anchored. A caller naming a
+    # master-side device in ``target_device`` would silently match zero
+    # links -- indistinguishable from a typo. Surface the mismatch.
+    slave_names = {l.slave for l in links}
+    master_names = {l.master for l in links}
+    for w in anomaly_windows:
+        if w.target_device is None:
+            continue
+        if w.target_device in slave_names:
+            continue
+        if w.target_device in master_names:
+            raise ValueError(
+                f"AnomalyWindow(kind={w.kind!r}) target_device={w.target_device!r} "
+                f"is a master-side device; v1 anomalies are slave-anchored. "
+                f"Pass an RTU name (or None for 'any')."
+            )
+        log.warning(
+            "modbus.generate: AnomalyWindow target_device=%r matches no link slave; "
+            "anomaly will emit zero events. Did you typo the device name?",
+            w.target_device,
+        )
 
     log.info(
         "modbus.generate: tier=%s links=%d window=[%s, %s) anomalies=%d",

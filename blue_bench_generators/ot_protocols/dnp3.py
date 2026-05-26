@@ -38,6 +38,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators.ot_protocols._uid import link_uid as _uid
 from blue_bench_generators.ot_protocols.topology import (
     Device,
     MasterSlaveLink,
@@ -128,11 +129,6 @@ def _rng_for_link_hour(
 
 def _ts_str(epoch: float) -> str:
     return f"{epoch:.6f}"
-
-
-def _uid(seed: int, *parts: int | str) -> str:
-    payload = "|".join([str(seed), *(str(p) for p in parts)]).encode()
-    return "C" + hashlib.sha256(payload).hexdigest()[:12]
 
 
 def _hour_floor(ts: datetime) -> datetime:
@@ -363,20 +359,22 @@ def _emit_link_hour(
             )
         )
 
-    if records:
-        # Emit the conn aggregate first at bucket_start (mirrors Zeek
-        # behaviour where the conn record carries the connection's first
-        # observed timestamp).
-        yield _emit_conn_record(
-            ts_epoch=bucket_start.timestamp(),
-            master=master,
-            slave=slave,
-            orig_port=orig_port,
-            uid=uid,
-            transaction_count=len(records),
-        )
-        for rec in records:
-            yield rec
+    # Always emit one conn record per (link, bucket) regardless of
+    # transaction_count. Sub-``1/polling_hz`` buckets at window edges
+    # would otherwise round to zero transactions and silently drop the
+    # conn record too, masking that the link existed for the partial
+    # interval. The conn aggregate at bucket_start mirrors Zeek
+    # behaviour (first-observed timestamp).
+    yield _emit_conn_record(
+        ts_epoch=bucket_start.timestamp(),
+        master=master,
+        slave=slave,
+        orig_port=orig_port,
+        uid=uid,
+        transaction_count=len(records),
+    )
+    for rec in records:
+        yield rec
 
 
 def _emit_unsolicited_overlay(
@@ -469,18 +467,25 @@ def _emit_unsolicited_overlay(
     bucket_seconds = (bucket_end - bucket_start).total_seconds()
     t_epoch = bucket_start.timestamp() + bucket_seconds * 0.5
 
+    # Direction is OUTSTATION -> MASTER for unsolicited (real DNP3
+    # semantics). The emit helpers map their ``master=`` arg to
+    # ``id.orig_h`` and ``slave=`` to ``id.resp_h``; for unsolicited
+    # we pass the outstation as ``master=`` so its IP lands on
+    # ``id.orig_h`` -- the names are positional-role to the helper but
+    # protocol-role here. Any detector keying off Zeek ``is_orig=F`` for
+    # unsolicited responses now sees the correct flow direction.
     yield _emit_conn_record(
         ts_epoch=bucket_start.timestamp(),
-        master=master,
-        slave=outstation,
+        master=outstation,
+        slave=master,
         orig_port=orig_port,
         uid=uid,
         transaction_count=1,
     )
     yield _emit_dnp3_record(
         ts_epoch=t_epoch,
-        master=master,
-        slave=outstation,
+        master=outstation,
+        slave=master,
         orig_port=orig_port,
         uid=uid,
         fc_request="UNSOLICITED_MESSAGE",

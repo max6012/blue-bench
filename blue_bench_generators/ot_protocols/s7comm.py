@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators.ot_protocols._uid import link_uid as _uid
 from blue_bench_generators.ot_protocols.topology import (
     Device,
     MasterSlaveLink,
@@ -150,12 +151,6 @@ def _link_hour_rng(
     payload = f"{seed}|{link.master}|{link.slave}|{hour_epoch}".encode()
     digest = hashlib.blake2b(payload, digest_size=8).digest()
     return random.Random(int.from_bytes(digest, "little"))
-
-
-def _uid(seed: int, *parts: int | str) -> str:
-    """Zeek-style UID. ``C`` prefix matches the IT-baseline convention."""
-    payload = "|".join([str(seed), *(str(p) for p in parts)]).encode()
-    return "C" + hashlib.blake2b(payload, digest_size=6).hexdigest()
 
 
 def _hour_floor(ts: datetime) -> datetime:
@@ -301,8 +296,43 @@ def _emit_business_day_session(
 
     # Number of read cycles in the session at 0.5 Hz.
     n_reads = int(duration_s * READ_VAR_HZ)
-    orig_bytes = n_reads * SESSION_ORIG_BYTES_PER_PDU * 2  # job + ack
-    resp_bytes = n_reads * SESSION_RESP_BYTES_PER_PDU * 2
+
+    # Build all PDUs first so byte accounting reflects actual emitted
+    # PDUs (write_var substitution emits only a job; read_var emits
+    # job + ack). Previous formula treated every cycle as a pair and
+    # over-counted by ~WRITE_VAR_FRACTION; the drift scaled linearly
+    # with that constant.
+    pdu_records: list[dict] = []
+    pdu_ref = rng.randint(1, 0xFFFF)
+    n_job_orig = 0
+    n_ack_resp = 0
+    for i in range(n_reads):
+        ts = session_start + timedelta(seconds=int(i / READ_VAR_HZ))
+        if rng.random() < WRITE_VAR_FRACTION:
+            pdu_records.append(_emit_s7(
+                ts=ts, uid=uid, src=src, dst=dst, orig_p=orig_p,
+                rosctr="job", function="write_var",
+                pdu_ref=pdu_ref, item_count=1,
+            ))
+            n_job_orig += 1
+        else:
+            pdu_records.append(_emit_s7(
+                ts=ts, uid=uid, src=src, dst=dst, orig_p=orig_p,
+                rosctr="job", function="read_var",
+                pdu_ref=pdu_ref, item_count=rng.randint(1, 4),
+            ))
+            pdu_records.append(_emit_s7(
+                ts=ts + timedelta(milliseconds=20),
+                uid=uid, src=src, dst=dst, orig_p=orig_p,
+                rosctr="ack_data", function="read_var",
+                pdu_ref=pdu_ref, item_count=rng.randint(1, 4),
+            ))
+            n_job_orig += 1
+            n_ack_resp += 1
+        pdu_ref = (pdu_ref + 1) & 0xFFFF
+
+    orig_bytes = n_job_orig * SESSION_ORIG_BYTES_PER_PDU
+    resp_bytes = n_ack_resp * SESSION_RESP_BYTES_PER_PDU
 
     yield _emit_conn(
         ts=session_start,
@@ -313,48 +343,8 @@ def _emit_business_day_session(
         orig_bytes=orig_bytes,
         resp_bytes=resp_bytes,
     )
-
-    # Stream of read/write PDUs at 0.5 Hz.
-    pdu_ref = rng.randint(1, 0xFFFF)
-    for i in range(n_reads):
-        ts = session_start + timedelta(seconds=int(i / READ_VAR_HZ))
-        # write_var substitution at ~1% of reads.
-        if rng.random() < WRITE_VAR_FRACTION:
-            yield _emit_s7(
-                ts=ts,
-                uid=uid,
-                src=src,
-                dst=dst,
-                orig_p=orig_p,
-                rosctr="job",
-                function="write_var",
-                pdu_ref=pdu_ref,
-                item_count=1,
-            )
-        else:
-            yield _emit_s7(
-                ts=ts,
-                uid=uid,
-                src=src,
-                dst=dst,
-                orig_p=orig_p,
-                rosctr="job",
-                function="read_var",
-                pdu_ref=pdu_ref,
-                item_count=rng.randint(1, 4),
-            )
-            yield _emit_s7(
-                ts=ts + timedelta(milliseconds=20),
-                uid=uid,
-                src=src,
-                dst=dst,
-                orig_p=orig_p,
-                rosctr="ack_data",
-                function="read_var",
-                pdu_ref=pdu_ref,
-                item_count=rng.randint(1, 4),
-            )
-        pdu_ref = (pdu_ref + 1) & 0xFFFF
+    for rec in pdu_records:
+        yield rec
 
     # PG ops during the maintenance window, if this day is the first
     # Tuesday of the month. Folded into the same session uid.
@@ -672,8 +662,20 @@ def generate(
         end,
     )
 
-    # Iterate business-day sessions: one per (link, weekday) overlapping
-    # the window.
+    # Collect all events into a buffer so we can yield them in
+    # time-monotonic order. S7Comm is the sparsest of the four OT
+    # protocols (event-driven, not cyclic) so buffering one stream is
+    # cheap even at L tier. The composer's downstream sort is
+    # belt-and-suspenders; any direct in-process consumer iterating
+    # ``s7comm.generate(...)`` should not see backward time jumps.
+    buffer: list[dict] = []
+
+    def _admit(ev: dict) -> None:
+        ts_v = float(ev["ts"])
+        if start.timestamp() <= ts_v < end.timestamp():
+            buffer.append(ev)
+
+    # Business-day sessions: one per (link, weekday) overlapping the window.
     day = _day_floor(start)
     one_day = timedelta(days=1)
     while day < end:
@@ -685,12 +687,10 @@ def generate(
             for ev in _emit_business_day_session(
                 link=link, src=master, dst=slave, day=day, seed=seed
             ):
-                ts = float(ev["ts"])
-                if start.timestamp() <= ts < end.timestamp():
-                    yield ev
+                _admit(ev)
         day = day + one_day
 
-    # Off-hours health-check sessions. One per (link, hour) where the
+    # Off-hours health-check sessions: one per (link, hour) where the
     # hour is NOT business-hours.
     hour = _hour_floor(start)
     one_hour = timedelta(hours=1)
@@ -708,9 +708,7 @@ def generate(
                     hour_start=hour,
                     seed=seed,
                 ):
-                    ts = float(ev["ts"])
-                    if start.timestamp() <= ts < end.timestamp():
-                        yield ev
+                    _admit(ev)
         hour = hour + one_hour
 
     # Anomaly overlays.
@@ -719,9 +717,18 @@ def generate(
             continue
         emitter = _ANOMALY_DISPATCH.get(win.kind)
         if emitter is None:
-            # Forward-compat: unimplemented kinds are silently skipped.
+            # Forward-compat: surface unimplemented anomaly kinds at INFO
+            # so a typo or API drift doesn't hide behind a silent no-op.
+            log.info(
+                "s7comm.generate: anomaly kind %r has no emitter wired in v1; "
+                "window %s..%s yielded zero events",
+                win.kind, win.start, win.end,
+            )
             continue
         for ev in emitter(window=win, network=network, seed=seed):
-            ts = float(ev["ts"])
-            if start.timestamp() <= ts < end.timestamp():
-                yield ev
+            _admit(ev)
+
+    # Yield in (ts, uid) order so direct consumers see a monotonic stream.
+    buffer.sort(key=lambda e: (float(e["ts"]), str(e.get("uid", ""))))
+    for ev in buffer:
+        yield ev

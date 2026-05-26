@@ -60,12 +60,26 @@ def generate(
     ``activity_model`` -- OT protocols are clock-driven from the
     master-slave-link cadence, not IT activity rates.
 
+    The coupling to the IT ``Topology`` dataclass is narrow: only
+    ``.tier`` and ``.seed`` are read. The defensive checks below raise
+    a clear error if either is missing rather than failing later with
+    a less-actionable ``AttributeError`` inside the per-protocol
+    generators.
+
     Yields events from all four per-protocol generators in series
     (Modbus, DNP3, IEC-104, S7Comm). Each event carries a ``_log``
     discriminator that the composer's Zeek-TSV writer routes into the
     appropriate per-protocol ``.log`` file under ``<output>/ot/``.
     """
-    network = build_ot_network(tier=topology.tier, seed=topology.seed)
+    tier = getattr(topology, "tier", None)
+    if tier is None:
+        raise TypeError(
+            f"ot_protocols.generate: topology object {type(topology).__name__!r} "
+            f"has no ``tier`` attribute; expected an IT ``Topology`` dataclass "
+            f"or any object exposing ``.tier`` ∈ {{'S','M','L'}}"
+        )
+    topo_seed = getattr(topology, "seed", seed)
+    network = build_ot_network(tier=tier, seed=topo_seed)
     yield from modbus.generate(network, start, end, seed=seed)
     yield from dnp3.generate(network, start, end, seed=seed)
     yield from iec104.generate(network, start, end, seed=seed)

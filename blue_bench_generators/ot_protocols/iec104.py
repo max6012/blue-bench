@@ -53,6 +53,7 @@ from datetime import datetime, timedelta
 from random import Random
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators.ot_protocols._uid import link_uid
 from blue_bench_generators.ot_protocols.topology import (
     PROTOCOL_PORTS,
     Device,
@@ -158,9 +159,9 @@ def _rng_for_link_hour(seed: int, link: MasterSlaveLink, hour_epoch: int) -> Ran
 
 
 def _uid_for(seed: int, master: str, slave: str, hour_epoch: int, kind: str, idx: int) -> str:
-    """Stable Zeek-style UID. ``C`` prefix matches the IT-baseline shape."""
-    payload = f"{seed}|{master}|{slave}|{hour_epoch}|{kind}|{idx}".encode()
-    return "C" + hashlib.blake2b(payload, digest_size=9).hexdigest()[:12]
+    """Thin wrapper preserving the per-protocol call-site signature;
+    delegates to the canonical ``link_uid`` helper."""
+    return link_uid(seed, master, slave, hour_epoch, kind, idx)
 
 
 def _src_port(rng: Random) -> int:
@@ -178,9 +179,17 @@ def _device_lookup(network: OTNetwork) -> dict[str, Device]:
     return {d.name: d for d in network.devices}
 
 
-def _common_address_for(link: MasterSlaveLink) -> int:
-    """Deterministic common address (ASDU addr) per link in [1, 65534]."""
-    payload = f"{link.master}->{link.slave}".encode()
+def _common_address_for(link: MasterSlaveLink, seed: int = 0) -> int:
+    """Deterministic common address (ASDU addr) per link in [1, 65534].
+
+    Note: keys on ``(seed, link.master, link.slave)``. The OT topology is
+    seed-invariant in v1 so seed-variation of (master, slave) only
+    produces different ASDU addresses if a future caller varies the
+    topology by seed too. Documented here so a future multi-tenant
+    caller doesn't bake in the assumption that addresses shift with
+    seed alone.
+    """
+    payload = f"{seed}|{link.master}->{link.slave}".encode()
     digest = hashlib.blake2b(payload, digest_size=4).digest()
     return (int.from_bytes(digest, "little") % 65533) + 1
 
@@ -205,16 +214,21 @@ def _supervisory_subnet_prefix(network: OTNetwork) -> str:
 def _unknown_supervisory_ip(network: OTNetwork) -> str:
     """Pick a supervisory-VLAN IP that no device holds.
 
-    Walks the /24 from .250 downward to .10 looking for an unused octet.
-    Deterministic given the network.
+    Walks the /24 from .250 downward to .2 (the gateway holds .1)
+    looking for an unused octet. Deterministic given the network. Raises
+    if every host octet is taken -- silent collision would break the
+    anomaly's defining property (origin must not be a real device).
     """
     prefix = _supervisory_subnet_prefix(network)
     used = {d.ip for d in network.devices}
-    for octet in range(250, 9, -1):
+    for octet in range(250, 1, -1):
         candidate = f"{prefix}.{octet}"
         if candidate not in used:
             return candidate
-    return f"{prefix}.250"
+    raise RuntimeError(
+        f"supervisory /24 {prefix}.0/24 is fully populated; cannot synthesise "
+        f"an unknown-station IP for the anomaly overlay"
+    )
 
 
 # --- record emitters ------------------------------------------------------
@@ -302,7 +316,7 @@ def _generate_link_hour(
     hour_epoch = int(hour_start.timestamp())
     rng = _rng_for_link_hour(seed, link, hour_epoch)
     src_port = _src_port(rng)
-    asdu_addr = _common_address_for(link)
+    asdu_addr = _common_address_for(link, seed)
 
     clip_seconds = (hour_end - hour_start).total_seconds()
     if clip_seconds <= 0:

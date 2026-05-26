@@ -474,6 +474,13 @@ def _build_manifest(
             "ot_devices": len(ot_network.devices),
             "ot_vlans": len(ot_network.vlans),
             "ot_links": len(ot_network.links),
+            # Per-protocol link counts so consumers can tell at a glance
+            # which protocols this corpus covers without grepping the
+            # OT log files.
+            "ot_protocols": {
+                proto: sum(1 for l in ot_network.links if l.protocol == proto)
+                for proto in ("modbus", "dnp3", "iec104", "s7comm")
+            },
         },
         "totals": {
             "events": total_events,

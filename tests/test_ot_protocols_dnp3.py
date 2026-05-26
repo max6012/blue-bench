@@ -337,8 +337,19 @@ def test_unsolicited_response_anomaly_from_non_enrolled_pair():
     assert unsols, "expected at least one UNSOLICITED_MESSAGE record"
     for u in unsols:
         assert u["fc_reply"] == "UNSOLICITED_RESPONSE"
-        # The (master, slave) pair must be non-enrolled.
-        master_dev = _device_by_ip(net, u["id.orig_h"])
-        slave_dev = _device_by_ip(net, u["id.resp_h"])
-        assert master_dev is not None and slave_dev is not None
-        assert master_dev.name not in enrolment.get(slave_dev.name, set())
+        # Real DNP3 unsolicited responses originate at the OUTSTATION
+        # and target the master, so id.orig_h must be the outstation IP
+        # and id.resp_h the master IP. The (master, outstation) pair
+        # must also be non-enrolled.
+        outstation_dev = _device_by_ip(net, u["id.orig_h"])
+        master_dev = _device_by_ip(net, u["id.resp_h"])
+        assert outstation_dev is not None and master_dev is not None
+        assert outstation_dev.role in ("controller", "safety-controller"), (
+            f"unsolicited id.orig_h={u['id.orig_h']} role={outstation_dev.role}, "
+            f"expected outstation"
+        )
+        assert master_dev.role in ("hmi", "historian", "engineering-workstation"), (
+            f"unsolicited id.resp_h={u['id.resp_h']} role={master_dev.role}, "
+            f"expected supervisory-VLAN master"
+        )
+        assert master_dev.name not in enrolment.get(outstation_dev.name, set())

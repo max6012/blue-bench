@@ -9,9 +9,12 @@ behavior model are tier-invariant.
 
 Determinism contract: ``build_corpus(tier, output_dir, seed=N)`` produces a
 byte-identical corpus across runs for the same ``(tier, seed, start,
-duration_days)`` tuple. Per-source streams are sorted by ``(ts, uid)`` (or
-``(timestamp, host)``) before write so reordering inside a generator does
-not leak into output bytes.
+duration_days)`` tuple. Per-source streams are pre-sorted by a key composed
+of timestamp + a per-source unique id (Zeek ``uid``/``fuid``, Suricata
+``flow_id``, Sysmon / EVTX ``EventID`` / ``RecordID``, identity ``event_id``,
+Linux ``msg_id``) so collisions on the timestamp do not silently fall
+through to generator-emission-order. Generator emission order is itself
+deterministic, so the sort is belt-and-suspenders, not load-bearing.
 
 Vendor-neutral. No exercise vocabulary in any emitted artefact.
 """
@@ -21,7 +24,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable, Literal
 
@@ -67,9 +70,12 @@ def build_corpus(
 
     Args:
         tier: "S", "M", or "L". Drives topology population + default duration.
-        output_dir: target directory. Created if missing. Existing source
-            directories are overwritten file-by-file but no other files are
-            removed.
+        output_dir: target directory. Created if missing. Files inside the
+            seven managed source subdirectories (``zeek``, ``suricata``,
+            ``sysmon``, ``evtx``, ``linux``, ``identity``, ``services``) are
+            deleted before write so a re-build of a smaller tier into the
+            same directory leaves no orphans. Files at the output root and
+            in unmanaged subdirectories are left alone.
         seed: deterministic seed threaded through topology, behavior, and
             every per-source generator.
         start: UTC window start. Defaults to ``DEFAULT_START``.
@@ -86,8 +92,7 @@ def build_corpus(
         # Generators assume naive datetimes; reduce a tz-aware ``--start``
         # to its UTC wall-clock value so the per-source comparators
         # (e.g. services.py:348) don't trip on offset-naive-vs-aware.
-        from datetime import timezone as _tz
-        start = start.astimezone(_tz.utc).replace(tzinfo=None)
+        start = start.astimezone(timezone.utc).replace(tzinfo=None)
     days = duration_days if duration_days is not None else TIER_DURATION_DAYS[tier]
     if days < 1:
         raise ValueError(f"duration_days must be >= 1, got {days}")
@@ -120,6 +125,15 @@ def build_corpus(
     for source_name, module, format_kind in source_specs:
         events = list(module.generate(topology, activity_model, start, end, seed=seed))
         source_dir = output_dir / source_name
+        # Wipe stale files from any prior build into the same directory.
+        # Without this, re-building a smaller tier (e.g. S over a previous M)
+        # would leave orphan files on disk that aren't in the new manifest
+        # and don't affect ``build_hash`` -- silent staleness for consumers
+        # that glob the directory.
+        if source_dir.exists():
+            for stale in source_dir.iterdir():
+                if stale.is_file():
+                    stale.unlink()
         source_dir.mkdir(exist_ok=True)
         files_meta = _write_source(source_name, format_kind, events, source_dir, output_dir)
         sources_meta.append(
@@ -215,19 +229,31 @@ def _zeek_field_order(records: list[dict]) -> list[str]:
     return head + tail
 
 
+_ZEEK_ESCAPES = str.maketrans({"\t": "\\x09", "\n": "\\x0a", "\r": "\\x0d", "\\": "\\\\"})
+
+
 def _zeek_value(v: Any) -> str:
     if v is None:
         return "-"
+    if isinstance(v, bool):
+        # Canonical Zeek bool encoding (matches data/raw/conn.log fixture).
+        # Listed BEFORE ``int`` because bool is a subclass of int in Python.
+        return "T" if v else "F"
     if isinstance(v, (list, tuple)):
         return ",".join(_zeek_value(x) for x in v) if v else "(empty)"
-    return str(v)
+    return str(v).translate(_ZEEK_ESCAPES)
 
 
 def _write_jsonl(events: list[dict], path: Path, output_root: Path) -> list[dict]:
+    """Write JSONL. ``_log`` is a generator-internal routing field and is
+    stripped from each record before serialisation -- real Suricata
+    ``eve.json`` / Sysmon / auditd telemetry has no such field, and any
+    phantom column would surface to MCP consumers."""
     sorted_events = sorted(events, key=_event_sort_key)
     with path.open("w", encoding="utf-8") as f:
         for ev in sorted_events:
-            f.write(json.dumps(ev, sort_keys=True, default=str) + "\n")
+            payload = {k: v for k, v in ev.items() if k != "_log"}
+            f.write(json.dumps(payload, sort_keys=True, default=str) + "\n")
     return [_file_meta(path, output_root, len(sorted_events))]
 
 
@@ -286,11 +312,18 @@ def _write_syslog_text(events: list[dict], path: Path, output_root: Path) -> lis
 
 def _event_sort_key(ev: dict) -> tuple:
     """Sort key tolerant of both Zeek (``ts`` = epoch string) and ISO
-    (``timestamp``) generators. Tie-break on uid / msg_id / host."""
+    (``timestamp``) generators. Tie-breakers cover the per-source unique
+    id field so two records emitted at the same timestamp are ordered
+    independently of generator emission order: Zeek ``uid`` / ``fuid``,
+    Suricata ``flow_id``, Sysmon / EVTX ``EventID`` and ``RecordID``,
+    identity ``event_id``, Linux ``msg_id``, then host/hostname."""
     return (
         str(ev.get("ts", "")),
         str(ev.get("timestamp", "")),
-        str(ev.get("uid", "")),
+        str(ev.get("uid", ev.get("fuid", ""))),
+        str(ev.get("flow_id", "")),
+        str(ev.get("EventID", ev.get("event_id", ""))),
+        str(ev.get("RecordID", "")),
         str(ev.get("msg_id", "")),
         str(ev.get("host", ev.get("hostname", ""))),
     )

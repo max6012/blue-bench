@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -28,6 +28,7 @@ import yaml
 from blue_bench_generators.it_baseline.composer import (
     DEFAULT_START,
     TIER_DURATION_DAYS,
+    _zeek_value,
     build_corpus,
 )
 
@@ -138,6 +139,36 @@ def test_jsonl_streams_are_well_formed(tmp_path):
             assert isinstance(obj, dict)
 
 
+def test_log_routing_field_stripped_from_jsonl(tmp_path):
+    """``_log`` is a generator-internal routing field. Real
+    Suricata/Sysmon/auditd telemetry has no such field; leaving it in
+    would surface a phantom column to MCP consumers."""
+    _build_s(tmp_path)
+    jsonl_paths = list(tmp_path.rglob("*.jsonl")) + [tmp_path / "suricata" / "eve.json"]
+    for path in jsonl_paths:
+        if not path.exists():
+            continue
+        for line in path.read_text().splitlines():
+            if not line.strip():
+                continue
+            obj = json.loads(line)
+            assert "_log" not in obj, (
+                f"{path}: ``_log`` field leaked into JSONL output; "
+                f"strip it in the writer before serialisation"
+            )
+
+
+def test_evtx_channel_field_preserved(tmp_path):
+    """``channel`` IS a real EventLog field (unlike ``_log``) and must
+    survive the strip pass for evtx."""
+    _build_s(tmp_path)
+    security = tmp_path / "evtx" / "security.jsonl"
+    if not security.exists():
+        pytest.skip("no security channel events in this S run")
+    first = json.loads(security.read_text().splitlines()[0])
+    assert first.get("channel") == "Security"
+
+
 # --- determinism -----------------------------------------------------------
 
 
@@ -186,6 +217,63 @@ def test_duration_days_override(tmp_path):
 def test_rejects_unknown_tier(tmp_path):
     with pytest.raises(ValueError, match="unknown tier"):
         build_corpus(tier="XL", output_dir=tmp_path)  # type: ignore[arg-type]
+
+
+def test_tz_aware_start_normalised_to_utc(tmp_path):
+    """A tz-aware ``--start`` from the CLI is reduced to its UTC wall-clock
+    so the per-source generators (which assume naive datetimes) don't
+    trip on offset-naive-vs-aware comparisons. The window in the manifest
+    is the naive UTC value, not the original tz-aware string."""
+    aware = datetime(2026, 1, 5, 4, 0, 0, tzinfo=timezone(timedelta(hours=4)))
+    manifest = build_corpus(
+        tier="S", output_dir=tmp_path, seed=0, start=aware, duration_days=1
+    )
+    assert manifest["window"]["start"] == "2026-01-05T00:00:00"
+
+
+# --- stale-file cleanup ----------------------------------------------------
+
+
+def test_rebuild_into_same_dir_removes_orphans(tmp_path):
+    """A re-build of a smaller tier over a larger one must not leave
+    orphan files from the prior build inside the managed source dirs."""
+    # First build: L would be slow; simulate with an artificial pre-existing
+    # file inside one of the managed source dirs.
+    _build_s(tmp_path)
+    orphan = tmp_path / "services" / "proxy_access.jsonl"
+    orphan.write_text('{"_log": "proxy_access", "stale": true}\n', encoding="utf-8")
+    assert orphan.exists()
+
+    # Rebuild: the orphan must be gone.
+    _build_s(tmp_path)
+    proxy_files_now = [p.name for p in (tmp_path / "services").iterdir()]
+    assert "proxy_access.jsonl" not in proxy_files_now, (
+        f"orphan from prior build survived: services/ now contains {proxy_files_now}"
+    )
+
+
+# --- Zeek value formatting -------------------------------------------------
+
+
+def test_zeek_value_bool_encoding():
+    """Canonical Zeek TSV uses ``T`` / ``F`` for bools (see
+    ``data/raw/conn.log`` ``local_orig`` column)."""
+    assert _zeek_value(True) == "T"
+    assert _zeek_value(False) == "F"
+
+
+def test_zeek_value_escapes_tsv_breakers():
+    """Tabs / newlines / backslashes inside a string field would corrupt
+    the row's column count or escape semantics for a strict parser."""
+    assert "\t" not in _zeek_value("foo\tbar")
+    assert "\n" not in _zeek_value("foo\nbar")
+    assert _zeek_value("foo\\bar") == "foo\\\\bar"
+
+
+def test_zeek_value_none_and_lists():
+    assert _zeek_value(None) == "-"
+    assert _zeek_value([]) == "(empty)"
+    assert _zeek_value(["a", "b"]) == "a,b"
 
 
 # --- CLI driver ------------------------------------------------------------

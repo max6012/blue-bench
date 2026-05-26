@@ -57,6 +57,13 @@ TIER_DURATION_DAYS: dict[str, int] = {"S": 1, "M": 7, "L": 14}
 # multiplier rather than the weekend baseline floor.
 DEFAULT_START = datetime(2026, 1, 5, 0, 0, 0)
 
+# Managed source subdirectories. ``corpus-manifest.yaml`` at the root of an
+# output dir identifies it as composer-produced and authorises wipe-before-write
+# of these subdirs; anything else is left untouched.
+_MANAGED_SOURCE_DIRS: tuple[str, ...] = (
+    "zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services",
+)
+
 
 def build_corpus(
     tier: Tier,
@@ -99,6 +106,24 @@ def build_corpus(
     end = start + timedelta(days=days)
 
     output_dir = Path(output_dir)
+    # Guard rail: if the output dir already exists and contains managed
+    # subdirectories WITHOUT a corpus-manifest.yaml, this is almost
+    # certainly not a previous composer build -- refuse rather than
+    # silently wipe whatever's there. A composer-produced directory always
+    # has a manifest at its root, so its presence is a reliable
+    # provenance marker.
+    manifest_path = output_dir / "corpus-manifest.yaml"
+    if output_dir.exists() and not manifest_path.exists():
+        existing_managed = [
+            name for name in _MANAGED_SOURCE_DIRS
+            if (output_dir / name).is_dir() and any((output_dir / name).iterdir())
+        ]
+        if existing_managed:
+            raise ValueError(
+                f"refusing to overwrite non-composer subdirectories in {output_dir}: "
+                f"{existing_managed}. Either delete the directory manually or pick a "
+                f"fresh --output path."
+            )
     output_dir.mkdir(parents=True, exist_ok=True)
 
     log.info(
@@ -153,10 +178,10 @@ def build_corpus(
         topology=topology,
         sources_meta=sources_meta,
     )
-    manifest_path = output_dir / "corpus-manifest.yaml"
     manifest_path.write_text(
         yaml.safe_dump(manifest, sort_keys=False, default_flow_style=False),
         encoding="utf-8",
+        newline="",
     )
     log.info("composer: wrote manifest %s build_hash=%s", manifest_path, manifest["build_hash"][:12])
     return manifest
@@ -213,7 +238,10 @@ def _write_zeek_tsv(events: list[dict], source_dir: Path, output_root: Path) -> 
         for r in recs_sorted:
             row = [_zeek_value(r.get(k)) for k in fields]
             lines.append("\t".join(row))
-        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        # ``newline=""`` disables platform newline translation so the file
+        # is byte-identical across Linux / macOS / Windows for the same
+        # ``(tier, seed)`` -- the determinism contract requires it.
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
         files_meta.append(_file_meta(path, output_root, len(recs_sorted)))
     return files_meta
 
@@ -241,7 +269,26 @@ def _zeek_value(v: Any) -> str:
         return "T" if v else "F"
     if isinstance(v, (list, tuple)):
         return ",".join(_zeek_value(x) for x in v) if v else "(empty)"
+    if isinstance(v, dict):
+        # ``str(dict)`` produces invalid TSV that no column-count check
+        # would catch -- surface the bug at build time instead.
+        raise TypeError(
+            f"unsupported Zeek value type {type(v).__name__}: {v!r}; "
+            f"nested dicts cannot be flattened into a TSV column"
+        )
     return str(v).translate(_ZEEK_ESCAPES)
+
+
+def _json_strict(v: Any) -> str:
+    """``json.dumps(default=...)`` hook that refuses to silently coerce
+    unexpected types via ``str()``. A ``datetime`` slipping through, for
+    example, would otherwise become ``"2026-01-05 00:00:00"`` -- not
+    ISO-8601 -- and tests downstream of JSON-parsing wouldn't catch it.
+    Generators are expected to emit JSON-native types only."""
+    raise TypeError(
+        f"non-serialisable value of type {type(v).__name__}: {v!r}; "
+        f"generators must emit JSON-native types (no datetime / Path / set)"
+    )
 
 
 def _write_jsonl(events: list[dict], path: Path, output_root: Path) -> list[dict]:
@@ -250,10 +297,13 @@ def _write_jsonl(events: list[dict], path: Path, output_root: Path) -> list[dict
     ``eve.json`` / Sysmon / auditd telemetry has no such field, and any
     phantom column would surface to MCP consumers."""
     sorted_events = sorted(events, key=_event_sort_key)
-    with path.open("w", encoding="utf-8") as f:
+    # ``newline=""`` disables platform newline translation so the file is
+    # byte-identical across OSes for the same (tier, seed) -- determinism
+    # contract requirement.
+    with path.open("w", encoding="utf-8", newline="") as f:
         for ev in sorted_events:
             payload = {k: v for k, v in ev.items() if k != "_log"}
-            f.write(json.dumps(payload, sort_keys=True, default=str) + "\n")
+            f.write(json.dumps(payload, sort_keys=True, default=_json_strict) + "\n")
     return [_file_meta(path, output_root, len(sorted_events))]
 
 
@@ -265,10 +315,19 @@ def _write_jsonl_by_field(
     field: str,
     suffix: str,
 ) -> list[dict]:
+    """Partition events into one JSONL per distinct value of ``field`` and
+    write each. Missing-routing-field is a generator-contract violation
+    and raises -- previously such records would silently bucket into
+    ``other.jsonl`` and a routing bug would slip past every test."""
     by_value: dict[str, list[dict]] = {}
     for ev in events:
-        raw = ev.get(field, "other")
-        key = str(raw).lower().replace("/", "_").replace(" ", "_")
+        if field not in ev:
+            raise ValueError(
+                f"event missing routing field {field!r}: {ev!r}; "
+                f"generator-contract violation -- every emitted event must "
+                f"carry the partition key the composer routes on"
+            )
+        key = str(ev[field]).lower().replace("/", "_").replace(" ", "_")
         by_value.setdefault(key, []).append(ev)
     files_meta: list[dict] = []
     for value, recs in sorted(by_value.items()):
@@ -306,19 +365,30 @@ def _write_syslog_text(events: list[dict], path: Path, output_root: Path) -> lis
         else:
             line = f"{ts} {host} {msg}"
         lines.append(line)
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="")
     return [_file_meta(path, output_root, len(sorted_events))]
 
 
 def _event_sort_key(ev: dict) -> tuple:
-    """Sort key tolerant of both Zeek (``ts`` = epoch string) and ISO
-    (``timestamp``) generators. Tie-breakers cover the per-source unique
-    id field so two records emitted at the same timestamp are ordered
-    independently of generator emission order: Zeek ``uid`` / ``fuid``,
-    Suricata ``flow_id``, Sysmon / EVTX ``EventID`` and ``RecordID``,
-    identity ``event_id``, Linux ``msg_id``, then host/hostname."""
+    """Sort key tolerant of both Zeek (``ts`` = epoch-seconds string) and
+    ISO (``timestamp``) generators. ``ts`` is parsed as float so the sort
+    is numeric -- lex sort happens to match numeric order only while the
+    epoch has 10 digits (i.e. dates from 2001-09-09 onward), and the
+    default window is comfortably inside that, but a tier-time-machine
+    override could land on the wrong side.
+
+    Tie-breakers cover the per-source unique id field so two records
+    emitted at the same timestamp are ordered independently of
+    generator emission order: Zeek ``uid`` / ``fuid``, Suricata
+    ``flow_id``, Sysmon / EVTX ``EventID`` / ``RecordID``, identity
+    ``event_id``, Linux ``msg_id``, then host/hostname."""
+    ts_raw = ev.get("ts")
+    try:
+        ts_key = float(ts_raw) if ts_raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        ts_key = 0.0
     return (
-        str(ev.get("ts", "")),
+        ts_key,
         str(ev.get("timestamp", "")),
         str(ev.get("uid", ev.get("fuid", ""))),
         str(ev.get("flow_id", "")),
@@ -343,7 +413,9 @@ def _file_meta(path: Path, output_root: Path, event_count: int) -> dict[str, Any
 
 def _sha256_file(path: Path) -> str:
     h = hashlib.sha256()
-    h.update(path.read_bytes())
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
     return h.hexdigest()
 
 
@@ -357,9 +429,12 @@ def _build_manifest(
     sources_meta: list[dict[str, Any]],
 ) -> dict[str, Any]:
     # build_hash = sha256 over (source_path, sha256) pairs sorted by path.
-    # Per-file hashes already cover every byte of every file; aggregating the
-    # path-hash pairs is enough to detect any change to any file or any
-    # rename.
+    # This is a CONTENT hash: it detects any change to any file or any
+    # rename, but it does NOT cover metadata (``tier``, ``seed``, ``window``,
+    # topology counts). Two builds with identical file contents but different
+    # metadata labels would share a build_hash -- intentional, but callers
+    # treating build_hash as a corpus-identity primary key should combine it
+    # with ``(tier, seed, window.start, window.end)`` themselves.
     pairs: list[str] = []
     total_events = 0
     total_bytes = 0

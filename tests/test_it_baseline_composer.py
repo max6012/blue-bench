@@ -160,13 +160,20 @@ def test_log_routing_field_stripped_from_jsonl(tmp_path):
 
 def test_evtx_channel_field_preserved(tmp_path):
     """``channel`` IS a real EventLog field (unlike ``_log``) and must
-    survive the strip pass for evtx."""
+    survive the strip pass for evtx. Check every row, not just the first
+    -- a partial-strip regression that drops ``channel`` mid-stream would
+    slip past a head-only assertion."""
     _build_s(tmp_path)
     security = tmp_path / "evtx" / "security.jsonl"
     if not security.exists():
         pytest.skip("no security channel events in this S run")
-    first = json.loads(security.read_text().splitlines()[0])
-    assert first.get("channel") == "Security"
+    for i, line in enumerate(security.read_text().splitlines()):
+        if not line.strip():
+            continue
+        obj = json.loads(line)
+        assert obj.get("channel") == "Security", (
+            f"row {i + 1}: channel={obj.get('channel')!r}, expected 'Security'"
+        )
 
 
 # --- determinism -----------------------------------------------------------
@@ -304,3 +311,107 @@ def test_cli_build_smoke(tmp_path):
     assert (out / "corpus-manifest.yaml").exists()
     assert (out / "zeek").is_dir()
     assert "build_hash=" in result.stdout
+
+
+def test_cli_cross_process_determinism(tmp_path):
+    """Two CLI invocations with the same ``(tier, seed)`` must produce the
+    same ``build_hash``. PR #2 added cross-process determinism explicitly
+    for the per-source generators (no hash-randomisation / no
+    environment-leak); the composer must inherit that property since the
+    CLI is the load-bearing entry point for the bake-off, not the
+    in-process API."""
+    out_a = tmp_path / "a"
+    out_b = tmp_path / "b"
+    for out in (out_a, out_b):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "blue_bench_generators.it_baseline",
+                "build",
+                "--tier",
+                "S",
+                "--output",
+                str(out),
+                "--seed",
+                "7",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert result.returncode == 0, f"CLI failed: stderr={result.stderr!r}"
+    manifest_a = yaml.safe_load((out_a / "corpus-manifest.yaml").read_text())
+    manifest_b = yaml.safe_load((out_b / "corpus-manifest.yaml").read_text())
+    assert manifest_a["build_hash"] == manifest_b["build_hash"], (
+        f"cross-process determinism broken: {manifest_a['build_hash']} != {manifest_b['build_hash']}"
+    )
+
+
+# --- guard rails -----------------------------------------------------------
+
+
+def test_refuses_to_overwrite_unmanaged_output_dir(tmp_path):
+    """If --output points at a directory containing a ``zeek/`` (or any
+    other managed subdir) without a ``corpus-manifest.yaml``, refuse. This
+    prevents wiping files in a directory that just happened to share a
+    subdir name (e.g. ``--output ~/Documents``)."""
+    bogus = tmp_path / "looks-like-corpus-but-isnt"
+    (bogus / "zeek").mkdir(parents=True)
+    (bogus / "zeek" / "user-data.log").write_text("important\n")
+
+    with pytest.raises(ValueError, match="refusing to overwrite"):
+        build_corpus(tier="S", output_dir=bogus, seed=0)
+
+    # The user's file must be untouched.
+    assert (bogus / "zeek" / "user-data.log").read_text() == "important\n"
+
+
+def test_routing_missing_field_raises(tmp_path):
+    """A generator that emits a record without its declared routing field
+    is a contract violation -- the composer must surface it, not bucket
+    the record into ``other.jsonl`` and continue silently."""
+    from blue_bench_generators.it_baseline.composer import _write_jsonl_by_field
+
+    bad_events = [{"_log": "ok"}, {"missing": True}]  # second one lacks _log
+    with pytest.raises(ValueError, match="missing routing field"):
+        _write_jsonl_by_field(bad_events, tmp_path, tmp_path, field="_log", suffix=".jsonl")
+
+
+def test_json_strict_default_rejects_non_native_types(tmp_path):
+    """``json.dumps`` would otherwise coerce ``datetime`` via ``str()`` to
+    a non-ISO form (``2026-01-05 00:00:00``) -- failing in CI is better
+    than failing in a downstream parser."""
+    from blue_bench_generators.it_baseline.composer import _json_strict
+
+    with pytest.raises(TypeError, match="non-serialisable"):
+        _json_strict(datetime(2026, 1, 5))
+
+
+def test_zeek_value_rejects_nested_dict():
+    """A nested dict in a Zeek record would silently stringify via
+    ``str(dict)`` and produce invalid TSV that the column-count check
+    wouldn't catch."""
+    from blue_bench_generators.it_baseline.composer import _zeek_value
+
+    with pytest.raises(TypeError, match="nested dicts"):
+        _zeek_value({"a": 1})
+
+
+def test_files_use_lf_newlines(tmp_path):
+    """``newline=""`` everywhere -- the determinism contract requires
+    byte-identical files across OSes, and any CRLF would leak through
+    platform translation otherwise. Spot-check one of each format kind."""
+    _build_s(tmp_path)
+    samples = [
+        tmp_path / "corpus-manifest.yaml",
+        tmp_path / "zeek" / "conn.log",
+        tmp_path / "suricata" / "eve.json",
+        tmp_path / "evtx" / "security.jsonl",
+        tmp_path / "linux" / "auth.log",
+    ]
+    for path in samples:
+        if not path.exists():
+            continue
+        raw = path.read_bytes()
+        assert b"\r\n" not in raw, f"{path}: CRLF newline leaked into output"

@@ -30,6 +30,7 @@ from typing import Any, Iterable, Literal
 
 import yaml
 
+from blue_bench_generators import ot_protocols
 from blue_bench_generators.it_baseline import (
     behavior,
     evtx,
@@ -41,6 +42,7 @@ from blue_bench_generators.it_baseline import (
     sysmon,
     topology as topo_mod,
 )
+from blue_bench_generators.ot_protocols.topology import build_ot_network
 
 log = logging.getLogger(__name__)
 
@@ -61,7 +63,7 @@ DEFAULT_START = datetime(2026, 1, 5, 0, 0, 0)
 # output dir identifies it as composer-produced and authorises wipe-before-write
 # of these subdirs; anything else is left untouched.
 _MANAGED_SOURCE_DIRS: tuple[str, ...] = (
-    "zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services",
+    "zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot",
 )
 
 
@@ -133,9 +135,16 @@ def build_corpus(
 
     topology = topo_mod.build_topology(tier=tier, seed=seed)
     activity_model = behavior.build_activity_model(topology, seed=seed)
+    # OT plant-network is built here so its device count flows into the
+    # manifest. The per-protocol generators re-build it internally from
+    # the IT topology's tier/seed -- duplicate builds are cheap and
+    # cross-process determinism is preserved.
+    ot_network = build_ot_network(tier=tier, seed=seed)
 
     # (source_name, module, format_kind). Order is stable so manifest
-    # iteration order is deterministic.
+    # iteration order is deterministic. ``ot`` uses the same Zeek-TSV
+    # writer as ``zeek`` -- its events carry ``_log`` ∈ {conn, modbus,
+    # dnp3, iec104, s7comm} and route into per-log files under ``ot/``.
     source_specs: tuple[tuple[str, Any, str], ...] = (
         ("zeek", network_zeek, "zeek_tsv"),
         ("suricata", suricata_noise, "jsonl_eve"),
@@ -144,6 +153,7 @@ def build_corpus(
         ("linux", linux_logs, "linux_mixed"),
         ("identity", identity, "jsonl_one"),
         ("services", services, "jsonl_by_log"),
+        ("ot", ot_protocols, "zeek_tsv"),
     )
 
     sources_meta: list[dict[str, Any]] = []
@@ -176,6 +186,7 @@ def build_corpus(
         start=start,
         end=end,
         topology=topology,
+        ot_network=ot_network,
         sources_meta=sources_meta,
     )
     manifest_path.write_text(
@@ -426,6 +437,7 @@ def _build_manifest(
     start: datetime,
     end: datetime,
     topology: topo_mod.Topology,
+    ot_network,
     sources_meta: list[dict[str, Any]],
 ) -> dict[str, Any]:
     # build_hash = sha256 over (source_path, sha256) pairs sorted by path.
@@ -459,6 +471,9 @@ def _build_manifest(
             "users": len(topology.users),
             "services": len(topology.services),
             "vlans": len(topology.vlans),
+            "ot_devices": len(ot_network.devices),
+            "ot_vlans": len(ot_network.vlans),
+            "ot_links": len(ot_network.links),
         },
         "totals": {
             "events": total_events,

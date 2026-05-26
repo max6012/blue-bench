@@ -22,7 +22,7 @@ alert_ratio)`` always produces an identical event stream. RNG is seeded
 via SHA-256 of a stable string -- never ``hash()`` (process-salt) and
 never module-level ``random``.
 
-Vendor-neutral; no exercise vocabulary anywhere.
+Vendor-neutral.
 """
 
 from __future__ import annotations

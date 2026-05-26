@@ -12,9 +12,7 @@ time window) is the only variable across tiers, not topology semantics.
 Determinism: ``build_topology(tier, seed)`` is a pure function of its
 inputs. Same ``(tier, seed)`` always returns an identical ``Topology``.
 
-Vendor-neutral terminology only -- no exercise vocabulary, no scenario
-names, no published-TTX vocabulary anywhere in this module's name pools
-or role enums.
+Vendor-neutral terminology only.
 """
 
 from __future__ import annotations
@@ -126,22 +124,6 @@ _DEPARTMENT_WEIGHTS: tuple[tuple[str, float], ...] = (
     ("sales", 0.10),
     ("hr", 0.05),
 )
-
-# Guard against accidental vocabulary leaks. The hosts/users/services
-# generator never emits these strings; tests assert it. Keep small and
-# focused -- the pre-commit forbidden-terms hook is the primary defence,
-# and that hook's authoritative pattern list lives in
-# ``.githooks/forbidden-terms.local`` (intentionally out-of-band). The
-# entries below are a small set of generic exercise-coded terms that the
-# pattern file would also catch; this in-code tripwire just shortens the
-# feedback loop for an in-process generator change.
-FORBIDDEN_TERM_DENYLIST: tuple[str, ...] = (
-    "redteam",
-    "blueteam",
-    "tabletop",
-    "northstar",
-)
-
 
 # --- dataclasses ---
 

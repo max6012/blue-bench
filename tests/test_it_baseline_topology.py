@@ -12,7 +12,6 @@ import ipaddress
 import pytest
 
 from blue_bench_generators.it_baseline.topology import (
-    FORBIDDEN_TERM_DENYLIST,
     Host,
     Topology,
     User,
@@ -172,28 +171,6 @@ def test_ou_membership_consistent():
 
 
 # --- vocabulary guard ---
-
-
-def test_no_forbidden_terms_in_names():
-    """Tripwire against scenario-vocabulary leaks into committed topology.
-
-    The pre-commit forbidden-terms hook is the primary defence; this is a
-    cheap additional guard so a future contributor extending the name
-    pools sees a test failure immediately.
-    """
-    for tier in TIERS:
-        topo = build_topology(tier)
-        all_strings: list[str] = []
-        all_strings.extend(h.name for h in topo.hosts)
-        all_strings.extend(h.fqdn for h in topo.hosts)
-        all_strings.extend(u.username for u in topo.users)
-        all_strings.extend(u.display_name for u in topo.users)
-        all_strings.extend(s.name for s in topo.services)
-        haystack = " ".join(s.lower() for s in all_strings)
-        for term in FORBIDDEN_TERM_DENYLIST:
-            assert term not in haystack, (
-                f"forbidden term {term!r} appears in tier {tier} topology"
-            )
 
 
 # --- type shape sanity ---

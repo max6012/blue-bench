@@ -6,8 +6,8 @@ telemetry streams that consume it (Zeek, Suricata, Sysmon, EVTX, Linux,
 identity, services), plus a tier-driven composer that emits a complete
 corpus to disk.
 
-Vendor-neutral terminology throughout; no exercise vocabulary. Same
-``(tier, seed)`` ALWAYS produces an identical corpus.
+Vendor-neutral terminology throughout. Same ``(tier, seed)`` ALWAYS
+produces an identical corpus.
 
 Sub-modules:
     topology  -- dataclasses + ``build_topology(tier, seed)`` builder.

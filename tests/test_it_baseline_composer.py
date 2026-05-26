@@ -33,7 +33,7 @@ from blue_bench_generators.it_baseline.composer import (
 )
 
 
-SOURCE_DIRS = {"zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services"}
+SOURCE_DIRS = {"zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot"}
 
 
 def _build_s(tmp_path: Path, *, seed: int = 0) -> dict:
@@ -415,3 +415,98 @@ def test_files_use_lf_newlines(tmp_path):
             continue
         raw = path.read_bytes()
         assert b"\r\n" not in raw, f"{path}: CRLF newline leaked into output"
+
+
+# --- OT integration -------------------------------------------------------
+
+
+def test_ot_dir_populated_with_zeek_tsv_per_protocol(tmp_path):
+    """OT is the 8th source. Output is Zeek TSV with one file per
+    ``_log`` value -- conn (merged across protocols), modbus, dnp3,
+    iec104, s7comm. S tier may emit zero S7Comm events depending on
+    business-hours overlap, so s7comm.log is optional; the other four
+    are required."""
+    _build_s(tmp_path)
+    ot_dir = tmp_path / "ot"
+    assert ot_dir.is_dir(), "expected ot/ subdirectory"
+    files = {p.name for p in ot_dir.iterdir()}
+    # conn merged across all 4 protocols; per-protocol log when the
+    # protocol emits any records in this window.
+    expected_required = {"conn.log", "modbus.log", "dnp3.log", "iec104.log"}
+    missing = expected_required - files
+    assert not missing, f"ot/ missing required logs: {missing}"
+
+
+def test_ot_zeek_tsv_files_are_well_formed(tmp_path):
+    """OT TSV must follow the same Zeek conventions as IT zeek/ -- the
+    composer reuses the same writer so ingestion via scripts/seed_es.py
+    works unchanged."""
+    _build_s(tmp_path)
+    ot_dir = tmp_path / "ot"
+    for path in ot_dir.glob("*.log"):
+        lines = path.read_text().splitlines()
+        assert lines[0] == "#separator \\x09", f"{path.name}: bad separator"
+        fields_line = next((l for l in lines if l.startswith("#fields")), None)
+        assert fields_line is not None, f"{path.name}: no #fields header"
+        fields = fields_line.split("\t")[1:]
+        for line in lines:
+            if line.startswith("#") or not line:
+                continue
+            parts = line.split("\t")
+            assert len(parts) == len(fields), (
+                f"{path.name}: data row col count {len(parts)} != header {len(fields)}"
+            )
+
+
+def test_manifest_carries_ot_topology_counts(tmp_path):
+    """Manifest gains ``topology.ot_devices`` / ``ot_vlans`` / ``ot_links``
+    so consumers can tell IT-only from IT+OT corpora without re-running
+    the topology builder."""
+    manifest = _build_s(tmp_path)
+    topo = manifest["topology"]
+    assert "ot_devices" in topo, "manifest topology missing ot_devices"
+    assert "ot_vlans" in topo, "manifest topology missing ot_vlans"
+    assert "ot_links" in topo, "manifest topology missing ot_links"
+    assert topo["ot_devices"] >= 5, f"S-tier OT device count too low: {topo['ot_devices']}"
+    assert topo["ot_vlans"] == 3
+    assert topo["ot_links"] >= 1
+
+
+def test_ot_records_carry_no_log_field_leak(tmp_path):
+    """Same `_log` strip discipline as the JSONL streams: although OT
+    output is TSV (not JSONL), the source-of-truth dicts use ``_log`` as
+    a routing discriminator. The Zeek TSV writer's field-order helper
+    already excludes ``_log`` from the column set, so it must not appear
+    in any header."""
+    _build_s(tmp_path)
+    for path in (tmp_path / "ot").glob("*.log"):
+        fields_line = next(
+            l for l in path.read_text().splitlines() if l.startswith("#fields")
+        )
+        assert "_log" not in fields_line.split("\t"), (
+            f"{path.name}: ``_log`` routing field leaked into TSV header"
+        )
+
+
+def test_ot_integration_does_not_break_existing_zeek_dir(tmp_path):
+    """Adding OT must not regress the existing IT zeek/ output."""
+    _build_s(tmp_path)
+    zeek = tmp_path / "zeek"
+    assert zeek.is_dir()
+    # S-tier zeek emits conn + dns + files (no http/ssl at S because the
+    # IT topology has no proxy at S).
+    files = {p.name for p in zeek.iterdir()}
+    assert {"conn.log", "dns.log", "files.log"}.issubset(files)
+
+
+def test_ot_re_run_deterministic(tmp_path):
+    """OT inherits the composer's byte-identical re-run guarantee."""
+    out_a = tmp_path / "a"
+    out_b = tmp_path / "b"
+    m_a = build_corpus(tier="S", output_dir=out_a, seed=11)
+    m_b = build_corpus(tier="S", output_dir=out_b, seed=11)
+    assert m_a["build_hash"] == m_b["build_hash"]
+    for rel in (out_a / "ot").iterdir():
+        assert (out_b / "ot" / rel.name).read_bytes() == rel.read_bytes(), (
+            f"ot/{rel.name} differs across deterministic re-run"
+        )

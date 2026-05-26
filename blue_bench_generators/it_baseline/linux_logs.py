@@ -11,8 +11,8 @@ Emits three log streams for Linux hosts in the topology:
 * ``syslog``   -- ``/var/log/syslog`` lines for cron (hourly fire), systemd
                   service events, and very rare apt package operations.
 
-Benign activity only. Vendor-neutral; no exercise vocabulary. Deterministic
-given ``(topology, start, end, seed)``.
+Benign activity only. Vendor-neutral. Deterministic given
+``(topology, start, end, seed)``.
 
 Rate composition is delegated to :class:`ActivityModel`. The mapping from
 event_class to log stream is:

@@ -267,6 +267,8 @@ def test_every_s7comm_pdu_shares_uid_with_a_conn():
 def test_download_block_off_hours_anomaly_visible():
     """download_block_off_hours emits a userdata/download_block PDU
     inside the anomaly window AND outside the maintenance window."""
+    from blue_bench_generators.ot_protocols.s7comm import _maintenance_interval
+
     net = _network()
     # Saturday afternoon -- off-hours, not maintenance.
     anomaly = AnomalyWindow(
@@ -290,15 +292,25 @@ def test_download_block_off_hours_anomaly_visible():
         and e["function"] == "download_block"
     ]
     assert hits, "no download_block userdata PDU emitted"
-    # All hits inside the anomaly window. Saturday is not the first
-    # Tuesday of the month, so this also exercises the "outside
-    # maintenance" property -- but the test asserts that explicitly via
-    # offset arithmetic rather than wall-clock attributes so it holds
-    # in any CI timezone.
     a_start = anomaly.start.timestamp()
     a_end = anomaly.end.timestamp()
+    # Explicit "outside maintenance" property: compute the canonical
+    # maintenance window for this anomaly's month directly from the
+    # generator and assert every download_block ts falls outside it.
+    # Without this check, the "outside maintenance" guarantee rides on
+    # the implicit fact that 2026-05-09 happens not to be the first
+    # Tuesday -- a future anchor change could silently break the
+    # property.
+    m_start, m_end = _maintenance_interval(anomaly.start.year, anomaly.start.month)
+    m_start_epoch = m_start.timestamp()
+    m_end_epoch = m_end.timestamp()
     for h in hits:
-        assert a_start <= float(h["ts"]) < a_end
+        ts_v = float(h["ts"])
+        assert a_start <= ts_v < a_end
+        assert not (m_start_epoch <= ts_v < m_end_epoch), (
+            f"download_block hit at ts={ts_v} fell inside the maintenance "
+            f"window [{m_start}, {m_end})"
+        )
 
 
 def test_download_block_distinguishable_from_baseline_read_var():

@@ -164,21 +164,26 @@ def _ephemeral_port(rng: random.Random) -> int:
 def _emit_conn_record(
     *,
     ts_epoch: float,
-    master: Device,
-    slave: Device,
+    src: Device,
+    dst: Device,
     orig_port: int,
     uid: str,
     transaction_count: int,
 ) -> dict:
+    """Emit a Zeek conn record. ``src`` lands on ``id.orig_h``, ``dst``
+    on ``id.resp_h`` -- this is purely directional, not a protocol-role
+    label, so unsolicited responses (outstation -> master in real DNP3)
+    pass ``src=outstation, dst=master`` rather than relying on a
+    positional master/slave swap."""
     orig_bytes = transaction_count * _CONN_ORIG_BYTES_PER_TRANSACTION
     resp_bytes = transaction_count * _CONN_RESP_BYTES_PER_TRANSACTION
     return {
         "_log": "conn",
         "ts": _ts_str(ts_epoch),
         "uid": uid,
-        "id.orig_h": master.ip,
+        "id.orig_h": src.ip,
         "id.orig_p": str(orig_port),
-        "id.resp_h": slave.ip,
+        "id.resp_h": dst.ip,
         "id.resp_p": str(DNP3_PORT),
         "proto": "tcp",
         "service": "dnp3",
@@ -192,21 +197,24 @@ def _emit_conn_record(
 def _emit_dnp3_record(
     *,
     ts_epoch: float,
-    master: Device,
-    slave: Device,
+    src: Device,
+    dst: Device,
     orig_port: int,
     uid: str,
     fc_request: str,
     fc_reply: str,
     iin_bits: int,
 ) -> dict:
+    """Emit a Zeek dnp3 record. Same ``src`` / ``dst`` directional
+    semantics as ``_emit_conn_record`` -- protocol role is carried by
+    ``fc_request`` / ``fc_reply``, not by the directional kwargs."""
     return {
         "_log": "dnp3",
         "ts": _ts_str(ts_epoch),
         "uid": uid,
-        "id.orig_h": master.ip,
+        "id.orig_h": src.ip,
         "id.orig_p": str(orig_port),
-        "id.resp_h": slave.ip,
+        "id.resp_h": dst.ip,
         "id.resp_p": str(DNP3_PORT),
         "fc_request": fc_request,
         "fc_reply": fc_reply,
@@ -315,8 +323,8 @@ def _emit_link_hour(
             records.append(
                 _emit_dnp3_record(
                     ts_epoch=t_epoch,
-                    master=master,
-                    slave=slave,
+                    src=master,
+                    dst=slave,
                     orig_port=orig_port,
                     uid=uid,
                     fc_request=fc,
@@ -333,8 +341,8 @@ def _emit_link_hour(
         records.append(
             _emit_dnp3_record(
                 ts_epoch=t_epoch,
-                master=master,
-                slave=slave,
+                src=master,
+                dst=slave,
                 orig_port=orig_port,
                 uid=uid,
                 fc_request=choice,
@@ -349,8 +357,8 @@ def _emit_link_hour(
         records.append(
             _emit_dnp3_record(
                 ts_epoch=t_epoch,
-                master=master,
-                slave=slave,
+                src=master,
+                dst=slave,
                 orig_port=orig_port,
                 uid=uid,
                 fc_request="DISABLE_UNSOLICITED",
@@ -367,8 +375,8 @@ def _emit_link_hour(
     # behaviour (first-observed timestamp).
     yield _emit_conn_record(
         ts_epoch=bucket_start.timestamp(),
-        master=master,
-        slave=slave,
+        src=master,
+        dst=slave,
         orig_port=orig_port,
         uid=uid,
         transaction_count=len(records),
@@ -468,24 +476,20 @@ def _emit_unsolicited_overlay(
     t_epoch = bucket_start.timestamp() + bucket_seconds * 0.5
 
     # Direction is OUTSTATION -> MASTER for unsolicited (real DNP3
-    # semantics). The emit helpers map their ``master=`` arg to
-    # ``id.orig_h`` and ``slave=`` to ``id.resp_h``; for unsolicited
-    # we pass the outstation as ``master=`` so its IP lands on
-    # ``id.orig_h`` -- the names are positional-role to the helper but
-    # protocol-role here. Any detector keying off Zeek ``is_orig=F`` for
-    # unsolicited responses now sees the correct flow direction.
+    # semantics). The emit helpers take ``src`` / ``dst`` directly; no
+    # role-swap trickery needed.
     yield _emit_conn_record(
         ts_epoch=bucket_start.timestamp(),
-        master=outstation,
-        slave=master,
+        src=outstation,
+        dst=master,
         orig_port=orig_port,
         uid=uid,
         transaction_count=1,
     )
     yield _emit_dnp3_record(
         ts_epoch=t_epoch,
-        master=outstation,
-        slave=master,
+        src=outstation,
+        dst=master,
         orig_port=orig_port,
         uid=uid,
         fc_request="UNSOLICITED_MESSAGE",

@@ -435,18 +435,19 @@ def _emit_ot_host_auth(
     method: str,
     src_ip: str,
     bridge_session_uid: str,
+    seed: int,
 ) -> dict:
-    # UID is keyed off bridge_session_uid only -- seed is transitively
-    # covered (the session UID itself derives from the seed). Pattern-
-    # divergent from natural ot_hosts._uid which includes seed
-    # explicitly; acceptable here because bridge UIDs are short-lived
-    # correlation keys, not the cross-corpus stability primary.
+    # ``seed`` is included in the UID key explicitly, matching the
+    # natural ``ot_hosts._uid`` pattern. Functionally redundant with
+    # bridge_session_uid's transitive seed-dependence, but pattern
+    # uniformity matters more here than the byte saved.
     return {
         "_source": "ot_hosts",
         "_log": "ot_auth",
         "timestamp": _iso_ts(ts),
         "uid": "H" + hashlib.blake2b(
-            f"bridge|ot_auth|{bridge_session_uid}".encode(), digest_size=6
+            f"{seed}|bridge|ot_auth|{bridge_session_uid}".encode(),
+            digest_size=6,
         ).hexdigest(),
         "host": host_fqdn,
         "host_role": host_role,
@@ -469,6 +470,7 @@ def _build_jump_to_ews(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
 ) -> list[dict]:
     """Corp user -> jump-host (SSH) -> EWS (RDP).
 
@@ -507,7 +509,7 @@ def _build_jump_to_ews(
             host_fqdn=ews.fqdn, host_role=ews.role,
             ts=handoff_ts + timedelta(milliseconds=400),
             user=user, method="rdp", src_ip=jump_ip,
-            bridge_session_uid=session_uid,
+            bridge_session_uid=session_uid, seed=seed,
         ),
     ]
 
@@ -519,6 +521,7 @@ def _build_historian_bi_read(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
 ) -> list[dict]:
     """Corp BI host -> historian (HTTPS).
 
@@ -557,6 +560,7 @@ def _build_ews_config_backup(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
 ) -> list[dict]:
     """EWS -> corp file share (SMB).
 
@@ -593,6 +597,7 @@ def _build_jump_host_bypass(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
     target_device: str | None,
 ) -> list[dict]:
     """Corp workstation -> EWS direct, bypassing the jump-host.
@@ -621,7 +626,7 @@ def _build_jump_host_bypass(
             host_fqdn=ews.fqdn, host_role=ews.role,
             ts=ts + timedelta(milliseconds=400),
             user=user, method="rdp", src_ip=corp_ws.ip,
-            bridge_session_uid=session_uid,
+            bridge_session_uid=session_uid, seed=seed,
         ),
     ]
 
@@ -633,6 +638,7 @@ def _build_unexpected_corp_to_ot(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
     target_device: str | None,
 ) -> list[dict]:
     """Corp workstation -> OT controller directly.
@@ -673,6 +679,7 @@ def _build_historian_external_replication(
     ts: datetime,
     session_uid: str,
     rng: random.Random,
+    seed: int,
     target_device: str | None,
 ) -> list[dict]:
     """Historian -> RFC5737 external destination.
@@ -815,7 +822,7 @@ def generate_for_topologies(
                     continue
                 events.extend(_BUILDERS[kind](
                     topology=topology, network=network, ts=ts,
-                    session_uid=session_uid, rng=rng,
+                    session_uid=session_uid, rng=rng, seed=seed,
                 ))
                 continue
             for _ in range(count):
@@ -827,7 +834,7 @@ def generate_for_topologies(
                     continue
                 events.extend(_BUILDERS[kind](
                     topology=topology, network=network, ts=ts,
-                    session_uid=session_uid, rng=rng,
+                    session_uid=session_uid, rng=rng, seed=seed,
                 ))
 
     # Anomalous sessions.
@@ -858,7 +865,7 @@ def generate_for_topologies(
         rng = _session_rng(seed, w.kind, session_idx)
         events.extend(builder(
             topology=topology, network=network, ts=w.start,
-            session_uid=session_uid, rng=rng,
+            session_uid=session_uid, rng=rng, seed=seed,
             target_device=w.target_device,
         ))
 

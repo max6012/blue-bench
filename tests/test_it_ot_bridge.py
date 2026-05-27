@@ -306,6 +306,48 @@ def test_all_session_uids_unique(it_topo_m, ot_net_m):
     assert len(distinct) == len(by_session_records)
 
 
+def test_bridge_ssh_thumbprint_matches_natural_shape(it_topo_m, ot_net_m):
+    """Bridge auth.log records must use the SAME 43-char SSH key
+    fingerprint shape as the natural linux_logs generator. A length-
+    based detector would otherwise discover every bridge session for
+    free (12-char hex vs 43-char base32 from a fixed alphabet)."""
+    import re
+    events = list(generate_for_topologies(
+        it_topo_m, ot_net_m, WINDOW_START, WINDOW_END_1D, seed=0,
+    ))
+    fp_pattern = re.compile(r"SHA256:([A-Z0-9]+) session=")
+    bridge_auth = [e for e in events if e["_source"] == "linux"]
+    assert bridge_auth, "expected at least one bridge linux auth_log"
+    for r in bridge_auth:
+        m = fp_pattern.search(r["message"])
+        assert m is not None, f"could not extract fingerprint from {r['message']!r}"
+        thumb = m.group(1)
+        assert len(thumb) == 43, (
+            f"bridge SSH fingerprint must be 43 chars (matches natural "
+            f"sshd record); got {len(thumb)} ({thumb!r})"
+        )
+        # Alphabet must match linux_logs.py:_emit_sshd_accepted (no I/O confusion)
+        assert set(thumb).issubset(set("ABCDEFGHJKLMNPQRSTUVWXYZ0123456789")), (
+            f"bridge SSH fingerprint contains chars outside ssh-fp alphabet: {thumb}"
+        )
+
+
+def test_bridge_auth_log_carries_session_in_message(it_topo_m, ot_net_m):
+    """The syslog text writer drops dict keys other than ``message``.
+    Bridge auth records append session=<uid> to the message tail so
+    cross-stream correlation survives serialisation."""
+    events = list(generate_for_topologies(
+        it_topo_m, ot_net_m, WINDOW_START, WINDOW_END_1D, seed=0,
+    ))
+    bridge_auth = [e for e in events if e["_source"] == "linux"]
+    assert bridge_auth
+    for r in bridge_auth:
+        uid = r["bridge_session_uid"]
+        assert f"session={uid}" in r["message"], (
+            f"bridge auth_log message must include session={uid}: {r['message']}"
+        )
+
+
 def test_l_tier_uses_real_jump_host(ot_net_m):
     """L-tier IT topology has a real jump-host. The bridge generator
     must prefer it over the synthesised fallback -- otherwise a
@@ -399,6 +441,27 @@ def test_unknown_anomaly_kind_raises(it_topo_s, ot_net_s):
     with pytest.raises(ValueError, match="unknown bridge anomaly kind"):
         list(generate_for_topologies(
             it_topo_s, ot_net_s, WINDOW_START, WINDOW_END_1D, seed=0,
+            anomaly_windows=(bad,),
+        ))
+
+
+@pytest.mark.parametrize("kind,bad_name", [
+    ("jump_host_bypass", "not-an-ews"),
+    ("unexpected_corp_to_ot", "not-a-controller"),
+    ("historian_external_replication", "not-a-historian"),
+])
+def test_bad_target_device_raises(it_topo_m, ot_net_m, kind, bad_name):
+    """Explicit target_device that names no eligible device is a caller
+    bug -- raises (uniform with ot_hosts anomaly target_device policy)."""
+    bad = AnomalyWindow(
+        kind=kind,
+        start=datetime(2026, 1, 5, 10, 0, 0),
+        end=datetime(2026, 1, 5, 10, 5, 0),
+        target_device=bad_name,
+    )
+    with pytest.raises(ValueError, match="not an eligible"):
+        list(generate_for_topologies(
+            it_topo_m, ot_net_m, WINDOW_START, WINDOW_END_1D, seed=0,
             anomaly_windows=(bad,),
         ))
 

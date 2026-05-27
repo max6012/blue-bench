@@ -283,6 +283,41 @@ def _pick_ot_controller(network: OTNetwork, rng: random.Random) -> Device | None
     return controllers[rng.randrange(len(controllers))]
 
 
+def _resolve_target_device(
+    network: OTNetwork,
+    eligible_roles: tuple[str, ...],
+    target_name: str | None,
+    kind: AnomalyKind,
+    rng: random.Random | None = None,
+) -> Device | None:
+    """Resolve an anomaly's target device by role + optional explicit name.
+
+    Mirrors ``ot_hosts._pick_anomaly_device`` policy: returns ``None``
+    when the network has no devices of the eligible role at all
+    (S/M may have no jump-host, no safety-controller, etc.) -- callers
+    skip silently. An explicit ``target_name`` that doesn't match any
+    eligible device is a caller bug and raises with the sorted
+    eligible-name list, uniform with the cross-boundary-window and
+    on-shift-start raises across the generator suite.
+    """
+    eligible = [d for d in network.devices if d.role in eligible_roles]
+    if not eligible:
+        return None
+    if target_name is not None:
+        for d in eligible:
+            if d.name == target_name:
+                return d
+        eligible_names = sorted(d.name for d in eligible)
+        raise ValueError(
+            f"anomaly {kind!r} target_device {target_name!r} is not an "
+            f"eligible {list(eligible_roles)!r} device in this network; "
+            f"eligible: {eligible_names}"
+        )
+    if rng is not None:
+        return eligible[rng.randrange(len(eligible))]
+    return eligible[0]
+
+
 def _pick_user(topology: Topology, rng: random.Random) -> str:
     """A real corp username from the topology, or a synthetic fallback."""
     if topology.users:
@@ -326,6 +361,35 @@ def _emit_zeek_conn(
     }
 
 
+# SSH key fingerprint alphabet matches linux_logs.py:357 -- 32 chars
+# (no I/O confusion). Bridge fingerprints derive deterministically from
+# bridge_session_uid so they are SHAPE-INDISTINGUISHABLE from natural
+# sshd records: 43 characters from the same alphabet. A detector
+# trained on natural fingerprint length will not get a free shortcut
+# on bridge records.
+_SSH_FP_ALPHABET: str = "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789"
+
+
+def _bridge_ssh_thumbprint(bridge_session_uid: str) -> str:
+    """Deterministic 43-char SSH thumb derived from the session UID.
+
+    blake2b(32 bytes) gives 256 bits of derivation entropy; we render
+    them into the 32-char ssh-fp alphabet (5 bits/char) to fill 43
+    characters. Pure function of ``bridge_session_uid`` -- no RNG, no
+    process-salt dependency, no length divergence from natural records.
+    """
+    digest = hashlib.blake2b(
+        bridge_session_uid.encode("utf-8"), digest_size=32
+    ).digest()
+    # Treat the digest as a base-2 stream; emit 43 base-32 chars.
+    bits = int.from_bytes(digest, "big")
+    out: list[str] = []
+    for _ in range(43):
+        out.append(_SSH_FP_ALPHABET[bits & 0x1F])
+        bits >>= 5
+    return "".join(out)
+
+
 def _emit_linux_auth_accepted(
     *,
     host_fqdn: str,
@@ -336,15 +400,23 @@ def _emit_linux_auth_accepted(
     bridge_session_uid: str,
     pid: int = 4321,
 ) -> dict:
-    thumb = bridge_session_uid[1:13].upper()
+    # Append ``session=<uid>`` to the message tail so cross-stream
+    # consumers can correlate bridge records in auth.log even after
+    # _write_syslog_text drops every key except the formatted message.
+    # The session= suffix is the documented carve-out for linux/auth.log
+    # (see __init__.py module header) since the dict-level
+    # bridge_session_uid does not survive the syslog text writer.
+    thumb = _bridge_ssh_thumbprint(bridge_session_uid)
     msg = (
         f"Accepted publickey for {user} from {src_ip} port {src_port} "
-        f"ssh2: ED25519 SHA256:{thumb}"
+        f"ssh2: ED25519 SHA256:{thumb} session={bridge_session_uid}"
     )
     return {
         "_source": "linux",
         "_log": "auth_log",
-        "timestamp": ts.isoformat(),
+        # Second precision -- matches the natural sshd record format
+        # (linux_logs uses second-precision ISO strings for auth.log).
+        "timestamp": ts.replace(microsecond=0).isoformat(),
         "hostname": host_fqdn,
         "facility": "auth",
         "process": "sshd",
@@ -364,6 +436,11 @@ def _emit_ot_host_auth(
     src_ip: str,
     bridge_session_uid: str,
 ) -> dict:
+    # UID is keyed off bridge_session_uid only -- seed is transitively
+    # covered (the session UID itself derives from the seed). Pattern-
+    # divergent from natural ot_hosts._uid which includes seed
+    # explicitly; acceptable here because bridge UIDs are short-lived
+    # correlation keys, not the cross-corpus stability primary.
     return {
         "_source": "ot_hosts",
         "_log": "ot_auth",
@@ -526,12 +603,10 @@ def _build_jump_host_bypass(
     jump-host auth record is always present.
     """
     corp_ws = _pick_corp_workstation(topology, rng)
-    if target_device is not None:
-        ews = next((d for d in network.devices
-                    if d.role == "engineering-workstation" and d.name == target_device),
-                   None)
-    else:
-        ews = _pick_ews(network)
+    ews = _resolve_target_device(
+        network, ("engineering-workstation",), target_device,
+        "jump_host_bypass", rng=None,  # deterministic-first when unspecified
+    )
     if corp_ws is None or ews is None:
         return []
     user = _pick_user(topology, rng)
@@ -567,10 +642,10 @@ def _build_unexpected_corp_to_ot(
     OT control or field VLANs.
     """
     corp_ws = _pick_corp_workstation(topology, rng)
-    if target_device is not None:
-        target = next((d for d in network.devices if d.name == target_device), None)
-    else:
-        target = _pick_ot_controller(network, rng)
+    target = _resolve_target_device(
+        network, ("controller", "safety-controller"), target_device,
+        "unexpected_corp_to_ot", rng=rng,
+    )
     if corp_ws is None or target is None:
         return []
     src_port = _ephemeral_port(rng)
@@ -606,14 +681,10 @@ def _build_historian_external_replication(
     external IP (198.51.100.x). Baseline historian traffic never leaves
     the topology subnets.
     """
-    if target_device is not None:
-        historian = next(
-            (d for d in network.devices
-             if d.role == "historian" and d.name == target_device),
-            None,
-        )
-    else:
-        historian = _pick_historian(network)
+    historian = _resolve_target_device(
+        network, ("historian",), target_device,
+        "historian_external_replication", rng=None,
+    )
     if historian is None:
         return []
     src_port = _ephemeral_port(rng)
@@ -648,7 +719,14 @@ _ANOMALY_BUILDERS = {
 
 
 def _weekdays_in_window(start: datetime, end: datetime) -> list[datetime]:
-    """Return naive-UTC midnights of each weekday inside ``[start, end)``."""
+    """Return naive-UTC midnights of each weekday inside ``[start, end)``.
+
+    Caveat: when ``start`` falls mid-day, the cursor rolls forward to
+    the next midnight, dropping that day's sessions entirely. The
+    composer anchors at 00:00 (``DEFAULT_START``) so this is fine in
+    practice, but a future caller passing ``--start 12:00`` would
+    silently lose a weekday of bridge sessions.
+    """
     days: list[datetime] = []
     cursor = start.replace(hour=0, minute=0, second=0, microsecond=0)
     if cursor < start:

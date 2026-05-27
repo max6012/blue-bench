@@ -157,18 +157,24 @@ def build_corpus(
         ("ot_hosts", ot_hosts, "jsonl_by_log"),
     )
 
-    # Phase 1: collect events per source. The bridge generator
-    # (``it_ot_bridge``) is special-cased -- it fans out matched-pair
-    # events across multiple existing source streams, so we run it
-    # AFTER all the standard sources and merge its events into the
-    # collected per-source lists before writing.
+    # Three-phase build:
+    #   1. collect per-source events from the 9 standard generators
+    #   2. fan ``it_ot_bridge`` matched-pair events across those
+    #      collected source lists via the ``_source`` discriminator
+    #   3. write each source stream to disk
+    # The bridge is intentionally not a 10th source spec -- its event
+    # set is cross-source and lands in the existing dirs.
+    #
+    # Anomaly injection is OUT-OF-BAND: this baseline build never
+    # passes anomaly_windows. Anomaly overlays are exercised via the
+    # generator-level API in tests / scenario runners.
     source_events_map: dict[str, list[dict]] = {}
     for source_name, module, format_kind in source_specs:
         events = list(module.generate(topology, activity_model, start, end, seed=seed))
         source_events_map[source_name] = events
         log.info("composer: %s generated %d events", source_name, len(events))
 
-    # Phase 2: merge bridge events into the appropriate source streams.
+    # Phase 2 (bridge fan-out): merge bridge events into the source streams.
     # Each bridge event carries a ``_source`` discriminator naming the
     # destination source dir; we pop it before writers see the event.
     bridge_events = list(it_ot_bridge.generate(topology, activity_model, start, end, seed=seed))
@@ -193,7 +199,7 @@ def build_corpus(
         len(bridge_events), len(bridge_session_uids),
     )
 
-    # Phase 3: write each source stream.
+    # Phase 3 (write): emit each source stream to disk.
     sources_meta: list[dict[str, Any]] = []
     for source_name, module, format_kind in source_specs:
         events = source_events_map[source_name]
@@ -437,7 +443,9 @@ def _event_sort_key(ev: dict) -> tuple:
     emitted at the same timestamp are ordered independently of
     generator emission order: Zeek ``uid`` / ``fuid``, Suricata
     ``flow_id``, Sysmon / EVTX ``EventID`` / ``RecordID``, identity
-    ``event_id``, Linux ``msg_id``, then host/hostname."""
+    ``event_id``, Linux ``msg_id``, ``bridge_session_uid`` (for
+    cross-source bridge records that share other primary keys with
+    natural records), then host/hostname."""
     ts_raw = ev.get("ts")
     try:
         ts_key = float(ts_raw) if ts_raw not in (None, "") else 0.0
@@ -451,6 +459,7 @@ def _event_sort_key(ev: dict) -> tuple:
         str(ev.get("EventID", ev.get("event_id", ""))),
         str(ev.get("RecordID", "")),
         str(ev.get("msg_id", "")),
+        str(ev.get("bridge_session_uid", "")),
         str(ev.get("host", ev.get("hostname", ""))),
     )
 

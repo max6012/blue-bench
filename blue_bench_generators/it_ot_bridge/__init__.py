@@ -39,6 +39,20 @@ Matched-pair correlation: every event from a session carries
 an additional column alongside the standard ``uid``; the bridge does
 NOT overload ``uid`` (which is per-connection in real Zeek).
 
+Carve-out for ``linux/auth.log``
+--------------------------------
+
+The composer's syslog text writer drops every dict key except the
+formatted message, so ``bridge_session_uid`` as a dict field does not
+survive serialisation for the auth.log stream. The bridge appends
+``session=<bridge_session_uid>`` to the SSH ``Accepted publickey``
+message so cross-stream consumers can still correlate via the raw
+auth.log text. The SSH key fingerprint in the same message is
+deterministically derived from ``bridge_session_uid`` using the same
+43-char alphabet as the natural sshd record, so bridge auth records
+are length-indistinguishable from natural ones (no "short fingerprint"
+detection shortcut).
+
 Determinism: per-session blake2b-derived RNG seeded from
 ``(seed, kind, session_idx)``. Same ``(topology, start, end, seed,
 anomaly_windows)`` always produces an identical event stream.

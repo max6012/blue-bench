@@ -1,9 +1,9 @@
 """IT-baseline corpus composer + tier scaling + corpus output.
 
-Orchestrates the seven per-source telemetry generators into a unified corpus
-build under ``<output_dir>/{zeek,suricata,sysmon,evtx,linux,identity,services}/``
-plus a top-level ``corpus-manifest.yaml``. The tier knob drives only
-topology population size and time-window length (S=1 day, M=7 days,
+Orchestrates the nine per-source telemetry generators into a unified corpus
+build under ``<output_dir>/{zeek,suricata,sysmon,evtx,linux,identity,services,
+ot,ot_hosts}/`` plus a top-level ``corpus-manifest.yaml``. The tier knob drives
+only topology population size and time-window length (S=1 day, M=7 days,
 L=14 days) per the ``t-s0jw`` decision; host populations, services, and the
 behavior model are tier-invariant.
 
@@ -30,7 +30,7 @@ from typing import Any, Iterable, Literal
 
 import yaml
 
-from blue_bench_generators import ot_protocols
+from blue_bench_generators import ot_hosts, ot_protocols
 from blue_bench_generators.it_baseline import (
     behavior,
     evtx,
@@ -63,7 +63,7 @@ DEFAULT_START = datetime(2026, 1, 5, 0, 0, 0)
 # output dir identifies it as composer-produced and authorises wipe-before-write
 # of these subdirs; anything else is left untouched.
 _MANAGED_SOURCE_DIRS: tuple[str, ...] = (
-    "zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot",
+    "zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot", "ot_hosts",
 )
 
 
@@ -154,6 +154,7 @@ def build_corpus(
         ("identity", identity, "jsonl_one"),
         ("services", services, "jsonl_by_log"),
         ("ot", ot_protocols, "zeek_tsv"),
+        ("ot_hosts", ot_hosts, "jsonl_by_log"),
     )
 
     sources_meta: list[dict[str, Any]] = []
@@ -480,6 +481,14 @@ def _build_manifest(
             "ot_protocols": {
                 proto: sum(1 for l in ot_network.links if l.protocol == proto)
                 for proto in ("modbus", "dnp3", "iec104", "s7comm")
+            },
+            # Per-role count of OT hosts that emit application-level
+            # logs (the ``ot_hosts`` source). Embedded RTOS roles
+            # (controller/safety/rtu) are excluded -- they have no host
+            # log surface.
+            "ot_logging_hosts": {
+                role: sum(1 for d in ot_network.devices if d.role == role)
+                for role in ("hmi", "engineering-workstation", "historian", "ot-firewall")
             },
         },
         "totals": {

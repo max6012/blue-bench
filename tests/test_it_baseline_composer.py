@@ -33,7 +33,7 @@ from blue_bench_generators.it_baseline.composer import (
 )
 
 
-SOURCE_DIRS = {"zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot"}
+SOURCE_DIRS = {"zeek", "suricata", "sysmon", "evtx", "linux", "identity", "services", "ot", "ot_hosts"}
 
 
 def _build_s(tmp_path: Path, *, seed: int = 0) -> dict:

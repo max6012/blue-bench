@@ -1,9 +1,9 @@
 """IT-baseline corpus composer + tier scaling + corpus output.
 
-Orchestrates the seven per-source telemetry generators into a unified corpus
-build under ``<output_dir>/{zeek,suricata,sysmon,evtx,linux,identity,services}/``
-plus a top-level ``corpus-manifest.yaml``. The tier knob drives only
-topology population size and time-window length (S=1 day, M=7 days,
+Orchestrates the nine per-source telemetry generators into a unified corpus
+build under ``<output_dir>/{zeek,suricata,sysmon,evtx,linux,identity,services,
+ot,ot_hosts}/`` plus a top-level ``corpus-manifest.yaml``. The tier knob drives
+only topology population size and time-window length (S=1 day, M=7 days,
 L=14 days) per the ``t-s0jw`` decision; host populations, services, and the
 behavior model are tier-invariant.
 

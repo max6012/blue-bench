@@ -117,12 +117,14 @@ _PROJECT_TEMPLATES: tuple[str, ...] = (
 )
 
 
-# USB device descriptors. Vendor-neutral product/vendor-id stubs.
+# USB device descriptors. Vendor-neutral product/vendor-id stubs that
+# read as plausible OT-bench peripherals (keyboards, mass-storage,
+# vendor programming-cable adapters). No consumer-brand devices.
 _USB_DESCRIPTORS: tuple[tuple[str, str, str], ...] = (
     ("0x046d", "0xc52b", "Logitech-style HID"),
     ("0x0781", "0x5567", "USB mass storage"),
     ("0x0bda", "0x8153", "USB Ethernet adapter"),
-    ("0x05ac", "0x0250", "Apple keyboard"),
+    ("0x0403", "0x6001", "USB-serial adapter"),
 )
 
 
@@ -425,10 +427,13 @@ def _make_ot_auth(
     # Failures are uncommon on a kiosk-style console.
     status = forced_status or ("success" if rng.random() < 0.95 else "failure")
     user = forced_user or _pick_account(rng, host.role)
-    # Source IPs: SSH/RDP come from the supervisory VLAN; interactive
-    # logins come from the local console (host's own IP).
+    # Source IPs: SSH/RDP come from the supervisory VLAN (operator
+    # jumpbox range, .200-.249, deliberately above the topology
+    # builder's host-assignment range starting at .10 so source IPs
+    # never collide with another OT host); interactive logins come
+    # from the local console (host's own IP).
     if method in ("rdp", "ssh"):
-        src_ip = f"10.40.0.{rng.randrange(10, 60)}"
+        src_ip = f"10.40.0.{rng.randrange(200, 250)}"
     else:
         src_ip = host.ip
     rec.update({
@@ -543,9 +548,14 @@ def _pick_anomaly_device(
     """Resolve an anomaly's target device.
 
     Each kind has a specific eligible role. ``target_name`` overrides
-    the default-first behaviour; if it doesn't match an eligible
-    device, the anomaly is silently skipped (callers should pick valid
-    targets, but a broken caller shouldn't crash a corpus build).
+    the default-first behaviour. Returns ``None`` only when the network
+    has no devices of the eligible role at all (e.g. tier-specific
+    populations where the role is empty) -- callers handle that as a
+    silent no-op since corpus build should not crash on a tier choice.
+    An explicit ``target_name`` that doesn't match any eligible device
+    is a caller bug and raises: uniform with the on-shift-start and
+    cross-boundary-window raises, so the three "caller passed an
+    invalid window" classes all fail loudly.
     """
     eligible_role = {
         "off_hours_ews_login": "engineering-workstation",
@@ -559,7 +569,12 @@ def _pick_anomaly_device(
         for d in eligible:
             if d.name == target_name:
                 return d
-        return None
+        eligible_names = sorted(d.name for d in eligible)
+        raise ValueError(
+            f"anomaly {kind!r} target_device {target_name!r} is not an "
+            f"eligible {eligible_role!r} in this network; eligible: "
+            f"{eligible_names}"
+        )
     return eligible[0]
 
 
@@ -653,6 +668,19 @@ def _emit_anomalies(
         # the window-discipline invariant downstream tests check.
         if w.end <= start or w.start >= end:
             continue
+        # Partial overlap is also rejected: the emitters use
+        # ``window.start`` (and a 2-minute follow-up) verbatim as event
+        # timestamps, so a window that straddles ``start`` or ``end``
+        # would emit records outside the corpus window. Uniform with
+        # the on-shift-start raise philosophy: loud failure beats
+        # silent corruption.
+        if w.start < start or w.end > end:
+            raise ValueError(
+                f"anomaly window {w.kind!r} {w.start.isoformat()}.."
+                f"{w.end.isoformat()} straddles corpus window "
+                f"{start.isoformat()}..{end.isoformat()}; anomaly windows "
+                f"must be fully contained in the corpus window"
+            )
         emitter = _ANOMALY_EMITTERS.get(w.kind)
         if emitter is None:
             raise ValueError(f"unknown anomaly kind {w.kind!r}")

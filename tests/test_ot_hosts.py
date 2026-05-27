@@ -304,6 +304,49 @@ def test_off_hours_login_on_shift_start_raises(net_m: OTNetwork):
         ))
 
 
+@pytest.mark.parametrize("kind,window_start,window_end", [
+    # Window straddles left edge of corpus -- emit would land before start.
+    ("historian_tag_deletion",
+     datetime(2026, 1, 4, 23, 0, 0),
+     datetime(2026, 1, 5, 1, 0, 0)),
+    # Window straddles right edge of corpus -- emit would land after end.
+    ("historian_tag_deletion",
+     datetime(2026, 1, 5, 23, 0, 0),
+     datetime(2026, 1, 6, 1, 0, 0)),
+    # off_hours_ews_login follow-up at start+2min could spill past end --
+    # right-edge case for the 2-minute follow-up. Saturday timestamps so
+    # _on_shift is False before the cross-boundary check runs.
+    ("off_hours_ews_login",
+     datetime(2026, 1, 4, 23, 0, 0),
+     datetime(2026, 1, 5, 0, 30, 0)),
+    ("unexpected_project_download",
+     datetime(2026, 1, 4, 23, 0, 0),
+     datetime(2026, 1, 5, 0, 30, 0)),
+])
+def test_anomaly_partial_overlap_raises(net_m, kind, window_start, window_end):
+    """Anomalies that straddle the corpus boundary would emit events
+    outside [start, end). Reject loudly rather than corrupt the corpus."""
+    bad = AnomalyWindow(kind=kind, start=window_start, end=window_end)
+    with pytest.raises(ValueError, match="straddles corpus window"):
+        list(generate_for_network(
+            net_m, WINDOW_START, WINDOW_END_1D, seed=0, anomaly_windows=(bad,),
+        ))
+
+
+def test_bad_target_device_raises(net_m: OTNetwork):
+    """Explicit target_device that names no eligible device is a caller bug."""
+    bad = AnomalyWindow(
+        kind="historian_tag_deletion",
+        start=datetime(2026, 1, 5, 10, 0, 0),
+        end=datetime(2026, 1, 5, 10, 5, 0),
+        target_device="not-a-real-host",
+    )
+    with pytest.raises(ValueError, match="not an eligible"):
+        list(generate_for_network(
+            net_m, WINDOW_START, WINDOW_END_1D, seed=0, anomaly_windows=(bad,),
+        ))
+
+
 def test_unknown_anomaly_kind_raises(net_s: OTNetwork):
     bad = AnomalyWindow(
         kind="bogus_kind",  # type: ignore[arg-type]

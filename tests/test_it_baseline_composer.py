@@ -472,6 +472,24 @@ def test_manifest_carries_ot_topology_counts(tmp_path):
     assert topo["ot_links"] >= 1
 
 
+def test_manifest_carries_ot_logging_host_counts(tmp_path):
+    """Manifest gains ``topology.ot_logging_hosts`` -- per-role count of
+    OT hosts that emit application-level host logs. Embedded RTOS roles
+    (controller / safety / rtu) are excluded; only HMI / EWS / historian
+    / OT firewall appear."""
+    manifest = _build_s(tmp_path)
+    counts = manifest["topology"]["ot_logging_hosts"]
+    assert set(counts.keys()) == {
+        "hmi", "engineering-workstation", "historian", "ot-firewall",
+    }
+    # S tier has at least one HMI, EWS, and historian (population table
+    # in ot_protocols.topology); OT firewall is 0 at S, non-zero at M/L.
+    assert counts["hmi"] >= 1
+    assert counts["engineering-workstation"] >= 1
+    assert counts["historian"] >= 1
+    assert counts["ot-firewall"] >= 0
+
+
 def test_ot_records_carry_no_log_field_leak(tmp_path):
     """Same `_log` strip discipline as the JSONL streams: although OT
     output is TSV (not JSONL), the source-of-truth dicts use ``_log`` as

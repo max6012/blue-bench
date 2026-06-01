@@ -1,0 +1,65 @@
+# T1059.001 PowerShell — Acceptance reference invocation.
+#
+# Mirrors Atomic Red Team's T1059.001 #1 (test_number=1) with the
+# inputs the sandbox needs. NOT the canonical ART YAML -- this is the
+# sandbox-side invocation record. The actual atomic spec lives in the
+# upstream redcanaryco/atomic-red-team repo at
+# atomics/T1059.001/T1059.001.yaml.
+
+attack_technique: T1059.001
+test_number: 1
+display_name: "Mimikatz - Cradle"
+target_os: windows
+parent_process: powershell.exe
+
+# What we expect to see in the harvested telemetry. The acceptance
+# test (tests/test_t1059_001_end_to_end.sh) asserts each of these.
+expected:
+  windows_security_evtx:
+    - event_id: 4688
+      command_line_contains: "powershell"
+      filter: NewProcessName ends with powershell.exe OR ends with pwsh.exe
+  windows_sysmon_evtx:
+    - event_id: 1   # ProcessCreate
+      image_ends_with: powershell.exe
+      original_filename: PowerShell.EXE
+    - event_id: 13  # RegistryValueSet (script-block logging may trigger)
+      # not required; just nice to have
+      required: false
+  windows_powershell_evtx:
+    - event_id: 4104   # script-block log
+      # the cradle download trigger; ScriptBlockText present
+  zeek_conn_log:
+    # No outbound network expected for the vanilla #1 cradle
+    # (mimikatz invocation only). If the test variant changes to one
+    # with network, swap to include the destination + service check.
+    required: false
+  suricata_eve_json:
+    required: false
+
+# Invocation the orchestrator will run inside the Windows VM.
+invocation:
+  module: Invoke-AtomicTest
+  args:
+    - T1059.001
+    - "-TestNumbers"
+    - "1"
+    - "-PathToAtomicsFolder"
+    - "C:\\AtomicRedTeam\\atomics"
+  # GetPrereqs first so any required-binary downloads happen via the
+  # offline-staged path. Sandbox has no internet egress so ART's
+  # remote-fetch prereqs must already be present on disk.
+  prereqs: true
+
+# Cleanup invocation -- restoring the VM to baseline snapshot is the
+# canonical cleanup; this is the in-place fallback if you want to
+# re-run on the same booted VM (not recommended).
+cleanup:
+  module: Invoke-AtomicTest
+  args:
+    - T1059.001
+    - "-TestNumbers"
+    - "1"
+    - "-Cleanup"
+    - "-PathToAtomicsFolder"
+    - "C:\\AtomicRedTeam\\atomics"

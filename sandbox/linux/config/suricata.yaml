@@ -1,0 +1,87 @@
+%YAML 1.1
+---
+# Suricata config for the sandbox capture.
+#
+# Listens on enp0s2 (sandbox-net), writes eve.json with the event
+# types the IT baseline's suricata_noise generator also emits so
+# harvested captures align with synthetic baseline shape.
+
+vars:
+  address-groups:
+    HOME_NET: "[192.168.66.0/24]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    AIM_SERVERS: "$EXTERNAL_NET"
+    DC_SERVERS: "$HOME_NET"
+    DNP3_SERVER: "$HOME_NET"
+    DNP3_CLIENT: "$HOME_NET"
+    MODBUS_CLIENT: "$HOME_NET"
+    MODBUS_SERVER: "$HOME_NET"
+    ENIP_CLIENT: "$HOME_NET"
+    ENIP_SERVER: "$HOME_NET"
+  port-groups:
+    HTTP_PORTS: "80"
+    SHELLCODE_PORTS: "!80"
+    ORACLE_PORTS: 1521
+    SSH_PORTS: 22
+    DNP3_PORTS: 20000
+    MODBUS_PORTS: 502
+    FILE_DATA_PORTS: "[$HTTP_PORTS,110,143]"
+    FTP_PORTS: 21
+    GENEVE_PORTS: 6081
+    VXLAN_PORTS: 4789
+    TEREDO_PORTS: 3544
+
+default-rule-path: /etc/suricata/rules
+rule-files:
+  - suricata.rules
+
+af-packet:
+  - interface: enp0s2
+    cluster-id: 99
+    cluster-type: cluster_flow
+    defrag: yes
+    use-mmap: yes
+    tpacket-v3: yes
+
+outputs:
+  - fast:
+      enabled: no
+
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      community-id: yes
+      types:
+        - alert:
+            metadata: yes
+            tagged-packets: yes
+        - flow
+        - dns:
+            query: yes
+            answer: yes
+        - http:
+            extended: yes
+        - tls:
+            extended: yes
+        - files
+        - smtp
+        - ssh
+        - dhcp
+        - smb
+
+logging:
+  default-log-level: notice
+  default-output-filter:
+  outputs:
+    - console:
+        enabled: yes
+    - file:
+        enabled: yes
+        level: info
+        filename: /var/log/suricata/suricata.log

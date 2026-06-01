@@ -1,0 +1,46 @@
+# Audit rules for the sandbox Linux VM.
+#
+# Scoped to what t-apt-inject needs to host-rewrite into the IT baseline
+# corpus's Linux side: EXECVE (process creation), connect() syscalls
+# (network), open() on sensitive paths, and credential-access patterns.
+#
+# Out of scope (deliberately): every syscall under the sun. Compare with
+# IT baseline's linux_logs.py for the field set we're targeting; widening
+# the audit rules here forces a corresponding widening on the synthetic
+# generator side before fixtures are comparable.
+
+# --- baseline / housekeeping -----------------------------------------
+-D                       # delete existing rules first
+-b 8192                  # buffer size
+--backlog_wait_time 60000
+--loginuid-immutable
+
+# --- process creation ------------------------------------------------
+-a always,exit -F arch=b64 -S execve  -k exec
+-a always,exit -F arch=b32 -S execve  -k exec
+-a always,exit -F arch=b64 -S execveat -k exec
+-a always,exit -F arch=b32 -S execveat -k exec
+
+# --- network -------------------------------------------------------
+-a always,exit -F arch=b64 -S connect -F success=1 -k net_connect
+-a always,exit -F arch=b32 -S connect -F success=1 -k net_connect
+
+# --- sensitive file access -----------------------------------------
+-w /etc/passwd          -p wa -k passwd_mod
+-w /etc/shadow          -p wa -k shadow_mod
+-w /etc/sudoers         -p wa -k sudoers_mod
+-w /etc/sudoers.d/      -p wa -k sudoers_mod
+-w /etc/ssh/sshd_config -p wa -k sshd_config_mod
+-w /etc/cron.d/         -p wa -k cron_mod
+-w /etc/cron.daily/     -p wa -k cron_mod
+-w /etc/cron.hourly/    -p wa -k cron_mod
+-w /etc/systemd/system/ -p wa -k systemd_unit_mod
+-w /root/.ssh/          -p wa -k root_ssh
+
+# --- credential access -----------------------------------------------
+-w /etc/krb5.keytab     -p rwa -k creds
+-a always,exit -F path=/usr/bin/sudo -F perm=x -F success=1 -k sudo
+
+# --- module loading --------------------------------------------------
+-a always,exit -F arch=b64 -S init_module,delete_module,finit_module -k kmod
+-a always,exit -F arch=b32 -S init_module,delete_module,finit_module -k kmod

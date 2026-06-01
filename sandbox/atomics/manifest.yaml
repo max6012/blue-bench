@@ -1,0 +1,106 @@
+# Atomic techniques the sandbox is expected to run.
+#
+# This file lists the techniques `t-apt-inject` will eventually want
+# captured from the sandbox. Each entry records:
+#   - ATT&CK technique number
+#   - which Atomic Red Team TestNumber inside that technique
+#   - target OS (windows / linux)
+#   - status: pending | captured | failed | n/a
+#
+# The acceptance gate for t-sandbox is the first entry: T1059.001 #1.
+# Everything else in `pending` is fodder for follow-up t-apt-inject
+# kill-chain construction.
+
+schema_version: 1
+
+techniques:
+  - id: T1059.001
+    name: PowerShell
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Acceptance gate. Vanilla Invoke-Command spawning a process via
+      PowerShell. Captures 4688 + Sysmon EventID 1 + PowerShell
+      script-block log.
+
+  - id: T1059.003
+    name: Windows Command Shell
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      cmd.exe spawn with a benign command. Complement to PowerShell
+      for command-line-interpreter coverage.
+
+  - id: T1059.004
+    name: Unix Shell
+    test_numbers: [1]
+    target: linux
+    status: pending
+    purpose: |
+      bash + curl + sh chain. Captures auditd EXECVE chain on Linux.
+
+  - id: T1003.001
+    name: LSASS Memory
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Credential dump from LSASS. Captures Sysmon EventID 10
+      (ProcessAccess with target LSASS). High-value LotL telemetry.
+
+  - id: T1547.001
+    name: Registry Run Keys / Startup Folder
+    test_numbers: [1, 4]
+    target: windows
+    status: pending
+    purpose: |
+      Persistence via HKCU\...\Run. Captures Sysmon EventID 13
+      (registry value set) under the Run key.
+
+  - id: T1053.005
+    name: Scheduled Task
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      schtasks /create. Captures TaskScheduler/Operational + 4698.
+
+  - id: T1218.005
+    name: Mshta
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Signed-binary proxy execution via mshta.exe. LOLBAS pattern;
+      captures Sysmon EventID 1 with parent=mshta.
+
+  - id: T1071.001
+    name: Application Layer Protocol — Web Protocols
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Beacon-style HTTP GET in a loop. The destination is pinned to a
+      sandbox-net IP via --input-args; captures Sysmon EventID 3 +
+      Zeek http.log.
+
+  - id: T1041
+    name: Exfiltration Over C2 Channel
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Exfil pattern via HTTP POST. Pairs with T1071.001 for the C2 +
+      exfil leg of the kill chain. Destination pinned to sandbox-net.
+
+  - id: T1021.002
+    name: SMB / Windows Admin Shares
+    test_numbers: [1]
+    target: windows
+    status: pending
+    purpose: |
+      Lateral movement via SMB admin shares (\\target\C$). Requires
+      both VMs participating in the same domain or local-account
+      reachability across sandbox-net.

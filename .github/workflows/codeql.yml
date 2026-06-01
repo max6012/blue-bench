@@ -45,10 +45,13 @@ jobs:
         language: [python, actions]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # SHA-pin to neutralise mutable-tag supply-chain risk; the
+        # human-friendly version follows in the trailing comment so
+        # future bumps are reviewable in the diff.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
       - name: Initialize CodeQL (${{ matrix.language }})
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
         with:
           languages: ${{ matrix.language }}
           # security-and-quality runs both the security-extended queries
@@ -60,9 +63,9 @@ jobs:
         # No-op for python + actions, but keeps the standard CodeQL
         # action sequence so other languages can be added later
         # without restructuring.
-        uses: github/codeql-action/autobuild@v3
+        uses: github/codeql-action/autobuild@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
 
       - name: Analyze
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
         with:
           category: "/language:${{ matrix.language }}"

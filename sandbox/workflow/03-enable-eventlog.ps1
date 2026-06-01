@@ -13,7 +13,15 @@
     glob is independent of the local-VM convention.
 #>
 
-$ErrorActionPreference = 'Stop'
+# Do NOT use $ErrorActionPreference = 'Stop' here -- wevtutil.exe returns
+# non-zero exit codes for channels that don't exist on this Windows image
+# (e.g. Microsoft-Windows-WMI-Activity/Operational is not present on
+# every Server 2022 SKU). Those exit codes are not PowerShell exceptions
+# so try/catch around them doesn't fire; instead $LASTEXITCODE persists
+# until the script ends, and PowerShell propagates it as the script's
+# exit code unless we explicitly `exit 0` at the end. That is what bit
+# the second sandbox-atomic acceptance run -- the script printed
+# "OK: EventLog channels configured." and then exited 1.
 
 # --- Process Creation includes command line (4688) ---------------------
 
@@ -66,12 +74,18 @@ $channels = @(
 )
 
 foreach ($ch in $channels) {
-    try {
-        & wevtutil.exe sl $ch /e:true /ms:524288000 /rt:false 2>&1 | Out-Null
+    & wevtutil.exe sl $ch /e:true /ms:524288000 /rt:false 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
         Write-Host "  $ch -> enabled, 500 MB, no retention overwrite"
-    } catch {
-        Write-Warning "  $ch -> failed to configure ($_)"
+    } else {
+        Write-Warning "  $ch -> wevtutil exit=$LASTEXITCODE (channel may not exist on this image; non-fatal)"
+        # Reset so it doesn't propagate as the script's exit code if no
+        # later wevtutil call clears it.
+        $global:LASTEXITCODE = 0
     }
 }
 
 Write-Host 'OK: EventLog channels configured.'
+# Explicit exit 0: belt-and-suspenders against any earlier native-command
+# exit code leaking through to the workflow step.
+exit 0

@@ -61,6 +61,23 @@ if (-not (Test-Path "$iarRoot\Invoke-AtomicRedTeam.psd1")) {
     }
 }
 
+# --- install module dependencies --------------------------------------
+
+# Invoke-AtomicRedTeam.psd1 declares powershell-yaml as a RequiredModule.
+# Import-Module fails with "required module 'powershell-yaml' is not
+# loaded" if we skip this. GHA runner has PSGallery access; install
+# under CurrentUser scope (no admin elevation needed inside pwsh) and
+# trust PSGallery for the duration of the install.
+Write-Host 'Installing powershell-yaml (Invoke-AtomicRedTeam dependency)...'
+if (-not (Get-Module -ListAvailable -Name 'powershell-yaml')) {
+    # Trust PSGallery without an interactive prompt.
+    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne 'Trusted') {
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    }
+    Install-Module -Name 'powershell-yaml' -Scope CurrentUser -Force -AllowClobber
+}
+Import-Module powershell-yaml -Force
+
 # --- import + smoke test ----------------------------------------------
 
 $psd1 = Get-ChildItem -Path $iarRoot -Filter 'Invoke-AtomicRedTeam.psd1' -Recurse | Select-Object -First 1

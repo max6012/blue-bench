@@ -1,0 +1,140 @@
+<!--
+  Sysmon modular config for the Blue-Bench sandbox (GHA-runner variant).
+
+  Scope: capture enough event diversity for the APT-detection research
+  question (RQ2 / LotL) without drowning the EVTX channel in noise
+  from the GHA runner's baseline processes (the Azure provisioning
+  agents, runner.exe, GitHub-managed services).
+
+  Conventions inspired by SwiftOnSecurity / Olaf Hartong's modular
+  configs, condensed to one file for portability. Subset deliberately
+  narrow -- the IT baseline's synthetic Sysmon generator produces
+  events shaped to match THIS schema; widening the config here forces
+  a corresponding widening in the IT-side generator before the
+  fixtures are comparable.
+
+  Event IDs included:
+    1  ProcessCreate            (load-bearing for LotL)
+    3  NetworkConnect           (sparse C2)
+    5  ProcessTerminate         (chain completion)
+    7  ImageLoad                (LOLBin / DLL sideload)
+    8  CreateRemoteThread       (injection)
+    10 ProcessAccess            (creddump / SAM access)
+    11 FileCreate               (drop + dwell)
+    12 RegistryEvent (create/delete)
+    13 RegistryEvent (value set)
+    22 DNSQuery                 (C2 lookups)
+    25 ProcessTampering         (image-load tricks)
+-->
+
+<Sysmon schemaversion="4.90">
+  <HashAlgorithms>md5,sha256,IMPHASH</HashAlgorithms>
+  <CheckRevocation>false</CheckRevocation>
+  <DnsLookup>false</DnsLookup>
+  <ArchiveDirectory>Sysmon</ArchiveDirectory>
+
+  <EventFiltering>
+
+    <!-- 1: ProcessCreate -->
+    <RuleGroup name="ProcessCreate" groupRelation="or">
+      <ProcessCreate onmatch="exclude">
+        <!-- exclude GHA runner agents + standard Windows services -->
+        <Image condition="is">C:\Windows\System32\svchost.exe</Image>
+        <Image condition="is">C:\Windows\System32\conhost.exe</Image>
+        <Image condition="is">C:\Windows\System32\backgroundTaskHost.exe</Image>
+        <Image condition="is">C:\Windows\System32\SearchProtocolHost.exe</Image>
+        <Image condition="is">C:\Windows\System32\SearchFilterHost.exe</Image>
+        <Image condition="contains">\Runner.Listener.exe</Image>
+        <Image condition="contains">\Runner.Worker.exe</Image>
+        <Image condition="contains">\actions-runner\</Image>
+      </ProcessCreate>
+    </RuleGroup>
+
+    <!-- 3: NetworkConnect (TCP only; UDP via 22 DNS instead) -->
+    <RuleGroup name="NetworkConnect" groupRelation="or">
+      <NetworkConnect onmatch="include">
+        <Protocol condition="is">tcp</Protocol>
+      </NetworkConnect>
+    </RuleGroup>
+
+    <!-- 5: ProcessTerminate -->
+    <RuleGroup name="ProcessTerminate" groupRelation="or">
+      <ProcessTerminate onmatch="exclude">
+        <Image condition="is">C:\Windows\System32\svchost.exe</Image>
+        <Image condition="is">C:\Windows\System32\conhost.exe</Image>
+        <Image condition="contains">\actions-runner\</Image>
+      </ProcessTerminate>
+    </RuleGroup>
+
+    <!-- 7: ImageLoad (LOLBin / sideload) -->
+    <RuleGroup name="ImageLoad" groupRelation="or">
+      <ImageLoad onmatch="include">
+        <ImageLoaded condition="begin with">C:\Users\</ImageLoaded>
+        <ImageLoaded condition="begin with">C:\ProgramData\</ImageLoaded>
+        <ImageLoaded condition="begin with">C:\Temp\</ImageLoaded>
+        <ImageLoaded condition="contains">\AppData\Local\Temp\</ImageLoaded>
+      </ImageLoad>
+    </RuleGroup>
+
+    <!-- 8: CreateRemoteThread (injection) -->
+    <RuleGroup name="CreateRemoteThread" groupRelation="or">
+      <CreateRemoteThread onmatch="exclude">
+        <SourceImage condition="is">C:\Windows\System32\csrss.exe</SourceImage>
+        <SourceImage condition="is">C:\Windows\System32\wininit.exe</SourceImage>
+      </CreateRemoteThread>
+    </RuleGroup>
+
+    <!-- 10: ProcessAccess (SAM/LSASS read = creddump) -->
+    <RuleGroup name="ProcessAccess" groupRelation="or">
+      <ProcessAccess onmatch="include">
+        <TargetImage condition="is">C:\Windows\System32\lsass.exe</TargetImage>
+      </ProcessAccess>
+    </RuleGroup>
+
+    <!-- 11: FileCreate (drop + dwell) -->
+    <RuleGroup name="FileCreate" groupRelation="or">
+      <FileCreate onmatch="include">
+        <TargetFilename condition="contains">\AppData\Local\Temp\</TargetFilename>
+        <TargetFilename condition="contains">\AppData\Roaming\</TargetFilename>
+        <TargetFilename condition="begin with">C:\Users\Public\</TargetFilename>
+        <TargetFilename condition="begin with">C:\ProgramData\</TargetFilename>
+        <TargetFilename condition="end with">.ps1</TargetFilename>
+        <TargetFilename condition="end with">.bat</TargetFilename>
+        <TargetFilename condition="end with">.vbs</TargetFilename>
+        <TargetFilename condition="end with">.hta</TargetFilename>
+        <TargetFilename condition="end with">.lnk</TargetFilename>
+      </FileCreate>
+    </RuleGroup>
+
+    <!-- 12 / 13: Registry create/set on persistence keys -->
+    <RuleGroup name="RegistryEvent" groupRelation="or">
+      <RegistryEvent onmatch="include">
+        <TargetObject condition="contains">\CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">\CurrentVersion\RunOnce</TargetObject>
+        <TargetObject condition="contains">\CurrentVersion\Explorer\Run</TargetObject>
+        <TargetObject condition="contains">\CurrentVersion\Image File Execution Options</TargetObject>
+        <TargetObject condition="contains">\Services\</TargetObject>
+        <TargetObject condition="contains">\Wow6432Node\Microsoft\Windows\CurrentVersion\Run</TargetObject>
+        <TargetObject condition="contains">\Microsoft\Office\</TargetObject>
+        <TargetObject condition="contains">\Microsoft\Windows NT\CurrentVersion\Winlogon</TargetObject>
+      </RegistryEvent>
+    </RuleGroup>
+
+    <!-- 22: DNSQuery -->
+    <RuleGroup name="DnsQuery" groupRelation="or">
+      <DnsQuery onmatch="exclude">
+        <QueryName condition="end with">.example.invalid</QueryName>
+        <QueryName condition="end with">.localdomain</QueryName>
+        <QueryName condition="end with">.in-addr.arpa</QueryName>
+      </DnsQuery>
+    </RuleGroup>
+
+    <!-- 25: ProcessTampering -->
+    <RuleGroup name="ProcessTampering" groupRelation="or">
+      <ProcessTampering onmatch="include">
+        <Type condition="is any">Image is replaced;Image is mapped</Type>
+      </ProcessTampering>
+    </RuleGroup>
+
+  </EventFiltering>
+</Sysmon>

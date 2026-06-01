@@ -1,0 +1,62 @@
+# T1059.001 PowerShell — Acceptance reference invocation.
+#
+# Mirrors Atomic Red Team's T1059.001 #1 (test_number=1) with the
+# inputs the sandbox needs. NOT the canonical ART YAML -- this is the
+# sandbox-side invocation record. The actual atomic spec lives in the
+# upstream redcanaryco/atomic-red-team repo at
+# atomics/T1059.001/T1059.001.yaml.
+
+attack_technique: T1059.001
+test_number: 1
+display_name: "Mimikatz - Cradle"
+target_os: windows
+parent_process: powershell.exe
+
+# What we expect to see in the harvested telemetry. The acceptance
+# test (tests/test_t1059_001_end_to_end.sh) asserts each of these.
+expected:
+  windows_security_evtx:
+    - event_id: 4688
+      command_line_contains: "powershell"
+      filter: NewProcessName ends with powershell.exe OR ends with pwsh.exe
+  windows_sysmon_evtx:
+    - event_id: 1   # ProcessCreate
+      image_ends_with: powershell.exe
+      original_filename: PowerShell.EXE
+    - event_id: 13  # RegistryValueSet (script-block logging may trigger)
+      # not required; just nice to have
+      required: false
+  windows_powershell_evtx:
+    - event_id: 4104   # script-block log
+      # the cradle download trigger; ScriptBlockText present
+# Invocation the workflow will run inside the GHA Windows runner.
+invocation:
+  module: Invoke-AtomicTest
+  args:
+    - T1059.001
+    - "-TestNumbers"
+    - "1"
+    - "-PathToAtomicsFolder"
+    - "C:\\AtomicRedTeam\\atomics"
+  # GetPrereqs first; the GHA runner has internet egress, so ART's
+  # remote-fetch prereqs work without out-of-band staging.
+  prereqs: true
+
+# Cleanup is implicit on GHA -- the runner VM is torn down after the
+# workflow exits. The fields below are documented for completeness;
+# the in-workflow flow does not call them.
+cleanup:
+  module: Invoke-AtomicTest
+  args:
+    - T1059.001
+    - "-TestNumbers"
+    - "1"
+    - "-Cleanup"
+    - "-PathToAtomicsFolder"
+    - "C:\\AtomicRedTeam\\atomics"
+
+# Network egress note: this technique (mimikatz cradle) does not
+# initiate outbound network. Techniques that DO (e.g. T1071.001,
+# T1041) must pin destinations to loopback / RFC1918 via the
+# Invoke-AtomicTest --input-args mechanism since the GHA runner has
+# real internet egress.

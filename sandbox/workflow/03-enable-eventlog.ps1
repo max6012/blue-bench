@@ -28,8 +28,18 @@
 
 $ErrorActionPreference = 'Stop'
 
-# Track which load-bearing actions actually succeeded. Anything that
-# stays $false at the end fails the step.
+# Pin native-command behaviour so a future pwsh / Server-2022 image
+# that flips the default cannot re-introduce the original leak. With
+# this set $false, & wevtutil.exe / & auditpol.exe return non-zero via
+# $LASTEXITCODE and do NOT throw -- which is what the channel-sizing
+# loop and the auditpol $LASTEXITCODE check both rely on.
+$PSNativeCommandUseErrorActionPreference = $false
+
+# Track which load-bearing actions actually succeeded. The catch
+# blocks below use Write-Warning (NOT Write-Error -- which would be
+# escalated to a terminating error by $ErrorActionPreference='Stop'
+# and kill the script before the aggregation check runs). The final
+# block is the single decision point.
 $registryCmdline = $false
 $auditpolProcCreate = $false
 $registryPsLogging = $false
@@ -45,7 +55,7 @@ try {
     $registryCmdline = $true
     Write-Host '  registry ProcessCreationIncludeCmdLine_Enabled = 1'
 } catch {
-    Write-Error "  registry ProcessCreationIncludeCmdLine_Enabled write failed: $($_.Exception.Message)"
+    Write-Warning "  registry ProcessCreationIncludeCmdLine_Enabled write failed: $($_.Exception.Message)"
 }
 
 # --- LOAD-BEARING 2/3: 4688 fires at all -------------------------------
@@ -55,7 +65,7 @@ if ($LASTEXITCODE -eq 0) {
     $auditpolProcCreate = $true
     Write-Host '  auditpol Process Creation success+failure enabled'
 } else {
-    Write-Error "  auditpol Process Creation failed (exit=$LASTEXITCODE)"
+    Write-Warning "  auditpol Process Creation failed (exit=$LASTEXITCODE)"
     $global:LASTEXITCODE = 0   # don't leak as script exit code; we track via the flag
 }
 
@@ -87,7 +97,7 @@ try {
     $registryPsLogging = $true
     Write-Host '  registry PS ModuleLogging + ScriptBlockLogging + Transcription set'
 } catch {
-    Write-Error "  PS logging registry writes failed: $($_.Exception.Message)"
+    Write-Warning "  PS logging registry writes failed: $($_.Exception.Message)"
 }
 
 # --- BEST-EFFORT: channel sizing --------------------------------------

@@ -8,7 +8,7 @@
 
   Conventions inspired by SwiftOnSecurity / Olaf Hartong's modular
   configs, condensed to one file for portability. Subset deliberately
-  narrow -- the IT baseline's synthetic Sysmon generator produces
+  narrow: the IT baseline's synthetic Sysmon generator produces
   events shaped to match THIS schema; widening the config here forces
   a corresponding widening in the IT-side generator before the
   fixtures are comparable.

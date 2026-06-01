@@ -30,7 +30,7 @@ from typing import Any, Iterable, Literal
 
 import yaml
 
-from blue_bench_generators import ot_hosts, ot_protocols
+from blue_bench_generators import it_ot_bridge, ot_hosts, ot_protocols
 from blue_bench_generators.it_baseline import (
     behavior,
     evtx,
@@ -157,9 +157,52 @@ def build_corpus(
         ("ot_hosts", ot_hosts, "jsonl_by_log"),
     )
 
-    sources_meta: list[dict[str, Any]] = []
+    # Three-phase build:
+    #   1. collect per-source events from the 9 standard generators
+    #   2. fan ``it_ot_bridge`` matched-pair events across those
+    #      collected source lists via the ``_source`` discriminator
+    #   3. write each source stream to disk
+    # The bridge is intentionally not a 10th source spec -- its event
+    # set is cross-source and lands in the existing dirs.
+    #
+    # Anomaly injection is OUT-OF-BAND: this baseline build never
+    # passes anomaly_windows. Anomaly overlays are exercised via the
+    # generator-level API in tests / scenario runners.
+    source_events_map: dict[str, list[dict]] = {}
     for source_name, module, format_kind in source_specs:
         events = list(module.generate(topology, activity_model, start, end, seed=seed))
+        source_events_map[source_name] = events
+        log.info("composer: %s generated %d events", source_name, len(events))
+
+    # Phase 2 (bridge fan-out): merge bridge events into the source streams.
+    # Each bridge event carries a ``_source`` discriminator naming the
+    # destination source dir; we pop it before writers see the event.
+    bridge_events = list(it_ot_bridge.generate(topology, activity_model, start, end, seed=seed))
+    bridge_session_uids: set[str] = set()
+    for ev in bridge_events:
+        target = ev.pop("_source", None)
+        if target is None:
+            raise ValueError(
+                f"it_ot_bridge event missing ``_source`` field: {ev!r}; "
+                f"every bridge event must declare its destination source"
+            )
+        if target not in source_events_map:
+            raise ValueError(
+                f"it_ot_bridge event targets unknown source {target!r}; "
+                f"expected one of {sorted(source_events_map)}"
+            )
+        source_events_map[target].append(ev)
+        if "bridge_session_uid" in ev:
+            bridge_session_uids.add(ev["bridge_session_uid"])
+    log.info(
+        "composer: it_ot_bridge generated %d events across %d sessions",
+        len(bridge_events), len(bridge_session_uids),
+    )
+
+    # Phase 3 (write): emit each source stream to disk.
+    sources_meta: list[dict[str, Any]] = []
+    for source_name, module, format_kind in source_specs:
+        events = source_events_map[source_name]
         source_dir = output_dir / source_name
         # Wipe stale files from any prior build into the same directory.
         # Without this, re-building a smaller tier (e.g. S over a previous M)
@@ -179,7 +222,7 @@ def build_corpus(
                 "files": files_meta,
             }
         )
-        log.info("composer: %s emitted %d events across %d files", source_name, len(events), len(files_meta))
+        log.info("composer: %s wrote %d events across %d files", source_name, len(events), len(files_meta))
 
     manifest = _build_manifest(
         tier=tier,
@@ -189,6 +232,7 @@ def build_corpus(
         topology=topology,
         ot_network=ot_network,
         sources_meta=sources_meta,
+        bridge_session_count=len(bridge_session_uids),
     )
     manifest_path.write_text(
         yaml.safe_dump(manifest, sort_keys=False, default_flow_style=False),
@@ -259,10 +303,16 @@ def _write_zeek_tsv(events: list[dict], source_dir: Path, output_root: Path) -> 
 
 
 def _zeek_field_order(records: list[dict]) -> list[str]:
-    """Stable field order: priority columns first, remainder sorted."""
+    """Stable field order: priority columns first, remainder sorted.
+
+    Excludes internal routing/discriminator fields (``_log``, ``_source``)
+    that the composer uses to pick the writer + source dir but which
+    have no place in real Zeek TSV columns. A leak here would surface
+    a phantom column to every MCP consumer that reads conn.log.
+    """
     keys: set[str] = set()
     for r in records:
-        keys.update(k for k in r.keys() if k != "_log")
+        keys.update(k for k in r.keys() if not k.startswith("_"))
     priority = ("ts", "uid", "fuid", "id.orig_h", "id.orig_p", "id.resp_h", "id.resp_p", "proto", "service")
     head = [k for k in priority if k in keys]
     tail = sorted(k for k in keys if k not in priority)
@@ -393,7 +443,9 @@ def _event_sort_key(ev: dict) -> tuple:
     emitted at the same timestamp are ordered independently of
     generator emission order: Zeek ``uid`` / ``fuid``, Suricata
     ``flow_id``, Sysmon / EVTX ``EventID`` / ``RecordID``, identity
-    ``event_id``, Linux ``msg_id``, then host/hostname."""
+    ``event_id``, Linux ``msg_id``, ``bridge_session_uid`` (for
+    cross-source bridge records that share other primary keys with
+    natural records), then host/hostname."""
     ts_raw = ev.get("ts")
     try:
         ts_key = float(ts_raw) if ts_raw not in (None, "") else 0.0
@@ -407,6 +459,7 @@ def _event_sort_key(ev: dict) -> tuple:
         str(ev.get("EventID", ev.get("event_id", ""))),
         str(ev.get("RecordID", "")),
         str(ev.get("msg_id", "")),
+        str(ev.get("bridge_session_uid", "")),
         str(ev.get("host", ev.get("hostname", ""))),
     )
 
@@ -440,6 +493,7 @@ def _build_manifest(
     topology: topo_mod.Topology,
     ot_network,
     sources_meta: list[dict[str, Any]],
+    bridge_session_count: int = 0,
 ) -> dict[str, Any]:
     # build_hash = sha256 over (source_path, sha256) pairs sorted by path.
     # This is a CONTENT hash: it detects any change to any file or any
@@ -490,6 +544,11 @@ def _build_manifest(
                 role: sum(1 for d in ot_network.devices if d.role == role)
                 for role in ("hmi", "engineering-workstation", "historian", "ot-firewall")
             },
+            # Number of distinct IT/OT bridge sessions emitted into the
+            # corpus. The bridge fans matched-pair records across
+            # existing source streams; this is the only place the
+            # session count is summarised.
+            "bridge_sessions": bridge_session_count,
         },
         "totals": {
             "events": total_events,

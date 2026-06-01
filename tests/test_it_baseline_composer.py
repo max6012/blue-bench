@@ -472,6 +472,48 @@ def test_manifest_carries_ot_topology_counts(tmp_path):
     assert topo["ot_links"] >= 1
 
 
+def test_manifest_carries_bridge_session_count(tmp_path):
+    """Manifest tracks the number of distinct IT/OT bridge sessions
+    fanned across existing source streams."""
+    manifest = _build_s(tmp_path)
+    topo = manifest["topology"]
+    assert "bridge_sessions" in topo, "manifest topology missing bridge_sessions"
+    # S tier with a 1-day weekday window emits at least one each of
+    # jump_to_ews + historian_bi_read + ews_config_backup sessions.
+    assert topo["bridge_sessions"] >= 3, (
+        f"expected >= 3 bridge sessions in S-tier weekday, got {topo['bridge_sessions']}"
+    )
+
+
+def test_bridge_events_appear_in_existing_source_streams(tmp_path):
+    """Bridge events are fanned into existing source dirs and carry
+    a ``bridge_session_uid`` field; their ``_source`` discriminator
+    must be stripped before writers see the event."""
+    _build_s(tmp_path)
+
+    # OT zeek conn.log should contain bridge_session_uid for the
+    # historian_bi_read OT-side leg + ews_config_backup outbound.
+    ot_conn = tmp_path / "ot" / "conn.log"
+    assert ot_conn.exists(), "ot/conn.log missing"
+    text = ot_conn.read_text()
+    assert "bridge_session_uid" in text, (
+        "bridge_session_uid column should appear in ot/conn.log #fields header"
+    )
+
+    # ot_hosts/ot_auth.jsonl should contain bridge_session_uid for the
+    # jump_to_ews OT-side login leg.
+    auth_jsonl = tmp_path / "ot_hosts" / "ot_auth.jsonl"
+    assert auth_jsonl.exists()
+    bridge_lines = [
+        line for line in auth_jsonl.read_text().splitlines()
+        if line.strip() and "bridge_session_uid" in line
+    ]
+    assert bridge_lines, "expected at least one bridge ot_auth record"
+    rec = json.loads(bridge_lines[0])
+    assert rec["bridge_session_uid"].startswith("B")
+    assert "_source" not in rec, "_source field must be stripped by composer"
+
+
 def test_manifest_carries_ot_logging_host_counts(tmp_path):
     """Manifest gains ``topology.ot_logging_hosts`` -- per-role count of
     OT hosts that emit application-level host logs. Embedded RTOS roles
@@ -488,6 +530,26 @@ def test_manifest_carries_ot_logging_host_counts(tmp_path):
     assert counts["engineering-workstation"] >= 1
     assert counts["historian"] >= 1
     assert counts["ot-firewall"] >= 0
+
+
+def test_bridge_source_field_does_not_leak_into_tsv(tmp_path):
+    """Bridge events carry a ``_source`` discriminator the composer
+    pops before writers see them. Belt-and-suspenders: confirm the
+    field never appears as a column in any zeek TSV header."""
+    _build_s(tmp_path)
+    for tsv_dir in ("zeek", "ot"):
+        for path in (tmp_path / tsv_dir).glob("*.log"):
+            fields_line = next(
+                (l for l in path.read_text().splitlines() if l.startswith("#fields")),
+                None,
+            )
+            if fields_line is None:
+                continue
+            columns = fields_line.split("\t")[1:]
+            for forbidden in ("_log", "_source"):
+                assert forbidden not in columns, (
+                    f"{path.name}: routing field {forbidden!r} leaked into TSV header"
+                )
 
 
 def test_ot_records_carry_no_log_field_leak(tmp_path):

@@ -25,6 +25,13 @@
 
 Write-Host 'Best-effort Defender relaxation on GHA windows-latest...'
 
+# Track outcomes of the two settings that ACTUALLY determine whether
+# the downstream Atomic technique can run. If both fail, the workflow
+# would otherwise emit silent / partial captures that look like
+# success; fail loudly instead.
+$realtimeDisabled = $false
+$exclusionsAdded = 0
+
 # --- TamperProtection registry write (may fail; that is OK) -----------
 
 $tamperKey = 'HKLM:\SOFTWARE\Microsoft\Windows Defender\Features'
@@ -52,6 +59,9 @@ foreach ($k in $toggles.Keys) {
     try {
         Set-MpPreference @splat
         Write-Host "  $k = $($toggles[$k]) applied"
+        if ($k -eq 'DisableRealtimeMonitoring' -and $toggles[$k] -eq $true) {
+            $realtimeDisabled = $true
+        }
     } catch {
         Write-Warning "  $k : failed ($($_.Exception.Message.Trim()))"
     }
@@ -67,24 +77,37 @@ foreach ($p in @('C:\AtomicRedTeam','C:\Tools','C:\Sysmon','C:\sandbox-transcrip
     try {
         Add-MpPreference -ExclusionPath $p -ErrorAction Stop
         Write-Host "  ExclusionPath added: $p"
+        $exclusionsAdded++
     } catch {
         Write-Warning "  ExclusionPath $p : failed ($($_.Exception.Message.Trim()))"
     }
 }
 
-# --- report final state, do not fail ---------------------------------
+# --- report final state + hard-fail if Defender wins outright ---------
 
 $prefs = Get-MpPreference -ErrorAction SilentlyContinue
 if ($prefs) {
+    $realtimeStillOn = -not $prefs.DisableRealtimeMonitoring
     Write-Host ''
     Write-Host ('  Final state: RealtimeMonitoring={0} BehaviorMonitoring={1} ScriptScanning={2}' -f `
         $prefs.DisableRealtimeMonitoring, $prefs.DisableBehaviorMonitoring, $prefs.DisableScriptScanning)
-    if (-not $prefs.DisableRealtimeMonitoring) {
-        Write-Warning '  Real-time monitoring is STILL on. Defender will likely detect'
-        Write-Warning '  the T1059.001 mimikatz cradle download and block the script body,'
-        Write-Warning '  but the PowerShell process spawn itself is still observable in'
-        Write-Warning '  EVTX 4688 + Sysmon EventID 1 -- which is what the acceptance test'
-        Write-Warning '  asserts on. Capture should still succeed.'
+    Write-Host ('  Cmdlet outcomes: realtimeDisabled={0} exclusionsAdded={1}' -f `
+        $realtimeDisabled, $exclusionsAdded)
+
+    # If realtime is still on AND we couldn't add even one exclusion,
+    # the downstream Atomic step will almost certainly run with full
+    # Defender protection. That produces partial / silent captures
+    # which look like success but break the acceptance contract.
+    # Fail loudly instead of pretending the step worked.
+    if ($realtimeStillOn -and $exclusionsAdded -eq 0) {
+        Write-Error 'Defender relaxation fully blocked: real-time monitoring is on AND no exclusions could be added.'
+        Write-Error 'Atomic execution will be blocked or produce only partial telemetry. Failing the step.'
+        exit 1
+    }
+
+    if ($realtimeStillOn) {
+        Write-Warning '  Real-time monitoring is STILL on, but ExclusionPath added for ART folders --'
+        Write-Warning '  technique execution should still produce useful telemetry for the acceptance gate.'
     }
 }
 

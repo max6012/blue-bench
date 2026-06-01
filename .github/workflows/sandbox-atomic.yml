@@ -1,0 +1,130 @@
+name: sandbox-atomic-capture
+
+# Manually-triggered workflow that runs an Atomic Red Team technique
+# on an ephemeral windows-latest runner and uploads the captured
+# EVTX / Sysmon / PowerShell telemetry as a workflow artifact.
+#
+# Trigger from the operator's Mac via:
+#   gh workflow run sandbox-atomic.yml -f technique=T1059.001 -f test_numbers=1
+#
+# Or via the orchestrator wrapper:
+#   ./sandbox/orchestrator/trigger-capture.sh T1059.001 -TestNumbers 1
+#
+# Downstream:
+#   ./sandbox/orchestrator/harvest-from-run.sh <run_id>
+#   ./sandbox/tests/test_t1059_001_end_to_end.sh   # acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      technique:
+        description: 'ATT&CK technique number (e.g. T1059.001)'
+        required: true
+        type: string
+      test_numbers:
+        description: 'Atomic Red Team TestNumbers (comma-separated)'
+        required: true
+        default: '1'
+        type: string
+      retention_days:
+        description: 'Artifact retention in days'
+        required: false
+        default: '30'
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    name: ${{ inputs.technique }} (tests ${{ inputs.test_numbers }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Stamp run_id
+        id: stamp
+        shell: pwsh
+        run: |
+          $now = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+          $rand = -join ((97..122) + (48..57) | Get-Random -Count 6 | ForEach-Object {[char]$_})
+          $rid  = "$now-${{ inputs.technique }}-$rand"
+          "run_id=$rid" >> $env:GITHUB_OUTPUT
+          Write-Host "run_id=$rid"
+
+      - name: Pre-flight context (egress is real internet)
+        shell: pwsh
+        run: |
+          Write-Host '----------------------------------------------------'
+          Write-Host 'GHA runner has full internet egress -- NOT isolated.'
+          Write-Host 'Techniques with active network behaviour MUST pin'
+          Write-Host 'destinations to loopback / RFC1918 via Invoke-AtomicTest'
+          Write-Host '--input-args. See sandbox/atomics/<technique>.yaml.'
+          Write-Host '----------------------------------------------------'
+
+      - name: 01 - Disable Defender
+        shell: pwsh
+        run: ./sandbox/workflow/01-disable-defender.ps1
+
+      - name: 02 - Install Sysmon
+        shell: pwsh
+        run: ./sandbox/workflow/02-install-sysmon.ps1
+
+      - name: 03 - Enable EventLog channels
+        shell: pwsh
+        run: ./sandbox/workflow/03-enable-eventlog.ps1
+
+      - name: 04 - Install Atomic Red Team
+        shell: pwsh
+        run: ./sandbox/workflow/04-install-atomic-red-team.ps1
+
+      - name: 05 - Run atomic
+        shell: pwsh
+        run: |
+          $tech = '${{ inputs.technique }}'
+          $tnStr = '${{ inputs.test_numbers }}'
+          $tn = $tnStr.Split(',') | ForEach-Object { [int]$_.Trim() }
+
+          Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force
+          $env:PSAtomicsFolder = 'C:\AtomicRedTeam\atomics'
+
+          # GetPrereqs first; this may download binary deps to
+          # C:\AtomicRedTeam\ExternalPayloads (the runner has internet,
+          # so the prereq fetch works without out-of-band staging).
+          Write-Host "Fetching prereqs for $tech tests $($tn -join ',')..."
+          Invoke-AtomicTest $tech -TestNumbers $tn -GetPrereqs `
+                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'
+
+          Write-Host "Running $tech tests $($tn -join ',')..."
+          Invoke-AtomicTest $tech -TestNumbers $tn `
+                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'
+
+      - name: 06 - Flush wait
+        shell: pwsh
+        run: |
+          Write-Host 'Waiting 30s for Sysmon + EventLog to flush...'
+          Start-Sleep -Seconds 30
+
+      - name: 07 - Harvest captured telemetry
+        shell: pwsh
+        run: ./sandbox/workflow/harvest.ps1 -RunId '${{ steps.stamp.outputs.run_id }}'
+
+      - name: Upload capture as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sandbox-capture-${{ steps.stamp.outputs.run_id }}
+          path: harvest/
+          retention-days: ${{ fromJSON(inputs.retention_days) }}
+          if-no-files-found: error
+
+      - name: Summary
+        shell: pwsh
+        run: |
+          $rid = '${{ steps.stamp.outputs.run_id }}'
+          Write-Host ''
+          Write-Host "ACCEPTANCE OK: run_id=$rid"
+          Write-Host "Artifact:      sandbox-capture-$rid"
+          Write-Host "Download via:  gh run download $env:GITHUB_RUN_ID -n sandbox-capture-$rid"

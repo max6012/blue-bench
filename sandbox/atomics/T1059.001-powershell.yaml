@@ -29,15 +29,7 @@ expected:
   windows_powershell_evtx:
     - event_id: 4104   # script-block log
       # the cradle download trigger; ScriptBlockText present
-  zeek_conn_log:
-    # No outbound network expected for the vanilla #1 cradle
-    # (mimikatz invocation only). If the test variant changes to one
-    # with network, swap to include the destination + service check.
-    required: false
-  suricata_eve_json:
-    required: false
-
-# Invocation the orchestrator will run inside the Windows VM.
+# Invocation the workflow will run inside the GHA Windows runner.
 invocation:
   module: Invoke-AtomicTest
   args:
@@ -46,14 +38,13 @@ invocation:
     - "1"
     - "-PathToAtomicsFolder"
     - "C:\\AtomicRedTeam\\atomics"
-  # GetPrereqs first so any required-binary downloads happen via the
-  # offline-staged path. Sandbox has no internet egress so ART's
-  # remote-fetch prereqs must already be present on disk.
+  # GetPrereqs first; the GHA runner has internet egress, so ART's
+  # remote-fetch prereqs work without out-of-band staging.
   prereqs: true
 
-# Cleanup invocation -- restoring the VM to baseline snapshot is the
-# canonical cleanup; this is the in-place fallback if you want to
-# re-run on the same booted VM (not recommended).
+# Cleanup is implicit on GHA -- the runner VM is torn down after the
+# workflow exits. The fields below are documented for completeness;
+# the in-workflow flow does not call them.
 cleanup:
   module: Invoke-AtomicTest
   args:
@@ -63,3 +54,9 @@ cleanup:
     - "-Cleanup"
     - "-PathToAtomicsFolder"
     - "C:\\AtomicRedTeam\\atomics"
+
+# Network egress note: this technique (mimikatz cradle) does not
+# initiate outbound network. Techniques that DO (e.g. T1071.001,
+# T1041) must pin destinations to loopback / RFC1918 via the
+# Invoke-AtomicTest --input-args mechanism since the GHA runner has
+# real internet egress.

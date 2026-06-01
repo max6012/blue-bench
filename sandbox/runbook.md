@@ -1,145 +1,93 @@
-# Sandbox runbook — first-time bootstrap to first capture
+# Sandbox runbook — first capture via GitHub Actions
 
-Step-by-step procedure for standing up the two-VM sandbox on a Mac and
-running the T1059.001 acceptance test. Total wall-clock first time
-through is ~90 minutes (mostly waiting on Windows installer + Sysmon
-baseline draws).
+Step-by-step from a fresh Mac to first `ACCEPTANCE OK`. Wall-clock
+~10 minutes the first time (mostly Atomic Red Team download inside
+the runner + the runner's own boot). Subsequent runs take ~3-5 min.
 
-## Prerequisites
-
-- macOS host with UTM 4.5+ installed (`brew install --cask utm`)
-- Windows 11 Pro ISO (Microsoft official, downloaded via the Windows
-  Insider Preview download page or your Volume Licensing portal)
-- Ubuntu Server 22.04 LTS ISO
-- ~80 GB free disk for both VM images + baseline snapshots
-- `jq` (`brew install jq`) — used by harvest scripts
-- `sshpass` (`brew install hudochenkov/sshpass/sshpass`) — used by
-  bootstrap to push the initial public key non-interactively. After
-  the first push, key-only auth is enforced and `sshpass` is no longer
-  needed.
-
-## 1. UTM internal network
-
-See `network/utm-network-setup.md`. One-time UTM-level config to create
-a "Host Only" virtual switch named `sandbox-net` that both VMs will
-attach to.
-
-Verify with:
+## Prerequisites (one-time host setup)
 
 ```bash
-./orchestrator/safe-fire-check.sh
+brew install gh jq python3
+gh auth login              # authenticate against github.com
+pip3 install python-evtx   # optional but lets the test assert on EVTX content
 ```
 
-The check confirms:
-- the `sandbox-net` network has no default route to en0
-- no DNS resolver inside the sandbox-net reaches the public internet
-- pfctl rules block any pkt sourced from the sandbox subnet from
-  egressing the Mac
-
-## 2. Linux VM
-
-UTM-create a VM per `linux/utm-vm-spec.md`:
-
-- 2 vCPU, 4 GB RAM, 30 GB disk
-- Network: `sandbox-net` only
-- Ubuntu Server 22.04 LTS, minimal install, no snap
-- Username `analyst`, password set during install
-- OpenSSH server enabled at install time
-
-After first boot:
+Verify `gh` is wired to this repo:
 
 ```bash
-# From the Mac host (run while the Linux VM is booted and reachable via
-# the UTM-assigned IP):
-scp -r sandbox/linux/bootstrap analyst@<linux-vm-ip>:/tmp/
-scp -r sandbox/linux/config analyst@<linux-vm-ip>:/tmp/
-ssh analyst@<linux-vm-ip> sudo bash /tmp/bootstrap/bootstrap.sh
+cd /Users/max/Blue-Bench
+gh repo view                # should print 'max6012/blue-bench ...'
 ```
 
-The bootstrap script installs auditd + Zeek + Suricata + Atomic Red
-Team Linux runner, applies the audit/Zeek/Suricata configs, and
-enables packet capture on `enp0s2` (the sandbox-net interface).
+## 1. First capture
 
-Once bootstrap succeeds, **take the UTM snapshot named `baseline`**:
+Trigger the workflow + wait for it:
 
 ```bash
-./orchestrator/snapshot.sh linux baseline
+./sandbox/orchestrator/trigger-capture.sh T1059.001
 ```
 
-## 3. Windows VM
+What you'll see:
 
-UTM-create a VM per `windows/utm-vm-spec.md`:
+- `gh workflow run` fires the workflow
+- The script polls until the run appears (~10s)
+- `gh run watch` streams the in-progress steps until terminal state
+- Stamp step output prints `run_id=<utc-timestamp>-T1059.001-<rand>`
+- Capture step uploads `sandbox-capture-<run_id>` artifact
 
-- 4 vCPU, 8 GB RAM, 60 GB disk
-- Network: `sandbox-net` only
-- Windows 11 Pro, English (US)
-- Skip Microsoft account at OOBE — local account `analyst` only
-- Disable telemetry at install time
-
-After first boot, copy the bootstrap directory in and run:
-
-```powershell
-# From an Administrator PowerShell prompt inside the Windows VM,
-# after copying sandbox/windows/bootstrap/ to C:\sandbox\:
-cd C:\sandbox\bootstrap
-.\bootstrap.ps1
-```
-
-The bootstrap script:
-1. Disables Defender (so atomics don't get blocked)
-2. Installs Sysmon with the modular config
-3. Enables verbose Windows EventLog channels (Security, System,
-   PowerShell-Operational, Sysmon)
-4. Installs Atomic Red Team Invoke-AtomicTest module
-5. Creates test accounts (Domain Admin equivalent + standard user)
-6. Enables OpenSSH server for orchestrator access
-
-Reboot, then take the snapshot:
+When the workflow finishes:
 
 ```bash
-./orchestrator/snapshot.sh windows baseline
+./sandbox/orchestrator/harvest-from-run.sh
 ```
 
-## 4. Acceptance test
+That downloads the artifact and lays it out under
+`data/raw/sandbox/<run_id>/` with the in-runner `manifest.json`.
 
-With both VMs at baseline snapshot, run from the Mac host:
+## 2. Acceptance gate
 
 ```bash
-./tests/test_t1059_001_end_to_end.sh
+./sandbox/tests/test_t1059_001_end_to_end.sh
 ```
 
 The script:
-1. Verifies safe-fire isolation
-2. Restores both VMs to baseline (idempotent)
-3. SSHes into the Windows VM and invokes:
-   `Invoke-AtomicTest T1059.001 -TestNumbers 1 -GetPrereqs`
-4. Waits 60 seconds for telemetry to flush
-5. Harvests EVTX / Sysmon / Zeek / Suricata to
-   `data/raw/sandbox/<run_id>/`
-6. Asserts:
-   - EVTX contains EventID 4688 with `CommandLine` matching the
-     atomic's invocation
-   - Sysmon JSONL contains EventID 1 (ProcessCreate) with the same
-     CommandLine
-   - Zeek `conn.log` covers the test window
+1. Triggers a fresh workflow run (so the acceptance is reproducible)
+2. Waits for completion
+3. Downloads the artifact
+4. Asserts the EVTX content (powershell.exe in Security 4688 + Sysmon EventID 1)
 
-A clean run exits 0 and prints `ACCEPTANCE OK: run_id=<id>`.
+Successful exit prints:
 
-## Recurring use
-
-After bootstrap, the steady-state loop is:
-
-```bash
-# Restore both VMs to the baseline snapshot (clean slate)
-./orchestrator/restore.sh both baseline
-
-# Run a technique
-./orchestrator/run-atomic.sh T1003.001 -TestNumbers 1
-
-# Harvest the captured telemetry
-./orchestrator/harvest.sh
+```
+ACCEPTANCE OK: workflow_run_id=<...> gha_run_id=<...>
 ```
 
-Each harvest writes to a new `data/raw/sandbox/<run_id>/` directory and
-appends a row to `data/raw/sandbox/manifest.csv` recording the run_id,
-technique, timestamp, snapshot ID, and per-stream byte counts.
+## 3. Recurring use
+
+```bash
+./sandbox/orchestrator/trigger-capture.sh T1003.001 -TestNumbers 1
+./sandbox/orchestrator/harvest-from-run.sh
+```
+
+Each run produces a new `data/raw/sandbox/<run_id>/` and appends a
+row to `data/raw/sandbox/manifest.csv` recording (run_id, gha_run_id,
+timestamp, total_bytes, file_count).
+
+## Bail-out conditions
+
+- **Workflow fails at the "Run atomic" step** → check `gh run view <id> --log`. Most likely cause: the atomic's GetPrereqs needs binary deps that Atomic Red Team couldn't download (rare; usually GHA's outbound is open).
+- **`harvest-from-run.sh` says no artifact** → workflow failed before the upload-artifact step. Check the run logs.
+- **Test fails on EVTX content** → the technique ran but didn't generate the expected events. Usually a Defender issue (some channels stay enabled despite the disable step on certain GHA Win images). Inspect the captured EVTX manually via `python -m Evtx.evtx_dump <path>` or load into a Windows host's Event Viewer.
+
+## What the operator does NOT need to do
+
+- Install UTM, VirtualBox, or any local hypervisor
+- Maintain a Windows ISO or installation
+- Snapshot/restore anything — every workflow run is a fresh runner
+- Configure network isolation — GHA runners are sandboxed by Microsoft
+
+## What this trades
+
+- **No isolated network.** GHA runners have real internet egress. Techniques with active network behaviour (HTTP C2, exfil, lateral movement) need destinations pinned to loopback/RFC1918 via `Invoke-AtomicTest --input-args`. Per-technique YAML in `sandbox/atomics/` documents the pin.
+- **No Zeek/Suricata tap.** GHA runner is a single host, not a tapped segment. Network observability is via Sysmon EventID 3 (NetworkConnect) + EventID 22 (DNSQuery), captured in-band. For techniques that need PCAP-level capture, fold `pktmon` into the per-technique workflow (not in v1).
+- **Baseline OS is Win Server 2022, not Win 11 Pro.** Less mismatch with the IT baseline than an external lab dataset would have, but not zero. Sysmon + EVTX work identically; field shapes are stable.

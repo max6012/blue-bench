@@ -1,15 +1,16 @@
 <!--
-  Sysmon modular config for the Blue-Bench sandbox.
+  Sysmon modular config for the Blue-Bench sandbox (GHA-runner variant).
 
   Scope: capture enough event diversity for the APT-detection research
-  question (RQ2 / LotL) without drowning the EVTX channel in noise from
-  the bootstrap installer + idle Windows services.
+  question (RQ2 / LotL) without drowning the EVTX channel in noise
+  from the GHA runner's baseline processes (the Azure provisioning
+  agents, runner.exe, GitHub-managed services).
 
   Conventions inspired by SwiftOnSecurity / Olaf Hartong's modular
   configs, condensed to one file for portability. Subset deliberately
   narrow -- the IT baseline's synthetic Sysmon generator produces
-  events shaped to match THIS schema, so widening the config here
-  forces a corresponding widening in the IT-side generator before the
+  events shaped to match THIS schema; widening the config here forces
+  a corresponding widening in the IT-side generator before the
   fixtures are comparable.
 
   Event IDs included:
@@ -24,21 +25,6 @@
     13 RegistryEvent (value set)
     22 DNSQuery                 (C2 lookups)
     25 ProcessTampering         (image-load tricks)
-
-  EventIDs deliberately OMITTED:
-    2  FileCreationTime         (forensic noise; not useful for LotL detection)
-    4  Service state change     (we emit it from the IT baseline's
-                                  services.py; sandbox capture would
-                                  duplicate)
-    6  DriverLoad               (rare; covered case-by-case)
-    9  RawAccessRead            (very noisy on Windows 11)
-   15  FileCreateStreamHash     (covered by 11 for our purposes)
-   16  Sysmon config change     (self-referential)
-   17  PipeCreated / connected  (noisy)
-   18  PipeCreated / connected
-   19/20/21  WMI subscription   (covered in v2 of this config)
-   23  FileDelete               (noisy)
-   24  ClipboardChange          (rare LotL signal)
 -->
 
 <Sysmon schemaversion="4.90">
@@ -52,12 +38,15 @@
     <!-- 1: ProcessCreate -->
     <RuleGroup name="ProcessCreate" groupRelation="or">
       <ProcessCreate onmatch="exclude">
-        <!-- exclude high-volume signed Microsoft services -->
+        <!-- exclude GHA runner agents + standard Windows services -->
         <Image condition="is">C:\Windows\System32\svchost.exe</Image>
         <Image condition="is">C:\Windows\System32\conhost.exe</Image>
         <Image condition="is">C:\Windows\System32\backgroundTaskHost.exe</Image>
         <Image condition="is">C:\Windows\System32\SearchProtocolHost.exe</Image>
         <Image condition="is">C:\Windows\System32\SearchFilterHost.exe</Image>
+        <Image condition="contains">\Runner.Listener.exe</Image>
+        <Image condition="contains">\Runner.Worker.exe</Image>
+        <Image condition="contains">\actions-runner\</Image>
       </ProcessCreate>
     </RuleGroup>
 
@@ -73,13 +62,13 @@
       <ProcessTerminate onmatch="exclude">
         <Image condition="is">C:\Windows\System32\svchost.exe</Image>
         <Image condition="is">C:\Windows\System32\conhost.exe</Image>
+        <Image condition="contains">\actions-runner\</Image>
       </ProcessTerminate>
     </RuleGroup>
 
     <!-- 7: ImageLoad (LOLBin / sideload) -->
     <RuleGroup name="ImageLoad" groupRelation="or">
       <ImageLoad onmatch="include">
-        <!-- Catch DLLs loaded from outside System32/Program Files -->
         <ImageLoaded condition="begin with">C:\Users\</ImageLoaded>
         <ImageLoaded condition="begin with">C:\ProgramData\</ImageLoaded>
         <ImageLoaded condition="begin with">C:\Temp\</ImageLoaded>
@@ -131,7 +120,7 @@
       </RegistryEvent>
     </RuleGroup>
 
-    <!-- 22: DNSQuery (C2 lookups) -->
+    <!-- 22: DNSQuery -->
     <RuleGroup name="DnsQuery" groupRelation="or">
       <DnsQuery onmatch="exclude">
         <QueryName condition="end with">.example.invalid</QueryName>
@@ -140,7 +129,7 @@
       </DnsQuery>
     </RuleGroup>
 
-    <!-- 25: ProcessTampering (image hollowing / process doppelganging) -->
+    <!-- 25: ProcessTampering -->
     <RuleGroup name="ProcessTampering" groupRelation="or">
       <ProcessTampering onmatch="include">
         <Type condition="is any">Image is replaced;Image is mapped</Type>

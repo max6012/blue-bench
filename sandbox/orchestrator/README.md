@@ -1,40 +1,35 @@
-# Orchestrator scripts
+# Orchestrator scripts (operator's Mac)
 
-Mac-side shell scripts that drive the sandbox VMs.
+Two shell scripts that drive the GHA-based sandbox from the
+operator's local machine.
 
 | Script | Purpose |
 |---|---|
-| `safe-fire-check.sh` | Verify isolation gates before every run |
-| `snapshot.sh` | UTM snapshot one or both VMs |
-| `restore.sh` | UTM restore one or both VMs to a named snapshot |
-| `run-atomic.sh` | SSH into the target VM and invoke `Invoke-AtomicTest` |
-| `harvest.sh` | Pull EVTX / Sysmon / Zeek / Suricata / auditd back to `data/raw/sandbox/<run_id>/` |
+| `trigger-capture.sh` | `gh workflow run` + poll until done; records `WORKFLOW_RUN_ID` and `GHA_RUN_ID` |
+| `harvest-from-run.sh` | `gh run download` of the sandbox-capture artifact into `data/raw/sandbox/<run_id>/` |
 
-## Environment variables
+## Requirements
 
-All scripts respect the following with the defaults shown:
-
-| Var | Default | Meaning |
-|---|---|---|
-| `SANDBOX_WIN_IP` | `192.168.66.10` | Windows VM static IP on sandbox-net |
-| `SANDBOX_LNX_IP` | `192.168.66.20` | Linux VM static IP on sandbox-net |
-| `SANDBOX_WIN_VM` | `sandbox-win` | UTM VM name for Windows |
-| `SANDBOX_LNX_VM` | `sandbox-lnx` | UTM VM name for Linux |
-| `SANDBOX_SSH_KEY` | `$HOME/.ssh/blue-bench-sandbox.key` | Orchestrator SSH private key |
-| `SANDBOX_FLUSH_SECONDS` | `60` | Wait after technique exec for telemetry to flush |
-| `BLUE_BENCH_ROOT` | `<repo root>` | Used to compute `data/raw/sandbox/` |
+- `gh` CLI authenticated against the repo's GitHub (`brew install gh && gh auth login`)
+- `jq` (`brew install jq`)
+- `python3` (used for parsing the artifact's manifest.json)
 
 ## Steady-state loop
 
 ```bash
-./safe-fire-check.sh                       # gate
-./restore.sh both baseline                 # clean slate
-./run-atomic.sh T1003.001 -TestNumbers 1   # do the thing
-./harvest.sh                               # pull telemetry
+./trigger-capture.sh T1003.001 -TestNumbers 1     # fire + wait
+./harvest-from-run.sh                             # pull artifact
 ```
 
-## utmctl
+Each run lands under `data/raw/sandbox/<run_id>/` with the in-runner
+`manifest.json` carrying per-file sha256s plus the `gha_run_url`
+pointing back at the workflow run on GitHub.
 
-The snapshot / restore scripts wrap `utmctl`, which ships with UTM
-4.5+ under `/Applications/UTM.app/Contents/MacOS/utmctl`. Either add
-that to `PATH` or alias `utmctl` to the full path.
+## Environment variables
+
+| Var | Default | Meaning |
+|---|---|---|
+| `BLUE_BENCH_ROOT` | repo root (auto-detected) | Where `data/raw/sandbox/` lives |
+
+`trigger-capture.sh` writes `/tmp/sandbox-current-run.id` so
+`harvest-from-run.sh` can be called with no arguments.

@@ -1,0 +1,71 @@
+name: CodeQL
+
+# Satisfies the "Main branch protect" ruleset's `code_scanning`
+# (security alerts >= high) AND `code_quality` (errors) requirements
+# by running CodeQL's combined security-and-quality query suite
+# against the two language surfaces we ship:
+#
+#   - python   : the Blue-Bench generators, MCP server, eval harness
+#   - actions  : the workflow YAML itself (sandbox-atomic.yml et al.) --
+#                catches shell-injection / context-bleed patterns
+#                introduced when adding new triggers or inputs
+#
+# PowerShell is NOT a CodeQL-supported language; sandbox/workflow/*.ps1
+# is reviewed by hand for now. JavaScript could be added later if the
+# frontend stack grows.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly Monday 04:17 UTC -- off-hours, low-traffic window. Catches
+    # query / advisory updates that would re-flag existing code.
+    - cron: '17 4 * * 1'
+
+permissions:
+  # CodeQL needs to read code + upload findings. Bare minimum.
+  actions: read
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, actions]
+    steps:
+      - name: Checkout
+        # SHA-pin to neutralise mutable-tag supply-chain risk; the
+        # human-friendly version follows in the trailing comment so
+        # future bumps are reviewable in the diff.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - name: Initialize CodeQL (${{ matrix.language }})
+        uses: github/codeql-action/init@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        with:
+          languages: ${{ matrix.language }}
+          # security-and-quality runs both the security-extended queries
+          # (high+ security findings -> code_scanning rule) and the
+          # code-quality queries (errors -> code_quality rule).
+          queries: security-and-quality
+
+      - name: Build (autobuild)
+        # No-op for python + actions, but keeps the standard CodeQL
+        # action sequence so other languages can be added later
+        # without restructuring.
+        uses: github/codeql-action/autobuild@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@03e4368ac7daa2bd82b3e85262f3bf87ee112f57  # v3.36.0
+        with:
+          category: "/language:${{ matrix.language }}"

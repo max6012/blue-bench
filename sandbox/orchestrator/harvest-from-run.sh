@@ -38,10 +38,10 @@ fi
 # `gh run view --json artifacts` is NOT a valid field on the gh CLI;
 # artifacts live on a different REST endpoint than the run object.
 # Verified live during the run-5 acceptance: `gh run view --json
-# artifacts` errors out with "Unknown JSON field". Use the REST API
-# instead, which lists artifacts for a given workflow run.
-OWNER_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-artifact=$(gh api "repos/${OWNER_REPO}/actions/runs/${GHA_RUN_ID}/artifacts" \
+# artifacts` errors out with "Unknown JSON field". `gh api` resolves
+# {owner}/{repo} from the cwd's git remote (same as `gh run download`
+# below), so no separate lookup is needed.
+artifact=$(gh api "repos/{owner}/{repo}/actions/runs/${GHA_RUN_ID}/artifacts" \
            --jq '.artifacts[] | select(.name | startswith("sandbox-capture-")) | .name' | head -1)
 if [[ -z $artifact ]]; then
     echo "ABORT: no sandbox-capture-* artifact attached to run $GHA_RUN_ID" >&2
@@ -70,17 +70,28 @@ gh run download "$GHA_RUN_ID" -n "$artifact" -D "$out_dir"
 # and the hoist was silently skipped.
 nested="$out_dir/$run_id"
 if [[ -d $nested ]]; then
-    # dotglob: in case the artifact ever ships hidden files; nullglob:
-    # so an empty nested dir doesn't error.
-    shopt -s dotglob nullglob
-    mv "$nested"/* "$out_dir/"
-    shopt -u dotglob nullglob
+    # dotglob: hoist hidden files too if the artifact ever ships them.
+    # compgen guard: an empty nested dir would expand `$nested/*` to
+    # zero words and run `mv` with only a destination arg, which exits
+    # non-zero and aborts under `set -e`. (nullglob alone does NOT
+    # prevent this; it CAUSES the zero-arg case.)
+    shopt -s dotglob
+    if compgen -G "$nested/*" >/dev/null; then
+        mv "$nested"/* "$out_dir/"
+    fi
+    shopt -u dotglob
     rmdir "$nested" 2>/dev/null || true
 fi
 
-# Sanity check that the manifest landed where downstream code expects.
+# Manifest is load-bearing for both the corpus index row below and the
+# acceptance test's downstream assertions. The workflow-side harvest.ps1
+# always writes it; absence means the artifact layout has drifted or
+# the hoist broke silently. Fail fast rather than recording a
+# misleading-success row in manifest.csv.
 if [[ ! -f "$out_dir/manifest.json" ]]; then
-    echo "WARN: $out_dir/manifest.json missing after hoist; layout may have changed upstream." >&2
+    echo "ABORT: $out_dir/manifest.json missing after hoist; harvest layout broken." >&2
+    echo "       Investigate: $(ls -la "$out_dir" 2>&1 | head -5)" >&2
+    exit 1
 fi
 
 # Append to the per-corpus manifest index.

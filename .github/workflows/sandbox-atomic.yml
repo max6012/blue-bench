@@ -31,6 +31,21 @@ on:
         required: false
         default: '30'
         type: string
+      input_args:
+        description: 'Invoke-AtomicTest -InputArgs (hashtable literal, e.g. "@{ domain = ''127.0.0.1:8000''; port = 8000 }"). Empty = use atomic defaults.'
+        required: false
+        default: ''
+        type: string
+      start_local_listener:
+        description: 'Start a Python http.server on the runner before the atomic. Required for T1071.001/T1041 when input_args pins the destination to 127.0.0.1.'
+        required: false
+        default: false
+        type: boolean
+      listener_port:
+        description: 'TCP port for the local listener (only used when start_local_listener=true).'
+        required: false
+        default: '8000'
+        type: string
 
 permissions:
   contents: read
@@ -81,26 +96,84 @@ jobs:
         shell: pwsh
         run: ./sandbox/workflow/04-install-atomic-red-team.ps1
 
-      - name: 05 - Run atomic
+      - name: 04b - Start local listener (optional)
+        if: inputs.start_local_listener == true
         shell: pwsh
         run: |
-          $tech = '${{ inputs.technique }}'
-          $tnStr = '${{ inputs.test_numbers }}'
+          # Background a small Python http.server so network atomics
+          # (T1071.001 / T1041) can pin their destination to
+          # 127.0.0.1:<listener_port> instead of egressing to the
+          # real internet. Beacons + exfil land in the listener's
+          # in-memory log; the listener exits when the runner is
+          # torn down.
+          $port = '${{ inputs.listener_port }}'
+          Write-Host "Starting Python http.server on 127.0.0.1:$port (background)..."
+          $listenerLog = Join-Path $env:RUNNER_TEMP "listener-$port.log"
+          Start-Process -FilePath 'python' `
+                        -ArgumentList @('-m','http.server',$port,'--bind','127.0.0.1') `
+                        -RedirectStandardOutput $listenerLog `
+                        -RedirectStandardError "$listenerLog.err" `
+                        -NoNewWindow `
+                        -PassThru | Out-Null
+          # Give the server a beat to bind.
+          Start-Sleep -Seconds 2
+          # Verify it's listening (curl returns 200 + index.html-ish).
+          try {
+              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5
+              Write-Host "OK: local listener responding (HTTP $($r.StatusCode))."
+          } catch {
+              Write-Error "Local listener at 127.0.0.1:$port not responding: $($_.Exception.Message)"
+              exit 1
+          }
+
+      - name: 05 - Run atomic
+        shell: pwsh
+        env:
+          # Pass workflow inputs via env vars instead of ${{ }}
+          # interpolation. Interpolation pastes the raw input text into
+          # the script body, which breaks immediately when the input
+          # contains single quotes (PS hashtable literals like
+          # `@{ domain = '127.0.0.1:8000' }` always do). The env-var
+          # path is whitespace + quote safe.
+          TECH: ${{ inputs.technique }}
+          TNSTR: ${{ inputs.test_numbers }}
+          INPUT_ARGS: ${{ inputs.input_args }}
+        run: |
+          $tech = $env:TECH
+          $tnStr = $env:TNSTR
           $tn = $tnStr.Split(',') | ForEach-Object { [int]$_.Trim() }
+          $inputArgsLiteral = ($env:INPUT_ARGS).Trim()
 
           Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force
           $env:PSAtomicsFolder = 'C:\AtomicRedTeam\atomics'
+
+          # Build the optional -InputArgs splat. When the workflow input
+          # is empty (the common case) the hashtable stays empty and the
+          # atomic uses its built-in defaults. When non-empty, we
+          # evaluate the literal as a hashtable expression -- the
+          # workflow input format is intentionally PS-native so the
+          # operator's intent is unambiguous on the wire.
+          $extra = @{}
+          if ($inputArgsLiteral) {
+              try {
+                  $extra['InputArgs'] = Invoke-Expression $inputArgsLiteral
+                  Write-Host "InputArgs: $($extra['InputArgs'] | ConvertTo-Json -Compress)"
+              } catch {
+                  Write-Error "Failed to parse input_args literal as a PowerShell hashtable: $($_.Exception.Message)"
+                  exit 1
+              }
+          }
 
           # GetPrereqs first; this may download binary deps to
           # C:\AtomicRedTeam\ExternalPayloads (the runner has internet,
           # so the prereq fetch works without out-of-band staging).
           Write-Host "Fetching prereqs for $tech tests $($tn -join ',')..."
           Invoke-AtomicTest $tech -TestNumbers $tn -GetPrereqs `
-                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'
+                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
 
           Write-Host "Running $tech tests $($tn -join ',')..."
           Invoke-AtomicTest $tech -TestNumbers $tn `
-                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'
+                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
 
       - name: 06 - Flush wait
         shell: pwsh

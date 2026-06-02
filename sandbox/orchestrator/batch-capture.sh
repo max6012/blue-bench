@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fire the sandbox-atomic-capture workflow once per queued technique
-# (sequentially), harvest each artifact, record outcomes, and update
-# sandbox/atomics/manifest.yaml's status field per technique.
+# (sequentially), harvest each artifact, and record outcomes. Does NOT
+# write back to sandbox/atomics/manifest.yaml -- per-capture provenance
+# lives in data/raw/sandbox/manifest.csv + the per-run manifest.json.
 #
 # Designed for "capture every queued technique in one orchestration
 # pass" so per-technique bugs surface together and can be addressed
@@ -180,7 +181,14 @@ while IFS=$'\t' read -r tech tns listen iargs; do
 done <<< "$QUEUE"
 
 # ---------------------------------------------------------------------
-# Summary + manifest write-back
+# Summary
+#
+# manifest.yaml write-back is OUT of scope for this script -- the
+# manifest stays as candidate-pool documentation; per-capture
+# provenance lives in data/raw/sandbox/manifest.csv (written by
+# harvest-from-run.sh) and the per-run manifest.json. A status-flip
+# from `pending` -> `captured` in manifest.yaml is a separate small
+# change if we want the manifest to become a real ledger.
 # ---------------------------------------------------------------------
 
 echo ""
@@ -188,18 +196,27 @@ echo "=========================================================="
 echo "  BATCH SUMMARY  ($(date -u +%Y-%m-%dT%H:%M:%SZ))"
 echo "=========================================================="
 ok=0; fail=0
-for line in "${SUMMARY[@]}"; do
-    tech="${line%%:*}"
-    rest="${line#*:}"
-    status="${rest%%:*}"
-    detail="${rest#*:}"
-    printf "  %-12s %-20s %s\n" "$tech" "$status" "$detail"
-    case "$status" in
-        OK)  ok=$((ok+1))   ;;
-        DRY) : ;;
-        *)   fail=$((fail+1));;
-    esac
-done
+# Guard the expansion: on bash 3.2 + `set -u`, `"${SUMMARY[@]}"` on an
+# empty array throws `SUMMARY[@]: unbound variable` and aborts the
+# summary entirely. Reproduces on the operator's default macOS bash
+# under `--only T-typo` (no matching technique) or
+# `--skip T1059.001,...` covering the full queue.
+if (( ${#SUMMARY[@]} )); then
+    for line in "${SUMMARY[@]}"; do
+        tech="${line%%:*}"
+        rest="${line#*:}"
+        status="${rest%%:*}"
+        detail="${rest#*:}"
+        printf "  %-12s %-20s %s\n" "$tech" "$status" "$detail"
+        case "$status" in
+            OK)  ok=$((ok+1))   ;;
+            DRY) : ;;
+            *)   fail=$((fail+1));;
+        esac
+    done
+else
+    echo "  (no techniques selected -- --only filter matched nothing, or --skip emptied the queue)"
+fi
 echo ""
 echo "  $ok ok, $fail failed.  Full log: $LOG"
 

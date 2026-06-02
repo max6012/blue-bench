@@ -97,8 +97,18 @@ jobs:
         run: ./sandbox/workflow/04-install-atomic-red-team.ps1
 
       - name: 04b - Start local listener (optional)
-        if: inputs.start_local_listener == true
+        # Unambiguous boolean evaluation: `inputs.start_local_listener
+        # == true` works for type:boolean inputs but is a known
+        # workflow_dispatch coercion gotcha; the bare `${{ ... }}`
+        # form sidesteps it.
+        if: ${{ inputs.start_local_listener }}
         shell: pwsh
+        env:
+          # Plumb listener_port via env: rather than ${{ }}
+          # interpolation -- same safe pattern step 05 uses for
+          # input_args. Avoids surprises if the input ever contains
+          # characters that pwsh would parse.
+          LISTENER_PORT: ${{ inputs.listener_port }}
         run: |
           # Background a small Python http.server so network atomics
           # (T1071.001 / T1041) can pin their destination to
@@ -106,7 +116,7 @@ jobs:
           # real internet. Beacons + exfil land in the listener's
           # in-memory log; the listener exits when the runner is
           # torn down.
-          $port = '${{ inputs.listener_port }}'
+          $port = $env:LISTENER_PORT
           Write-Host "Starting Python http.server on 127.0.0.1:$port (background)..."
           $listenerLog = Join-Path $env:RUNNER_TEMP "listener-$port.log"
           Start-Process -FilePath 'python' `

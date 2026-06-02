@@ -57,15 +57,25 @@ fi
 echo "  OK: manifest.json present, total_bytes=$total"
 
 # 3c. EVTX content checks (best-effort via python-evtx).
+#
+# Note on EventID regex: python-evtx serialises records as
+#   <EventID Qualifiers="">N</EventID>
+# (always with the Qualifiers attribute, even when empty). A plain
+# `<EventID>N</EventID>` substring match returns zero hits even on
+# records that DO carry the EventID. Use the attribute-tolerant
+# pattern `<EventID[^>]*>N</EventID>`. (Caught during run-5 acceptance:
+# the script returned green with 0 matches against an EVTX that
+# actually contained 82 matching records.)
 if python3 -c "import Evtx.Evtx" 2>/dev/null; then
     found_4688_powershell=$(python3 - <<PY
 import re
 from Evtx.Evtx import Evtx
+eid_re = re.compile(r"<EventID[^>]*>4688</EventID>")
 hits = 0
 with Evtx("$CAP_DIR/windows/Security.evtx") as evtx:
     for record in evtx.records():
         xml = record.xml()
-        if "<EventID>4688</EventID>" in xml and re.search(r"powershell\.exe", xml, re.I):
+        if eid_re.search(xml) and re.search(r"powershell\.exe", xml, re.I):
             hits += 1
 print(hits)
 PY
@@ -78,11 +88,12 @@ PY
     found_sysmon_proccreate=$(python3 - <<PY
 import re
 from Evtx.Evtx import Evtx
+eid_re = re.compile(r"<EventID[^>]*>1</EventID>")
 hits = 0
 with Evtx("$CAP_DIR/windows/Sysmon.evtx") as evtx:
     for record in evtx.records():
         xml = record.xml()
-        if "<EventID>1</EventID>" in xml and re.search(r"powershell\.exe", xml, re.I):
+        if eid_re.search(xml) and re.search(r"powershell\.exe", xml, re.I):
             hits += 1
 print(hits)
 PY

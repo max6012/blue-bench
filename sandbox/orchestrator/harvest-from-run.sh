@@ -34,7 +34,14 @@ if [[ -z $GHA_RUN_ID ]]; then
 fi
 
 # Find the artifact name (sandbox-capture-<workflow_run_id>).
-artifact=$(gh run view "$GHA_RUN_ID" --json artifacts \
+#
+# `gh run view --json artifacts` is NOT a valid field on the gh CLI;
+# artifacts live on a different REST endpoint than the run object.
+# Verified live during the run-5 acceptance: `gh run view --json
+# artifacts` errors out with "Unknown JSON field". `gh api` resolves
+# {owner}/{repo} from the cwd's git remote (same as `gh run download`
+# below), so no separate lookup is needed.
+artifact=$(gh api "repos/{owner}/{repo}/actions/runs/${GHA_RUN_ID}/artifacts" \
            --jq '.artifacts[] | select(.name | startswith("sandbox-capture-")) | .name' | head -1)
 if [[ -z $artifact ]]; then
     echo "ABORT: no sandbox-capture-* artifact attached to run $GHA_RUN_ID" >&2
@@ -50,14 +57,41 @@ mkdir -p "$out_dir"
 echo "Downloading $artifact -> $out_dir"
 gh run download "$GHA_RUN_ID" -n "$artifact" -D "$out_dir"
 
-# gh extracts the artifact contents into out_dir/. The harvest.ps1
-# laid them out as ./harvest/<run_id>/{windows,manifest.json}; the
-# artifact upload preserves that under the artifact's content root.
-# Normalise: if there's a nested directory, hoist its contents up.
-nested=$(find "$out_dir" -maxdepth 2 -type d -name "$run_id" | head -1)
-if [[ -n $nested && $nested != "$out_dir" ]]; then
-    mv "$nested"/* "$out_dir/"
+# gh extracts the artifact contents into out_dir/. harvest.ps1 laid
+# them out as ./harvest/<run_id>/{windows,manifest.json}; the
+# upload-artifact action preserves that path under the artifact root,
+# so on disk we end up with out_dir/<run_id>/{windows,manifest.json}.
+# Hoist the contents one level up.
+#
+# Use the explicit nested path rather than find -- find -name "$run_id"
+# (without -mindepth 1) matches the out_dir itself, since its basename
+# equals $run_id. Subtle but bites: the original find-based logic
+# returned out_dir as the first hit, the `!= "$out_dir"` check failed,
+# and the hoist was silently skipped.
+nested="$out_dir/$run_id"
+if [[ -d $nested ]]; then
+    # dotglob: hoist hidden files too if the artifact ever ships them.
+    # compgen guard: an empty nested dir would expand `$nested/*` to
+    # zero words and run `mv` with only a destination arg, which exits
+    # non-zero and aborts under `set -e`. (nullglob alone does NOT
+    # prevent this; it CAUSES the zero-arg case.)
+    shopt -s dotglob
+    if compgen -G "$nested/*" >/dev/null; then
+        mv "$nested"/* "$out_dir/"
+    fi
+    shopt -u dotglob
     rmdir "$nested" 2>/dev/null || true
+fi
+
+# Manifest is load-bearing for both the corpus index row below and the
+# acceptance test's downstream assertions. The workflow-side harvest.ps1
+# always writes it; absence means the artifact layout has drifted or
+# the hoist broke silently. Fail fast rather than recording a
+# misleading-success row in manifest.csv.
+if [[ ! -f "$out_dir/manifest.json" ]]; then
+    echo "ABORT: $out_dir/manifest.json missing after hoist; harvest layout broken." >&2
+    echo "       Investigate: $(ls -la "$out_dir" 2>&1 | head -5)" >&2
+    exit 1
 fi
 
 # Append to the per-corpus manifest index.

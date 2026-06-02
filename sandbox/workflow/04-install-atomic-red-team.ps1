@@ -67,14 +67,40 @@ if (-not (Test-Path "$iarRoot\Invoke-AtomicRedTeam.psd1")) {
 # Import-Module fails with "required module 'powershell-yaml' is not
 # loaded" if we skip this. GHA runner has PSGallery access; install
 # under CurrentUser scope (no admin elevation needed inside pwsh) and
-# trust PSGallery for the duration of the install.
+# pin -Repository PSGallery on the install so the trust-policy change
+# actually applies to the source we use. Original policy is restored
+# in a finally block so this script doesn't leave the runner with a
+# persistent config change.
 Write-Host 'Installing powershell-yaml (Invoke-AtomicRedTeam dependency)...'
 if (-not (Get-Module -ListAvailable -Name 'powershell-yaml')) {
-    # Trust PSGallery without an interactive prompt.
-    if ((Get-PSRepository -Name PSGallery).InstallationPolicy -ne 'Trusted') {
-        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+    # Look up PSGallery safely -- it should always be registered on
+    # windows-latest, but Get-PSRepository throws under EAP='Stop' if
+    # for some reason it isn't, which would abort the step before any
+    # useful diagnostic. Treat absence as a hard error with a clear
+    # message instead.
+    $psgallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+    if (-not $psgallery) {
+        Write-Error 'PSGallery is not registered on this runner; cannot install powershell-yaml.'
+        exit 1
     }
-    Install-Module -Name 'powershell-yaml' -Scope CurrentUser -Force -AllowClobber
+    $previousPolicy = $psgallery.InstallationPolicy
+
+    try {
+        if ($previousPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        }
+        Install-Module -Name 'powershell-yaml' -Repository PSGallery `
+                       -Scope CurrentUser -Force -AllowClobber
+    } finally {
+        # Restore the original policy so this script doesn't leave the
+        # runner's PSGallery trust in a different state than it found
+        # it -- matches the comment's "for the duration of the install"
+        # contract.
+        if ($previousPolicy -and $previousPolicy -ne 'Trusted') {
+            Set-PSRepository -Name PSGallery -InstallationPolicy $previousPolicy `
+                             -ErrorAction SilentlyContinue
+        }
+    }
 }
 Import-Module powershell-yaml -Force
 

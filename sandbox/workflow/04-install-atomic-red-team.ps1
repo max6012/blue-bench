@@ -80,8 +80,10 @@ if (-not (Get-Module -ListAvailable -Name 'powershell-yaml')) {
     # message instead.
     $psgallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
     if (-not $psgallery) {
+        # Write-Error is terminating under EAP='Stop'; no explicit exit
+        # needed and adding one would be dead code (same anti-pattern
+        # Max flagged on PR #11).
         Write-Error 'PSGallery is not registered on this runner; cannot install powershell-yaml.'
-        exit 1
     }
     $previousPolicy = $psgallery.InstallationPolicy
 
@@ -102,7 +104,14 @@ if (-not (Get-Module -ListAvailable -Name 'powershell-yaml')) {
         }
     }
 }
-Import-Module powershell-yaml -Force
+# Deliberately NOT pre-importing powershell-yaml here. Step 05 runs in
+# a fresh pwsh process and imports Invoke-AtomicRedTeam.psd1 cold,
+# triggering auto-import of RequiredModules from disk. If we pre-loaded
+# powershell-yaml in *this* step, the psd1 import below would test the
+# pre-load path -- a false proxy for what step 05 actually does. By
+# leaving auto-import to fire here too, step 04 exercises the exact
+# code path step 05 will hit; an auto-import failure surfaces cheaply
+# at step 04 instead of step 05.
 
 # --- import + smoke test ----------------------------------------------
 

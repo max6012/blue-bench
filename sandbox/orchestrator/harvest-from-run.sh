@@ -34,7 +34,14 @@ if [[ -z $GHA_RUN_ID ]]; then
 fi
 
 # Find the artifact name (sandbox-capture-<workflow_run_id>).
-artifact=$(gh run view "$GHA_RUN_ID" --json artifacts \
+#
+# `gh run view --json artifacts` is NOT a valid field on the gh CLI;
+# artifacts live on a different REST endpoint than the run object.
+# Verified live during the run-5 acceptance: `gh run view --json
+# artifacts` errors out with "Unknown JSON field". Use the REST API
+# instead, which lists artifacts for a given workflow run.
+OWNER_REPO=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+artifact=$(gh api "repos/${OWNER_REPO}/actions/runs/${GHA_RUN_ID}/artifacts" \
            --jq '.artifacts[] | select(.name | startswith("sandbox-capture-")) | .name' | head -1)
 if [[ -z $artifact ]]; then
     echo "ABORT: no sandbox-capture-* artifact attached to run $GHA_RUN_ID" >&2
@@ -50,14 +57,30 @@ mkdir -p "$out_dir"
 echo "Downloading $artifact -> $out_dir"
 gh run download "$GHA_RUN_ID" -n "$artifact" -D "$out_dir"
 
-# gh extracts the artifact contents into out_dir/. The harvest.ps1
-# laid them out as ./harvest/<run_id>/{windows,manifest.json}; the
-# artifact upload preserves that under the artifact's content root.
-# Normalise: if there's a nested directory, hoist its contents up.
-nested=$(find "$out_dir" -maxdepth 2 -type d -name "$run_id" | head -1)
-if [[ -n $nested && $nested != "$out_dir" ]]; then
+# gh extracts the artifact contents into out_dir/. harvest.ps1 laid
+# them out as ./harvest/<run_id>/{windows,manifest.json}; the
+# upload-artifact action preserves that path under the artifact root,
+# so on disk we end up with out_dir/<run_id>/{windows,manifest.json}.
+# Hoist the contents one level up.
+#
+# Use the explicit nested path rather than find -- find -name "$run_id"
+# (without -mindepth 1) matches the out_dir itself, since its basename
+# equals $run_id. Subtle but bites: the original find-based logic
+# returned out_dir as the first hit, the `!= "$out_dir"` check failed,
+# and the hoist was silently skipped.
+nested="$out_dir/$run_id"
+if [[ -d $nested ]]; then
+    # dotglob: in case the artifact ever ships hidden files; nullglob:
+    # so an empty nested dir doesn't error.
+    shopt -s dotglob nullglob
     mv "$nested"/* "$out_dir/"
+    shopt -u dotglob nullglob
     rmdir "$nested" 2>/dev/null || true
+fi
+
+# Sanity check that the manifest landed where downstream code expects.
+if [[ ! -f "$out_dir/manifest.json" ]]; then
+    echo "WARN: $out_dir/manifest.json missing after hoist; layout may have changed upstream." >&2
 fi
 
 # Append to the per-corpus manifest index.

@@ -91,18 +91,27 @@
       </ProcessAccess>
     </RuleGroup>
 
-    <!-- 11: FileCreate (drop + dwell) -->
+    <!-- 11: FileCreate (drop + dwell).
+         C:\Windows\Temp\ added so credential-dump tooling (ProcDump
+         writing lsass_dump.dmp etc.) lands in the include set. The
+         T1003.001 batch capture caught 25x ProcessAccess vs LSASS but
+         zero FileCreate for the .dmp, because the .dmp landed in
+         C:\Windows\Temp\ and that path was outside the include list.
+         .dmp added explicitly as an extension catch-all for dump
+         files dropped anywhere. -->
     <RuleGroup name="FileCreate" groupRelation="or">
       <FileCreate onmatch="include">
         <TargetFilename condition="contains">\AppData\Local\Temp\</TargetFilename>
         <TargetFilename condition="contains">\AppData\Roaming\</TargetFilename>
         <TargetFilename condition="begin with">C:\Users\Public\</TargetFilename>
         <TargetFilename condition="begin with">C:\ProgramData\</TargetFilename>
+        <TargetFilename condition="begin with">C:\Windows\Temp\</TargetFilename>
         <TargetFilename condition="end with">.ps1</TargetFilename>
         <TargetFilename condition="end with">.bat</TargetFilename>
         <TargetFilename condition="end with">.vbs</TargetFilename>
         <TargetFilename condition="end with">.hta</TargetFilename>
         <TargetFilename condition="end with">.lnk</TargetFilename>
+        <TargetFilename condition="end with">.dmp</TargetFilename>
       </FileCreate>
     </RuleGroup>
 

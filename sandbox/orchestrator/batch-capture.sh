@@ -42,8 +42,8 @@ T1003.001	1	false
 T1547.001	1	false
 T1053.005	1	false
 T1218.005	1	false
-T1071.001	1	true	@{ domain = '127.0.0.1:8000' }
-T1041	1	true	@{ exfil_url = 'http://127.0.0.1:8000/' }
+T1071.001	1	true	@{ domain = 'http://127.0.0.1:8000' }
+T1041	1	true	@{ destination_url = 'http://127.0.0.1:8000/' }
 EOF
 )
 

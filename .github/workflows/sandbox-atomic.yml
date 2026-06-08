@@ -96,46 +96,6 @@ jobs:
         shell: pwsh
         run: ./sandbox/workflow/04-install-atomic-red-team.ps1
 
-      - name: 04b - Start local listener (optional)
-        # Unambiguous boolean evaluation: `inputs.start_local_listener
-        # == true` works for type:boolean inputs but is a known
-        # workflow_dispatch coercion gotcha; the bare `${{ ... }}`
-        # form sidesteps it.
-        if: ${{ inputs.start_local_listener }}
-        shell: pwsh
-        env:
-          # Plumb listener_port via env: rather than ${{ }}
-          # interpolation -- same safe pattern step 05 uses for
-          # input_args. Avoids surprises if the input ever contains
-          # characters that pwsh would parse.
-          LISTENER_PORT: ${{ inputs.listener_port }}
-        run: |
-          # Background a small Python http.server so network atomics
-          # (T1071.001 / T1041) can pin their destination to
-          # 127.0.0.1:<listener_port> instead of egressing to the
-          # real internet. Beacons + exfil land in the listener's
-          # in-memory log; the listener exits when the runner is
-          # torn down.
-          $port = $env:LISTENER_PORT
-          Write-Host "Starting Python http.server on 127.0.0.1:$port (background)..."
-          $listenerLog = Join-Path $env:RUNNER_TEMP "listener-$port.log"
-          Start-Process -FilePath 'python' `
-                        -ArgumentList @('-m','http.server',$port,'--bind','127.0.0.1') `
-                        -RedirectStandardOutput $listenerLog `
-                        -RedirectStandardError "$listenerLog.err" `
-                        -NoNewWindow `
-                        -PassThru | Out-Null
-          # Give the server a beat to bind.
-          Start-Sleep -Seconds 2
-          # Verify it's listening (curl returns 200 + index.html-ish).
-          try {
-              $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" -UseBasicParsing -TimeoutSec 5
-              Write-Host "OK: local listener responding (HTTP $($r.StatusCode))."
-          } catch {
-              Write-Error "Local listener at 127.0.0.1:$port not responding: $($_.Exception.Message)"
-              exit 1
-          }
-
       - name: 05 - Run atomic
         shell: pwsh
         env:
@@ -148,42 +108,94 @@ jobs:
           TECH: ${{ inputs.technique }}
           TNSTR: ${{ inputs.test_numbers }}
           INPUT_ARGS: ${{ inputs.input_args }}
+          # Loopback listener is brought up INSIDE this step (not a
+          # prior one) so python shares the atomic's process tree.
+          # The previous split-across-steps layout put python in step
+          # 04b's GHA job object, and the runner reaped it when 04b
+          # ended. T1071.001's PR #15 re-fire saw 13x "Unable to
+          # connect" against http://127.0.0.1:8000 even though the
+          # same URL had returned HTTP 200 OK to a probe 20 seconds
+          # earlier in step 04b. Co-locating listener bring-up with
+          # the atomic eliminates the cross-step reap window.
+          START_LOCAL_LISTENER: ${{ inputs.start_local_listener }}
+          LISTENER_PORT: ${{ inputs.listener_port }}
         run: |
           $tech = $env:TECH
           $tnStr = $env:TNSTR
           $tn = $tnStr.Split(',') | ForEach-Object { [int]$_.Trim() }
           $inputArgsLiteral = ($env:INPUT_ARGS).Trim()
 
-          Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force
-          $env:PSAtomicsFolder = 'C:\AtomicRedTeam\atomics'
-
-          # Build the optional -InputArgs splat. When the workflow input
-          # is empty (the common case) the hashtable stays empty and the
-          # atomic uses its built-in defaults. When non-empty, we
-          # evaluate the literal as a hashtable expression -- the
-          # workflow input format is intentionally PS-native so the
-          # operator's intent is unambiguous on the wire.
-          $extra = @{}
-          if ($inputArgsLiteral) {
-              try {
-                  $extra['InputArgs'] = Invoke-Expression $inputArgsLiteral
-                  Write-Host "InputArgs: $($extra['InputArgs'] | ConvertTo-Json -Compress)"
-              } catch {
-                  Write-Error "Failed to parse input_args literal as a PowerShell hashtable: $($_.Exception.Message)"
+          # Bring up loopback listener (when requested) in THIS step's
+          # process tree. Poll-until-bound: python's cold start on
+          # windows-latest has been observed at 1-5s. The previous
+          # fixed 2s sleep raced the bind on T1041's PR #15 re-fire
+          # and the step's HTTP probe rejected with "actively refused"
+          # before python had finished binding.
+          $listenerProc = $null
+          if ($env:START_LOCAL_LISTENER -eq 'true') {
+              $port = $env:LISTENER_PORT
+              Write-Host "Starting Python http.server on 127.0.0.1:$port (in-step)..."
+              $listenerLog = Join-Path $env:RUNNER_TEMP "listener-$port.log"
+              $listenerProc = Start-Process -FilePath 'python' `
+                                  -ArgumentList @('-m','http.server',$port,'--bind','127.0.0.1') `
+                                  -RedirectStandardOutput $listenerLog `
+                                  -RedirectStandardError "$listenerLog.err" `
+                                  -PassThru -WindowStyle Hidden
+              $bound = $false
+              for ($i = 0; $i -lt 30; $i++) {
+                  Start-Sleep -Milliseconds 500
+                  try {
+                      $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/" `
+                              -UseBasicParsing -TimeoutSec 2
+                      if ($r.StatusCode -eq 200) {
+                          Write-Host "OK: listener bound after ~$([int]($i*500+500))ms (pid=$($listenerProc.Id))."
+                          $bound = $true; break
+                      }
+                  } catch { }
+              }
+              if (-not $bound) {
+                  Write-Error "Local listener at 127.0.0.1:$port never came up in 15s"
                   exit 1
               }
           }
 
-          # GetPrereqs first; this may download binary deps to
-          # C:\AtomicRedTeam\ExternalPayloads (the runner has internet,
-          # so the prereq fetch works without out-of-band staging).
-          Write-Host "Fetching prereqs for $tech tests $($tn -join ',')..."
-          Invoke-AtomicTest $tech -TestNumbers $tn -GetPrereqs `
-                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
+          try {
+              Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force
+              $env:PSAtomicsFolder = 'C:\AtomicRedTeam\atomics'
 
-          Write-Host "Running $tech tests $($tn -join ',')..."
-          Invoke-AtomicTest $tech -TestNumbers $tn `
-                            -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
+              # Build the optional -InputArgs splat. When the workflow input
+              # is empty (the common case) the hashtable stays empty and the
+              # atomic uses its built-in defaults. When non-empty, we
+              # evaluate the literal as a hashtable expression -- the
+              # workflow input format is intentionally PS-native so the
+              # operator's intent is unambiguous on the wire.
+              $extra = @{}
+              if ($inputArgsLiteral) {
+                  try {
+                      $extra['InputArgs'] = Invoke-Expression $inputArgsLiteral
+                      Write-Host "InputArgs: $($extra['InputArgs'] | ConvertTo-Json -Compress)"
+                  } catch {
+                      Write-Error "Failed to parse input_args literal as a PowerShell hashtable: $($_.Exception.Message)"
+                      exit 1
+                  }
+              }
+
+              # GetPrereqs first; this may download binary deps to
+              # C:\AtomicRedTeam\ExternalPayloads (the runner has internet,
+              # so the prereq fetch works without out-of-band staging).
+              Write-Host "Fetching prereqs for $tech tests $($tn -join ',')..."
+              Invoke-AtomicTest $tech -TestNumbers $tn -GetPrereqs `
+                                -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
+
+              Write-Host "Running $tech tests $($tn -join ',')..."
+              Invoke-AtomicTest $tech -TestNumbers $tn `
+                                -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics' @extra
+          } finally {
+              if ($listenerProc -and -not $listenerProc.HasExited) {
+                  Write-Host "Stopping local listener (pid=$($listenerProc.Id))..."
+                  Stop-Process -Id $listenerProc.Id -Force -ErrorAction SilentlyContinue
+              }
+          }
 
       - name: 06 - Flush wait
         shell: pwsh

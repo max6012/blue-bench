@@ -1,0 +1,9 @@
+{
+  "phase": "win-install",
+  "boot_to_winrm_seconds": 2663,
+  "boot_to_winrm_minutes": 44.3,
+  "qcow2_path": "/Users/max/Library/Application Support/bb-sandbox-vm/bb-sandbox-win11-baseline.qcow2",
+  "qcow2_size_bytes": 15878717440,
+  "qemu_version": "11.0.1",
+  "completed_at": "2026-06-09T16:10:00Z"
+}

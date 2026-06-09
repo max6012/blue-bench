@@ -196,44 +196,59 @@
         <SkipUserOOBE>true</SkipUserOOBE>
       </OOBE>
 
-      <!-- FirstLogonCommands run as sandbox (Administrator) after the
-           OOBE chain settles. Order matters: WinRM/PSRemoting first so
-           the host can reach in immediately; Defender + WU disabled
-           before they have a chance to fight us; ExecutionPolicy last
-           so it survives reboots. -->
+      <!-- FirstLogonCommands run as sandbox (Administrator) after
+           the OOBE chain settles. Order: OpenSSH Server install +
+           authorized_keys first so the host can reach in
+           immediately; Defender + WU disabled before they fight
+           us; ExecutionPolicy last so it survives reboots.
+           Switched from WinRM to SSH on 2026-06-09 because pwsh
+           on macOS has no WSMan client library, so it can't drive
+           WinRM from the host. SSH is also the transport the
+           Linux/Zeek VM in t-sandbox proper will use, so one
+           wrapper across the whole substrate. -->
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Order>1</Order>
-          <Description>Enable WinRM service + basic auth + cleartext</Description>
-          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "winrm quickconfig -force; winrm set winrm/config/service '@{AllowUnencrypted=\"true\"}'; winrm set winrm/config/service/auth '@{Basic=\"true\"}'; winrm set winrm/config/client/auth '@{Basic=\"true\"}'"</CommandLine>
+          <Description>Install OpenSSH Server capability</Description>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Order>2</Order>
-          <Description>Enable PowerShell Remoting</Description>
-          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Enable-PSRemoting -Force -SkipNetworkProfileCheck"</CommandLine>
+          <Description>Start sshd + set to autostart</Description>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Service sshd; Set-Service -Name sshd -StartupType Automatic"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Order>3</Order>
-          <Description>Open firewall for WinRM TCP/5985</Description>
-          <CommandLine>netsh advfirewall firewall add rule name="WinRM-HTTP-5985" dir=in action=allow protocol=TCP localport=5985</CommandLine>
+          <Description>Open firewall for SSH TCP/22</Description>
+          <CommandLine>netsh advfirewall firewall add rule name="SSHD-22" dir=in action=allow protocol=TCP localport=22</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
           <Order>4</Order>
+          <Description>Drop authorized_keys for sandbox user (admin pubkey)</Description>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$adminAuth = 'C:\ProgramData\ssh\administrators_authorized_keys'; New-Item -ItemType File -Path $adminAuth -Force | Out-Null; Set-Content -Path $adminAuth -Value 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILjd6mLIDXYBMz76yOTmFD//SLTbx50hqoo4QgDuMsyg bb-sandbox@max-MBPro-CN' -Encoding UTF8; icacls $adminAuth /inheritance:r; icacls $adminAuth /grant SYSTEM:F; icacls $adminAuth /grant BUILTIN\Administrators:F"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>5</Order>
+          <Description>Set default shell for SSH to PowerShell</Description>
+          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "New-ItemProperty -Path HKLM:\SOFTWARE\OpenSSH -Name DefaultShell -Value 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe' -PropertyType String -Force"</CommandLine>
+        </SynchronousCommand>
+        <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+          <Order>6</Order>
           <Description>Disable Defender real-time monitoring</Description>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-MpPreference -DisableRealtimeMonitoring $true -DisableBehaviorMonitoring $true -DisableIOAVProtection $true -ErrorAction SilentlyContinue"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-          <Order>5</Order>
+          <Order>7</Order>
           <Description>Disable Windows Update service during smoke</Description>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Service -Name wuauserv -StartupType Disabled; Stop-Service -Name wuauserv -Force"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-          <Order>6</Order>
+          <Order>8</Order>
           <Description>Set ExecutionPolicy=Bypass at LocalMachine scope</Description>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy Bypass -Force"</CommandLine>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
-          <Order>7</Order>
+          <Order>9</Order>
           <Description>Stamp /provisioned marker so the host knows OOBE finished</Description>
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "New-Item -ItemType File -Path C:\provisioned -Force | Out-Null"</CommandLine>
         </SynchronousCommand>

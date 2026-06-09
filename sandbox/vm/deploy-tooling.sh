@@ -15,11 +15,11 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$HERE/../.." && pwd)"
-WINRM_EXEC="$HERE/winrm-exec.sh"
+SSH_EXEC="$HERE/ssh-exec.sh"
 SYSMON_CONFIG="$REPO_ROOT/sandbox/workflow/sysmon-config.xml"
 
-if [[ ! -x $WINRM_EXEC ]]; then
-    echo "ABORT: $WINRM_EXEC not executable" >&2; exit 1
+if [[ ! -x $SSH_EXEC ]]; then
+    echo "ABORT: $SSH_EXEC not executable" >&2; exit 1
 fi
 if [[ ! -f $SYSMON_CONFIG ]]; then
     echo "ABORT: $SYSMON_CONFIG not found" >&2; exit 1
@@ -28,7 +28,7 @@ fi
 echo "=== Phase 1: push sysmon-config.xml into guest ==="
 SYSMON_B64=$(base64 < "$SYSMON_CONFIG" | tr -d '\n')
 
-"$WINRM_EXEC" <<PS1
+"$SSH_EXEC" <<PS1
 \$ErrorActionPreference = 'Stop'
 \$b64 = '${SYSMON_B64}'
 \$xml = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String(\$b64))
@@ -40,7 +40,7 @@ PS1
 
 echo
 echo "=== Phase 2: install Sysmon ==="
-"$WINRM_EXEC" <<'PS2'
+"$SSH_EXEC" <<'PS2'
 $ErrorActionPreference = 'Stop'
 $dst = 'C:\sandbox\Sysmon64.exe'
 if (-not (Test-Path $dst)) {
@@ -54,7 +54,7 @@ PS2
 
 echo
 echo "=== Phase 3: install Atomic Red Team ==="
-"$WINRM_EXEC" <<'PS3'
+"$SSH_EXEC" <<'PS3'
 $ErrorActionPreference = 'Stop'
 Set-ExecutionPolicy Bypass -Scope Process -Force
 $installer = Invoke-WebRequest 'https://raw.githubusercontent.com/redcanaryco/invoke-atomicredteam/master/install-atomicredteam.ps1' -UseBasicParsing
@@ -65,7 +65,7 @@ PS3
 
 echo
 echo "=== Phase 4: verify Sysmon EID 1 fires ==="
-"$WINRM_EXEC" <<'PS4'
+"$SSH_EXEC" <<'PS4'
 $ErrorActionPreference = 'Stop'
 # Trigger a process-create event.
 Start-Process -FilePath 'powershell.exe' -ArgumentList '-NoProfile','-Command','Start-Sleep 1' -NoNewWindow -Wait

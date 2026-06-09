@@ -26,7 +26,7 @@ TIMINGS="$HERE/perf-timings.json"
 CPU=4
 RAM=8192
 DISK_SIZE=80G
-WINRM_PORT=5985
+SSH_PORT=2222
 
 # VNC is the display channel. -display cocoa fails when QEMU is
 # launched from a non-UI-context shell -- the window exists but
@@ -100,7 +100,7 @@ qemu-system-x86_64 \
     -device "ide-cd,drive=cdrom0,bus=ide.1,bootindex=1" \
     -drive "file=$UNATTEND_ISO,if=none,id=cdrom1,media=cdrom,readonly=on,file.locking=off" \
     -device "ide-cd,drive=cdrom1,bus=ide.2" \
-    -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
+    -netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
     -device "e1000e,netdev=net0" \
     -display none \
     -vnc "127.0.0.1:${VNC_DISPLAY}" \
@@ -151,9 +151,10 @@ fi
 # ---- poll for WinRM -----------------------------------------------
 # Windows OOBE + FirstLogonCommands settles in ~20-40 min under TCG
 # on arm64; cap at 90 min before giving up.
-echo "Polling WinRM on localhost:$WINRM_PORT (up to 90 minutes)..."
+echo "Polling SSH on localhost:$SSH_PORT (up to 90 minutes)..."
 deadline=$(( $(date +%s) + 5400 ))
-winrm_ready=0
+ssh_ready=0
+SSH_KEY="$HOME/.ssh/bb-sandbox-ed25519"
 while (( $(date +%s) < deadline )); do
     # Abort early if QEMU died -- otherwise we spin uselessly until
     # the 90-min deadline. Earlier run did exactly this after a
@@ -163,11 +164,17 @@ while (( $(date +%s) < deadline )); do
         echo "       (see prior stderr above for the cause)" >&2
         exit 1
     fi
-    if nc -z -G 2 localhost "$WINRM_PORT" 2>/dev/null; then
-        # Port is open. Verify it's actually WinRM (not garbage).
-        if curl -s --max-time 5 -X POST "http://localhost:$WINRM_PORT/wsman" \
-              -H "Content-Type: application/soap+xml" >/dev/null 2>&1; then
-            winrm_ready=1
+    if nc -z -G 2 localhost "$SSH_PORT" 2>/dev/null; then
+        # Port is open. Verify SSH speaks SSH (key auth as sandbox).
+        if ssh -i "$SSH_KEY" \
+               -o StrictHostKeyChecking=no \
+               -o UserKnownHostsFile=/dev/null \
+               -o LogLevel=QUIET \
+               -o ConnectTimeout=5 \
+               -o BatchMode=yes \
+               -p "$SSH_PORT" sandbox@127.0.0.1 \
+               "exit 0" 2>/dev/null; then
+            ssh_ready=1
             break
         fi
     fi
@@ -177,8 +184,8 @@ done
 end_ts=$(date +%s)
 elapsed=$(( end_ts - start_ts ))
 
-if [[ $winrm_ready -eq 0 ]]; then
-    echo "ABORT: WinRM never came up in $((elapsed/60)) minutes" >&2
+if [[ $ssh_ready -eq 0 ]]; then
+    echo "ABORT: SSH never came up in $((elapsed/60)) minutes" >&2
     echo "       qcow2 left at $BASELINE_QCOW for forensics" >&2
     if kill -0 "$qemu_pid" 2>/dev/null; then
         echo "       QEMU pid $qemu_pid still running -- kill manually:" >&2
@@ -187,14 +194,14 @@ if [[ $winrm_ready -eq 0 ]]; then
     exit 1
 fi
 
-echo "OK: WinRM reachable after ${elapsed}s ($(printf '%.1f' $(bc <<<"scale=1; $elapsed/60"))min)"
+echo "OK: SSH reachable after ${elapsed}s ($(printf '%.1f' $(bc <<<"scale=1; $elapsed/60"))min)"
 
 # ---- record timing ------------------------------------------------
 cat > "$TIMINGS" <<EOF
 {
   "phase": "win-install",
-  "boot_to_winrm_seconds": $elapsed,
-  "boot_to_winrm_minutes": $(printf '%.1f' $(bc <<<"scale=1; $elapsed/60")),
+  "boot_to_ssh_seconds": $elapsed,
+  "boot_to_ssh_minutes": $(printf '%.1f' $(bc <<<"scale=1; $elapsed/60")),
   "qcow2_path": "$BASELINE_QCOW",
   "qcow2_size_bytes": $(stat -f%z "$BASELINE_QCOW"),
   "qemu_version": "$(qemu-system-x86_64 --version | head -1 | awk '{print $4}')",

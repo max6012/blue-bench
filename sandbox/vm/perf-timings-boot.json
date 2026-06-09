@@ -1,0 +1,8 @@
+{
+  "phase": "boot-baseline",
+  "qcow2_path": "/Users/max/Library/Application Support/bb-sandbox-vm/bb-sandbox-win11-baseline.qcow2",
+  "boot_to_winrm_seconds": 16,
+  "boot_to_winrm_minutes": 0.2,
+  "qemu_pid": 51597,
+  "completed_at": "2026-06-09T16:15:39Z"
+}

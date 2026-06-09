@@ -87,8 +87,8 @@ qemu-system-x86_64 \
     -drive "if=pflash,format=raw,readonly=on,file=$OVMF" \
     -drive "if=pflash,format=raw,file=$OVMF_VARS" \
     -drive "file=$BASELINE_QCOW,if=virtio,format=qcow2" \
-    -drive "file=$WIN_ISO,media=cdrom,readonly=on" \
-    -drive "file=$UNATTEND_ISO,media=cdrom,readonly=on" \
+    -drive "file=$WIN_ISO,media=cdrom,readonly=on,file.locking=off" \
+    -drive "file=$UNATTEND_ISO,media=cdrom,readonly=on,file.locking=off" \
     -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
     -device "virtio-net,netdev=net0" \
     -boot order=d \
@@ -105,6 +105,14 @@ echo "Polling WinRM on localhost:$WINRM_PORT (up to 90 minutes)..."
 deadline=$(( $(date +%s) + 5400 ))
 winrm_ready=0
 while (( $(date +%s) < deadline )); do
+    # Abort early if QEMU died -- otherwise we spin uselessly until
+    # the 90-min deadline. Earlier run did exactly this after a
+    # macOS file-lock failure at startup.
+    if ! kill -0 "$qemu_pid" 2>/dev/null; then
+        echo "ABORT: QEMU process $qemu_pid exited unexpectedly." >&2
+        echo "       (see prior stderr above for the cause)" >&2
+        exit 1
+    fi
     if nc -z -G 2 localhost "$WINRM_PORT" 2>/dev/null; then
         # Port is open. Verify it's actually WinRM (not garbage).
         if curl -s --max-time 5 -X POST "http://localhost:$WINRM_PORT/wsman" \
@@ -122,8 +130,10 @@ elapsed=$(( end_ts - start_ts ))
 if [[ $winrm_ready -eq 0 ]]; then
     echo "ABORT: WinRM never came up in $((elapsed/60)) minutes" >&2
     echo "       qcow2 left at $BASELINE_QCOW for forensics" >&2
-    echo "       QEMU pid $qemu_pid still running -- kill manually:" >&2
-    echo "         kill $qemu_pid" >&2
+    if kill -0 "$qemu_pid" 2>/dev/null; then
+        echo "       QEMU pid $qemu_pid still running -- kill manually:" >&2
+        echo "         kill $qemu_pid" >&2
+    fi
     exit 1
 fi
 

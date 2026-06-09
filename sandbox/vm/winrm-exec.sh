@@ -81,7 +81,7 @@ fi
 \$user = '$WINRM_USER'
 \$pass = ConvertTo-SecureString '$WINRM_PASS' -AsPlainText -Force
 \$cred = [pscredential]::new(\$user, \$pass)
-\$so   = New-PSSessionOption -OpenTimeout 60000 -OperationTimeout 0 -IdleTimeout 600000
+\$so   = New-PSSessionOption -OpenTimeout 60000 -OperationTimeout 7200000 -IdleTimeout 600000
 
 # Trust the loopback host for basic auth + HTTP.
 \$null = winrm set winrm/config/client/auth '@{Basic=\"true\"}' 2>&1

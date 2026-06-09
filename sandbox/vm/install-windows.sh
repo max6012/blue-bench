@@ -28,6 +28,14 @@ RAM=8192
 DISK_SIZE=80G
 WINRM_PORT=5985
 
+# VNC is the display channel. -display cocoa fails when QEMU is
+# launched from a non-UI-context shell -- the window exists but
+# never surfaces in the Dock. VNC decouples the viewer process from
+# the QEMU process so launch context doesn't matter; we open
+# vnc://127.0.0.1:5900 from the script after QEMU comes up.
+VNC_PORT=5900
+VNC_DISPLAY=0   # VNC :0 -> TCP/5900
+
 if [[ $# -lt 1 ]]; then
     echo "usage: $0 <path-to-Win11-iso>" >&2
     exit 1
@@ -92,11 +100,23 @@ qemu-system-x86_64 \
     -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
     -device "virtio-net,netdev=net0" \
     -boot order=d \
-    -display cocoa \
+    -display none \
+    -vnc "127.0.0.1:${VNC_DISPLAY}" \
     -monitor "unix:$VM_DIR/qemu-monitor.sock,server,nowait" \
     -pidfile "$VM_DIR/qemu.pid" \
     &
 qemu_pid=$!
+
+# Wait a beat for VNC + monitor socket to bind, then open the
+# system's default VNC viewer. macOS Screen Sharing handles no-auth
+# VNC fine; the loopback URL means no auth prompt either way.
+for _ in $(seq 1 20); do
+    if nc -z 127.0.0.1 "$VNC_PORT" 2>/dev/null; then break; fi
+    sleep 0.5
+done
+echo "Opening VNC viewer at vnc://127.0.0.1:${VNC_PORT}..."
+open "vnc://127.0.0.1:${VNC_PORT}" || \
+    echo "  (could not open vnc:// URL; connect manually via Screen Sharing.app)"
 
 # Inject Enter to clear the UEFI "Press any key to boot from CD or
 # DVD..." prompt that cdboot.efi displays for ~5s at first power-on.

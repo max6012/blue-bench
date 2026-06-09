@@ -20,16 +20,20 @@ SSH_PORT="${BB_SANDBOX_SSH_PORT:-2222}"
 SSH_USER="${BB_SANDBOX_SSH_USER:-sandbox}"
 SSH_KEY="${BB_SANDBOX_SSH_KEY:-$HOME/.ssh/bb-sandbox-ed25519}"
 
-# Hard refuse non-loopback hosts -- the substrate is currently
-# loopback-only by design. If a future use needs a remote target,
-# swap in host-key verification + a different known_hosts strategy
-# first.
+# Loopback (QEMU-local) and the AWS substrate are both fine:
+# auth is ed25519 key-only, and the AWS host is reachable only
+# from the operator IP via the bb-sandbox security group. The
+# earlier hard loopback-only guard dated from the WinRM
+# basic-auth+cleartext era, which no longer applies. To allow an
+# explicit non-loopback host, set BB_SANDBOX_ALLOW_REMOTE=1.
 case "$SSH_HOST" in
     127.0.0.1|localhost|::1) ;;
     *)
-        echo "ABORT: ssh-exec.sh refuses non-loopback host '$SSH_HOST'." >&2
-        echo "       Sandbox VM is loopback-only by design." >&2
-        exit 1
+        if [[ "${BB_SANDBOX_ALLOW_REMOTE:-0}" != "1" ]]; then
+            echo "ABORT: ssh-exec.sh refuses non-loopback host '$SSH_HOST'." >&2
+            echo "       Set BB_SANDBOX_ALLOW_REMOTE=1 to allow (AWS substrate)." >&2
+            exit 1
+        fi
         ;;
 esac
 

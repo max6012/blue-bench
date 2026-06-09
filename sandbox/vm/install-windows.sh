@@ -115,11 +115,12 @@ for _ in $(seq 1 20); do
     sleep 0.5
 done
 echo "Opening VNC viewer at 127.0.0.1:${VNC_PORT}..."
-# Prefer TigerVNC (open-source, handles anonymous VNC cleanly).
-# RealVNC Connect.app is the SERVER, not a viewer -- pulled in as
-# a sibling cask but not useful here.
-if [[ -d "/Applications/TigerVNC.app" ]]; then
-    open -a TigerVNC "vnc://127.0.0.1:${VNC_PORT}" || true
+# Prefer TigerVNC via direct CLI launch with the address as
+# argument. `open -a TigerVNC vnc://...` routes the URL via
+# macOS's vnc:// handler which goes to Screen Sharing.app
+# regardless of -a, producing a useless password prompt.
+if [[ -x "/Applications/TigerVNC.app/Contents/MacOS/vncviewer" ]]; then
+    /Applications/TigerVNC.app/Contents/MacOS/vncviewer "127.0.0.1:${VNC_PORT}" &
 else
     open "vnc://127.0.0.1:${VNC_PORT}" || \
         echo "  (could not open vnc:// URL; connect manually)"

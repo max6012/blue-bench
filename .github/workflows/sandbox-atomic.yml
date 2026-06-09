@@ -132,6 +132,7 @@ jobs:
           # and the step's HTTP probe rejected with "actively refused"
           # before python had finished binding.
           $listenerProc = $null
+          $bound = $false
           if ($env:START_LOCAL_LISTENER -eq 'true') {
               $port = $env:LISTENER_PORT
               Write-Host "Starting Python http.server on 127.0.0.1:$port (in-step)..."
@@ -141,7 +142,6 @@ jobs:
                                   -RedirectStandardOutput $listenerLog `
                                   -RedirectStandardError "$listenerLog.err" `
                                   -PassThru -WindowStyle Hidden
-              $bound = $false
               for ($i = 0; $i -lt 30; $i++) {
                   Start-Sleep -Milliseconds 500
                   try {
@@ -151,15 +151,21 @@ jobs:
                           Write-Host "OK: listener bound after ~$([int]($i*500+500))ms (pid=$($listenerProc.Id))."
                           $bound = $true; break
                       }
-                  } catch { }
-              }
-              if (-not $bound) {
-                  Write-Error "Local listener at 127.0.0.1:$port never came up in 15s"
-                  exit 1
+                  } catch { <# bind not ready yet -- next iteration #> }
               }
           }
 
           try {
+              # Bind-timeout check is INSIDE the try so the finally
+              # still runs Stop-Process. Previously this lived above
+              # the try and exit 1 on the failure path orphaned the
+              # listener process; harmless in GHA (runner teardown
+              # reaps it) but the "always clean up" intent wasn't met.
+              if ($env:START_LOCAL_LISTENER -eq 'true' -and -not $bound) {
+                  Write-Error "Local listener at 127.0.0.1:$($env:LISTENER_PORT) never came up in 15s"
+                  exit 1
+              }
+
               Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force
               $env:PSAtomicsFolder = 'C:\AtomicRedTeam\atomics'
 

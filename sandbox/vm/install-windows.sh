@@ -114,11 +114,12 @@ for _ in $(seq 1 20); do
     if nc -z 127.0.0.1 "$VNC_PORT" 2>/dev/null; then break; fi
     sleep 0.5
 done
-echo "Opening RealVNC Connect at vnc://127.0.0.1:${VNC_PORT}..."
-# Prefer RealVNC Connect (handles anonymous VNC cleanly); fall back
-# to the default vnc:// handler if it isn't installed.
-if [[ -d "/Applications/RealVNC Connect.app" ]]; then
-    open -a "RealVNC Connect" "vnc://127.0.0.1:${VNC_PORT}" || true
+echo "Opening VNC viewer at 127.0.0.1:${VNC_PORT}..."
+# Prefer TigerVNC (open-source, handles anonymous VNC cleanly).
+# RealVNC Connect.app is the SERVER, not a viewer -- pulled in as
+# a sibling cask but not useful here.
+if [[ -d "/Applications/TigerVNC.app" ]]; then
+    open -a TigerVNC "vnc://127.0.0.1:${VNC_PORT}" || true
 else
     open "vnc://127.0.0.1:${VNC_PORT}" || \
         echo "  (could not open vnc:// URL; connect manually)"

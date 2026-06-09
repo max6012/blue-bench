@@ -32,6 +32,10 @@ stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 cp "$SRC" "$stage/autounattend.xml"
 
+# hdiutil makehybrid refuses to overwrite -- always start clean so
+# the script is rerunnable after autounattend.xml edits.
+rm -f "$OUT"
+
 # hdiutil is built into macOS. -joliet keeps long-filename
 # compatibility; the volume name AUTOUNATTEND matches the label
 # Windows Setup expects when scanning for unattend sources.

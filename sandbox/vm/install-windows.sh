@@ -94,11 +94,12 @@ qemu-system-x86_64 \
     -m "$RAM" \
     -drive "if=pflash,format=raw,readonly=on,file=$OVMF" \
     -drive "if=pflash,format=raw,file=$OVMF_VARS" \
-    -drive "file=$BASELINE_QCOW,if=virtio,format=qcow2" \
+    -drive "file=$BASELINE_QCOW,if=none,id=hd0,format=qcow2" \
+    -device "ide-hd,drive=hd0,bootindex=2" \
     -drive "file=$WIN_ISO,media=cdrom,readonly=on,file.locking=off" \
     -drive "file=$UNATTEND_ISO,media=cdrom,readonly=on,file.locking=off" \
     -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
-    -device "virtio-net,netdev=net0" \
+    -device "e1000e,netdev=net0" \
     -boot order=d \
     -display none \
     -vnc "127.0.0.1:${VNC_DISPLAY}" \

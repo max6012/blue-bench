@@ -58,3 +58,5 @@ models/
 sandbox/vm/*.iso
 sandbox/vm/*.qcow2
 sandbox/vm/*.img
+# Per-run timing emissions -- belong in the perf-report, not git.
+sandbox/vm/perf-timings*.json

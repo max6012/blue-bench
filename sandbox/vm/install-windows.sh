@@ -114,9 +114,15 @@ for _ in $(seq 1 20); do
     if nc -z 127.0.0.1 "$VNC_PORT" 2>/dev/null; then break; fi
     sleep 0.5
 done
-echo "Opening VNC viewer at vnc://127.0.0.1:${VNC_PORT}..."
-open "vnc://127.0.0.1:${VNC_PORT}" || \
-    echo "  (could not open vnc:// URL; connect manually via Screen Sharing.app)"
+echo "Opening RealVNC Connect at vnc://127.0.0.1:${VNC_PORT}..."
+# Prefer RealVNC Connect (handles anonymous VNC cleanly); fall back
+# to the default vnc:// handler if it isn't installed.
+if [[ -d "/Applications/RealVNC Connect.app" ]]; then
+    open -a "RealVNC Connect" "vnc://127.0.0.1:${VNC_PORT}" || true
+else
+    open "vnc://127.0.0.1:${VNC_PORT}" || \
+        echo "  (could not open vnc:// URL; connect manually)"
+fi
 
 # Inject Enter to clear the UEFI "Press any key to boot from CD or
 # DVD..." prompt that cdboot.efi displays for ~5s at first power-on.

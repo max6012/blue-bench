@@ -51,3 +51,10 @@ models/
 # ── Local demo run artifacts ───────────────────────────────────
 # Screenshots captured during local CLI/MCP demo runs (Chrome DevTools, etc.)
 .demo-run/
+
+# ── VM build artifacts (sandbox/vm/) ──────────────────────────
+# qcow2 disk images and rebuildable ISOs. Source-of-truth lives in
+# autounattend.xml + the build scripts; binaries are env-specific.
+sandbox/vm/*.iso
+sandbox/vm/*.qcow2
+sandbox/vm/*.img

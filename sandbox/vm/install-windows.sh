@@ -95,12 +95,13 @@ qemu-system-x86_64 \
     -drive "if=pflash,format=raw,readonly=on,file=$OVMF" \
     -drive "if=pflash,format=raw,file=$OVMF_VARS" \
     -drive "file=$BASELINE_QCOW,if=none,id=hd0,format=qcow2" \
-    -device "ide-hd,drive=hd0,bootindex=2" \
-    -drive "file=$WIN_ISO,media=cdrom,readonly=on,file.locking=off" \
-    -drive "file=$UNATTEND_ISO,media=cdrom,readonly=on,file.locking=off" \
+    -device "ide-hd,drive=hd0,bus=ide.0,bootindex=2" \
+    -drive "file=$WIN_ISO,if=none,id=cdrom0,media=cdrom,readonly=on,file.locking=off" \
+    -device "ide-cd,drive=cdrom0,bus=ide.1,bootindex=1" \
+    -drive "file=$UNATTEND_ISO,if=none,id=cdrom1,media=cdrom,readonly=on,file.locking=off" \
+    -device "ide-cd,drive=cdrom1,bus=ide.2" \
     -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
     -device "e1000e,netdev=net0" \
-    -boot order=d \
     -display none \
     -vnc "127.0.0.1:${VNC_DISPLAY}" \
     -monitor "unix:$VM_DIR/qemu-monitor.sock,server,nowait" \

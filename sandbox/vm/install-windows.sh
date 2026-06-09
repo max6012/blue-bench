@@ -92,11 +92,31 @@ qemu-system-x86_64 \
     -netdev "user,id=net0,hostfwd=tcp::${WINRM_PORT}-:5985" \
     -device "virtio-net,netdev=net0" \
     -boot order=d \
-    -nographic \
+    -display cocoa \
     -monitor "unix:$VM_DIR/qemu-monitor.sock,server,nowait" \
     -pidfile "$VM_DIR/qemu.pid" \
     &
 qemu_pid=$!
+
+# Inject Enter to clear the UEFI "Press any key to boot from CD or
+# DVD..." prompt that cdboot.efi displays for ~5s at first power-on.
+# Without this keypress, BdsDxe falls through to the next boot entry
+# (typically PXE) and the install never starts. Run for ~15s only:
+# Windows Setup reboots 1-2x mid-install, and on those reboots the
+# CD prompt MUST time out so BdsDxe falls through to the now-bootable
+# Windows Boot Manager on the HDD. Spamming Enter beyond the first
+# boot would re-enter Setup in a loop.
+(
+    # Wait a beat for the monitor socket to appear.
+    for _ in $(seq 1 20); do
+        [[ -S $VM_DIR/qemu-monitor.sock ]] && break
+        sleep 0.5
+    done
+    for _ in $(seq 1 15); do
+        printf 'sendkey ret\n' | nc -U "$VM_DIR/qemu-monitor.sock" 2>/dev/null || true
+        sleep 1
+    done
+) &
 
 # ---- poll for WinRM -----------------------------------------------
 # Windows OOBE + FirstLogonCommands settles in ~20-40 min under TCG

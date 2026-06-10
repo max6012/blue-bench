@@ -1,0 +1,14 @@
+# bb-sandbox APT kill-chain technique set (ATT&CK stages -> ART tests)
+# Captured via sandbox/vm/capture-killchain.sh; fed to the apt_inject harness.
+# Single AWS Windows host (Server 2022): lateral movement is source-side only.
+# stage	technique	test	attack_id	note
+initial-access	T1566.001	1	T1566.001	download macro-enabled phishing attachment
+execution	T1059.001	1	T1059.001	powershell download cradle
+persistence	T1547.001	1	T1547.001	registry Run key
+defense-evasion	T1218.005	2	T1218.005	mshta vbscript local command
+credential-access	T1003.001	2	T1003.001	LSASS dump via comsvcs.dll (native, Defender off)
+discovery	T1057	2	T1057	process discovery (tasklist)
+lateral-movement	T1021.002	1	T1021.002	map admin share (source-side, single host)
+collection	T1560.001	11	T1560.001	compress for exfil via makecab (native)
+command-and-control	T1071.001	1	T1071.001	web protocol beacon / malicious user-agents
+exfiltration	T1041	1	T1041	exfil over C2 (web; T1041-2 DNS test targets a placeholder server, no egress)

@@ -47,7 +47,7 @@ echo "firing atomic..."
 EXTRA=""
 [[ -n $IARGS ]] && EXTRA=" -InputArgs $IARGS"
 BB_SANDBOX_ALLOW_REMOTE=1 BB_SANDBOX_SSH_HOST="$WIN_PUBLIC_IP" BB_SANDBOX_SSH_PORT=22 BB_SANDBOX_SSH_USER="$WIN_SSH_USER" \
-  "$HERE/ssh-exec.sh" -c "Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force; \$env:PSAtomicsFolder='C:\AtomicRedTeam\atomics'; Invoke-AtomicTest $TECH -TestNumbers $TNS -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'$EXTRA" 2>&1 | tail -5
+  "$HERE/ssh-exec.sh" -c "Import-Module C:\AtomicRedTeam\invoke-atomicredteam\Invoke-AtomicRedTeam.psd1 -Force; \$env:PSAtomicsFolder='C:\AtomicRedTeam\atomics'; Invoke-AtomicTest $TECH -TestNumbers $TNS -GetPrereqs -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'$EXTRA; Invoke-AtomicTest $TECH -TestNumbers $TNS -PathToAtomicsFolder 'C:\AtomicRedTeam\atomics'$EXTRA" 2>&1 | tail -6
 
 echo "atomic done; waiting for Zeek window to close + flush..."
 wait "$ZEEK_BG" || true

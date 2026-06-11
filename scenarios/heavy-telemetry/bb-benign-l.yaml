@@ -1,0 +1,138 @@
+version: "1.0"
+name: bb-benign-l
+description: |
+  Blue-Bench BENIGN baseline corpus — L (large) tier. STRESS FLOOR: data/ must
+  be >= 5 GB (Blue-Bench's hard L-tier floor).
+  Pure benign IT telemetry substrate: normal corporate office activity with NO
+  attack storyline. Adversary signal is injected later by a separate Blue-Bench
+  pipeline. Mirrors Blue-Bench enterprise topology conventions (CORP AD domain
+  corp.example.invalid; Windows workstations + DC + file server + Linux servers;
+  10.10 workstation / 10.20 server subnets).
+
+  Density knobs held IDENTICAL to the S and M tiers so one MB-per-host-day
+  constant predicts all tiers: intensity=medium, variation=medium, no
+  suspicious_noise, identical output.logs list, single span Zeek sensor over both
+  segments, persona mix, user:system ratio ~0.8, and proportional system
+  composition (workstation:DC:file:Linux). Tiers differ ONLY in host count, user
+  count, and window length.
+
+  L tier: 30 systems (21 workstations, 1 DC, 1 file server, 4 Linux web/app, 3
+  Linux DB), 24 users (0.8/system), 18-day window. 30 x 18 = 540 host-days.
+  PROJECTED, NOT GENERATED: at ~7.8 s/host-day this scenario needs ~70 minutes
+  to generate, far over the ~10-minute calibration budget, so it is sized by the
+  measured scaling curve rather than generated here.
+  Curve from three calibration points (S=10hd/169MB, M=45hd/670MB,
+  calib3=80hd/1242MB). Per-host-day density is near-constant and FLATTENING
+  (16.91 / 14.89 / 15.52 MB/hd at 10 / 45 / 80 host-days) — no continued decay.
+  3-point linear fit: size_MB = 15.324 * host_days + 4.1. Pessimistic power-law
+  fit (p=0.95): size_MB = 18.757 * host_days^0.9501.
+  L's 540 host-days projects to ~8.1 GB (linear) / ~7.2 GB (pessimistic
+  power-law), clearing the 5 GB HARD floor with large margin. Break-even density
+  for 5 GB at 540 host-days is only 9.48 MB/hd, far below every observed value
+  (>=14.9), so the floor cannot plausibly be missed even under decay.
+  The 5 GB floor is GUARANTEED only upon eventual generation; these are
+  projections with margin. See the EF-P3 deliverable scaling notes for the full
+  derivation.
+
+environment:
+  description: "Large corporate office — Active Directory, file server, Linux web/app and DB servers"
+  domain: "corp.example.invalid"
+
+  timezone:
+    default: "America/New_York"
+
+  users:
+    - {username: wkst-01-user, full_name: "Avery Stone", email: avery.stone@corp.example.invalid, persona: developer, primary_system: wkst-01, groups: ["developers"], enabled: true}
+    - {username: wkst-02-user, full_name: "Blair Nunez", email: blair.nunez@corp.example.invalid, persona: analyst, primary_system: wkst-02, groups: ["analysts"], enabled: true}
+    - {username: wkst-03-user, full_name: "Casey Ford", email: casey.ford@corp.example.invalid, persona: executive, primary_system: wkst-03, groups: ["leadership"], enabled: true}
+    - {username: wkst-04-user, full_name: "Devon Hale", email: devon.hale@corp.example.invalid, persona: analyst, primary_system: wkst-04, groups: ["analysts"], enabled: true}
+    - {username: corp-admin, full_name: "Erin Park", email: erin.park@corp.example.invalid, persona: sysadmin, primary_system: wkst-05, groups: ["it-admins", "domain-admins"], enabled: true}
+    - {username: wkst-06-user, full_name: "Frankie Lowe", email: frankie.lowe@corp.example.invalid, persona: analyst, primary_system: wkst-06, groups: ["analysts"], enabled: true}
+    - {username: wkst-07-user, full_name: "Gray Okafor", email: gray.okafor@corp.example.invalid, persona: executive, primary_system: wkst-07, groups: ["leadership"], enabled: true}
+    - {username: wkst-08-user, full_name: "Harper Quinn", email: harper.quinn@corp.example.invalid, persona: developer, primary_system: wkst-08, groups: ["developers"], enabled: true}
+    - {username: wkst-09-user, full_name: "Indra Walsh", email: indra.walsh@corp.example.invalid, persona: analyst, primary_system: wkst-09, groups: ["analysts"], enabled: true}
+    - {username: wkst-10-user, full_name: "Jordan Reyes", email: jordan.reyes@corp.example.invalid, persona: developer, primary_system: wkst-10, groups: ["developers"], enabled: true}
+    - {username: wkst-11-user, full_name: "Kai Brennan", email: kai.brennan@corp.example.invalid, persona: executive, primary_system: wkst-11, groups: ["leadership"], enabled: true}
+    - {username: wkst-12-user, full_name: "Lane Ortiz", email: lane.ortiz@corp.example.invalid, persona: analyst, primary_system: wkst-12, groups: ["analysts"], enabled: true}
+    - {username: wkst-13-user, full_name: "Morgan Diaz", email: morgan.diaz@corp.example.invalid, persona: developer, primary_system: wkst-13, groups: ["developers"], enabled: true}
+    - {username: wkst-14-user, full_name: "Noor Sayed", email: noor.sayed@corp.example.invalid, persona: analyst, primary_system: wkst-14, groups: ["analysts"], enabled: true}
+    - {username: wkst-15-user, full_name: "Owen Pratt", email: owen.pratt@corp.example.invalid, persona: developer, primary_system: wkst-15, groups: ["developers"], enabled: true}
+    - {username: wkst-16-user, full_name: "Piper Vance", email: piper.vance@corp.example.invalid, persona: executive, primary_system: wkst-16, groups: ["leadership"], enabled: true}
+    - {username: wkst-17-user, full_name: "Quincy Bell", email: quincy.bell@corp.example.invalid, persona: analyst, primary_system: wkst-17, groups: ["analysts"], enabled: true}
+    - {username: wkst-18-user, full_name: "Riley Tran", email: riley.tran@corp.example.invalid, persona: developer, primary_system: wkst-18, groups: ["developers"], enabled: true}
+    - {username: wkst-19-user, full_name: "Sage Mercer", email: sage.mercer@corp.example.invalid, persona: analyst, primary_system: wkst-19, groups: ["analysts"], enabled: true}
+    - {username: wkst-20-user, full_name: "Tatum Voss", email: tatum.voss@corp.example.invalid, persona: developer, primary_system: wkst-20, groups: ["developers"], enabled: true}
+    - {username: wkst-21-user, full_name: "Umi Rhodes", email: umi.rhodes@corp.example.invalid, persona: executive, primary_system: wkst-21, groups: ["leadership"], enabled: true}
+    - {username: srv-app-user, full_name: "Vesper Lin", email: vesper.lin@corp.example.invalid, persona: developer, primary_system: srv-app-01, groups: ["developers"], enabled: true}
+    - {username: srv-app2-user, full_name: "Wynn Carter", email: wynn.carter@corp.example.invalid, persona: developer, primary_system: srv-app-02, groups: ["developers"], enabled: true}
+    - {username: srv-db-user, full_name: "Yara Sol", email: yara.sol@corp.example.invalid, persona: analyst, primary_system: srv-db-01, groups: ["analysts"], enabled: true}
+
+  service_accounts:
+    - svc-backup
+    - svc-monitor
+
+  systems:
+    - {hostname: wkst-01, ip: "10.10.0.11", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-01-user, services: ["dns-client"]}
+    - {hostname: wkst-02, ip: "10.10.0.12", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-02-user, services: ["dns-client"]}
+    - {hostname: wkst-03, ip: "10.10.0.13", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-03-user, services: ["dns-client"]}
+    - {hostname: wkst-04, ip: "10.10.0.14", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-04-user, services: ["dns-client"]}
+    - {hostname: wkst-05, ip: "10.10.0.15", os: "Windows 11 Enterprise", type: workstation, assigned_user: corp-admin, services: ["dns-client"]}
+    - {hostname: wkst-06, ip: "10.10.0.16", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-06-user, services: ["dns-client"]}
+    - {hostname: wkst-07, ip: "10.10.0.17", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-07-user, services: ["dns-client"]}
+    - {hostname: wkst-08, ip: "10.10.0.18", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-08-user, services: ["dns-client"]}
+    - {hostname: wkst-09, ip: "10.10.0.19", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-09-user, services: ["dns-client"]}
+    - {hostname: wkst-10, ip: "10.10.0.20", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-10-user, services: ["dns-client"]}
+    - {hostname: wkst-11, ip: "10.10.0.21", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-11-user, services: ["dns-client"]}
+    - {hostname: wkst-12, ip: "10.10.0.22", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-12-user, services: ["dns-client"]}
+    - {hostname: wkst-13, ip: "10.10.0.23", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-13-user, services: ["dns-client"]}
+    - {hostname: wkst-14, ip: "10.10.0.24", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-14-user, services: ["dns-client"]}
+    - {hostname: wkst-15, ip: "10.10.0.25", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-15-user, services: ["dns-client"]}
+    - {hostname: wkst-16, ip: "10.10.0.26", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-16-user, services: ["dns-client"]}
+    - {hostname: wkst-17, ip: "10.10.0.27", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-17-user, services: ["dns-client"]}
+    - {hostname: wkst-18, ip: "10.10.0.28", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-18-user, services: ["dns-client"]}
+    - {hostname: wkst-19, ip: "10.10.0.29", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-19-user, services: ["dns-client"]}
+    - {hostname: wkst-20, ip: "10.10.0.30", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-20-user, services: ["dns-client"]}
+    - {hostname: wkst-21, ip: "10.10.0.31", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-21-user, services: ["dns-client"]}
+    - {hostname: dc-01, ip: "10.20.0.10", os: "Windows Server 2022", type: domain_controller, services: ["kerberos", "ldap", "dns"], roles: ["domain_controller", "dns_server"]}
+    - {hostname: srv-files-01, ip: "10.20.0.20", os: "Windows Server 2019", type: server, services: ["smb", "dfs", "dns-client"], roles: ["file_server"]}
+    - {hostname: srv-app-01, ip: "10.20.0.30", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-app-user, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
+    - {hostname: srv-app-02, ip: "10.20.0.31", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-app2-user, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
+    - {hostname: srv-app-03, ip: "10.20.0.32", os: "Ubuntu 22.04 LTS", type: server, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
+    - {hostname: srv-app-04, ip: "10.20.0.33", os: "Ubuntu 22.04 LTS", type: server, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
+    - {hostname: srv-db-01, ip: "10.20.0.40", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-db-user, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+    - {hostname: srv-db-02, ip: "10.20.0.41", os: "Ubuntu 22.04 LTS", type: server, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+    - {hostname: srv-db-03, ip: "10.20.0.42", os: "Ubuntu 22.04 LTS", type: server, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+
+  network:
+    segments:
+      - {name: workstations, cidr: "10.10.0.0/16", exposure: internal, systems: [wkst-01, wkst-02, wkst-03, wkst-04, wkst-05, wkst-06, wkst-07, wkst-08, wkst-09, wkst-10, wkst-11, wkst-12, wkst-13, wkst-14, wkst-15, wkst-16, wkst-17, wkst-18, wkst-19, wkst-20, wkst-21]}
+      - {name: servers, cidr: "10.20.0.0/16", exposure: internal, systems: [dc-01, srv-files-01, srv-app-01, srv-app-02, srv-app-03, srv-app-04, srv-db-01, srv-db-02, srv-db-03]}
+    sensors:
+      - type: network
+        name: core-span
+        hostname: zeek-core
+        monitoring_segments: [workstations, servers]
+        direction: bidirectional
+        placement: span
+        log_formats: [zeek]
+
+time_window:
+  start: "2026-03-02T05:00:00Z"
+  duration: "432h"
+  warmup: "8h"
+
+baseline_activity:
+  description: "Normal corporate workday activity over 18 days — domain auth, file share access, web browsing, dev/db server work. No attacks."
+  intensity: medium
+  variation: medium
+
+observation_profile: complete
+
+output:
+  logs:
+    - {format: windows}
+    - {format: zeek}
+    - {format: ecar}
+    - {format: syslog}
+    - {format: bash_history}
+  destination: ./output

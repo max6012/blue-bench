@@ -1,0 +1,83 @@
+version: "1.0"
+name: bb-benign-s
+description: |
+  Blue-Bench BENIGN baseline corpus — S (small) tier.
+  Pure benign IT telemetry substrate: normal corporate office activity with NO
+  attack storyline. Adversary signal is injected later by a separate Blue-Bench
+  pipeline. Mirrors Blue-Bench enterprise topology conventions: CORP AD domain
+  (corp.example.invalid), Windows workstations + DC + file server + Linux
+  servers, 10.x private subnets (10.10 workstations, 10.20 servers).
+
+  Density knobs (intensity / variation / output formats / sensor topology /
+  persona mix) are held IDENTICAL across the S/M/L tiers so a single
+  MB-per-host-day scaling constant predicts all three. Tiers differ ONLY in host
+  count, user count, and window length.
+
+  S tier: 10 systems, 8 users, ~1 day window.
+
+environment:
+  description: "Small corporate office — Active Directory, file server, Linux app/DB servers"
+  domain: "corp.example.invalid"
+
+  timezone:
+    default: "America/New_York"
+
+  users:
+    - {username: wkst-01-user, full_name: "Avery Stone", email: avery.stone@corp.example.invalid, persona: developer, primary_system: wkst-01, groups: ["developers"], enabled: true}
+    - {username: wkst-02-user, full_name: "Blair Nunez", email: blair.nunez@corp.example.invalid, persona: analyst, primary_system: wkst-02, groups: ["analysts"], enabled: true}
+    - {username: wkst-03-user, full_name: "Casey Ford", email: casey.ford@corp.example.invalid, persona: executive, primary_system: wkst-03, groups: ["leadership"], enabled: true}
+    - {username: wkst-04-user, full_name: "Devon Hale", email: devon.hale@corp.example.invalid, persona: analyst, primary_system: wkst-04, groups: ["analysts"], enabled: true}
+    - {username: corp-admin, full_name: "Erin Park", email: erin.park@corp.example.invalid, persona: sysadmin, primary_system: wkst-05, groups: ["it-admins", "domain-admins"], enabled: true}
+    - {username: wkst-06-user, full_name: "Frankie Lowe", email: frankie.lowe@corp.example.invalid, persona: developer, primary_system: wkst-06, groups: ["developers"], enabled: true}
+    - {username: srv-app-user, full_name: "Gray Okafor", email: gray.okafor@corp.example.invalid, persona: developer, primary_system: srv-app-01, groups: ["developers"], enabled: true}
+    - {username: srv-db-user, full_name: "Harper Quinn", email: harper.quinn@corp.example.invalid, persona: analyst, primary_system: srv-db-01, groups: ["analysts"], enabled: true}
+
+  service_accounts:
+    - svc-backup
+    - svc-monitor
+
+  systems:
+    - {hostname: wkst-01, ip: "10.10.0.11", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-01-user, services: ["dns-client"]}
+    - {hostname: wkst-02, ip: "10.10.0.12", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-02-user, services: ["dns-client"]}
+    - {hostname: wkst-03, ip: "10.10.0.13", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-03-user, services: ["dns-client"]}
+    - {hostname: wkst-04, ip: "10.10.0.14", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-04-user, services: ["dns-client"]}
+    - {hostname: wkst-05, ip: "10.10.0.15", os: "Windows 11 Enterprise", type: workstation, assigned_user: corp-admin, services: ["dns-client"]}
+    - {hostname: wkst-06, ip: "10.10.0.16", os: "Windows 11 Enterprise", type: workstation, assigned_user: wkst-06-user, services: ["dns-client"]}
+    - {hostname: dc-01, ip: "10.20.0.10", os: "Windows Server 2022", type: domain_controller, services: ["kerberos", "ldap", "dns"], roles: ["domain_controller", "dns_server"]}
+    - {hostname: srv-files-01, ip: "10.20.0.20", os: "Windows Server 2019", type: server, services: ["smb", "dfs", "dns-client"], roles: ["file_server"]}
+    - {hostname: srv-app-01, ip: "10.20.0.30", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-app-user, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
+    - {hostname: srv-db-01, ip: "10.20.0.40", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-db-user, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+
+  network:
+    segments:
+      - {name: workstations, cidr: "10.10.0.0/16", exposure: internal, systems: [wkst-01, wkst-02, wkst-03, wkst-04, wkst-05, wkst-06]}
+      - {name: servers, cidr: "10.20.0.0/16", exposure: internal, systems: [dc-01, srv-files-01, srv-app-01, srv-db-01]}
+    sensors:
+      - type: network
+        name: core-span
+        hostname: zeek-core
+        monitoring_segments: [workstations, servers]
+        direction: bidirectional
+        placement: span
+        log_formats: [zeek]
+
+time_window:
+  start: "2026-03-02T05:00:00Z"
+  duration: "24h"
+  warmup: "8h"
+
+baseline_activity:
+  description: "Normal corporate workday activity — domain auth, file share access, web browsing, dev/db server work. No attacks."
+  intensity: medium
+  variation: medium
+
+observation_profile: complete
+
+output:
+  logs:
+    - {format: windows}
+    - {format: zeek}
+    - {format: ecar}
+    - {format: syslog}
+    - {format: bash_history}
+  destination: ./output

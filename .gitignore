@@ -44,6 +44,13 @@ results/
 data/raw/
 data/evidence/
 
+# ── Injection bundles (answer keys) ────────────────────────────
+# Generated adversary bundles pair injected attack telemetry with
+# ground-truth annotations (the signal, the TTP attribution, the rubric).
+# Same "never publish ground truth" rule as results/ — the harness code
+# is committed, the emitted bundles are not.
+data/bundles/
+
 # ── Model weights ──────────────────────────────────────────────
 models/
 *.gguf

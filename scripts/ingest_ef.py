@@ -238,6 +238,10 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
                 when = datetime.fromtimestamp(float(ts), tz=timezone.utc)
             elif rec.get("timestamp"):
                 when = _parse_iso(str(rec["timestamp"]))
+            elif rec.get("UtcTime"):
+                # Sysmon-shaped events (e.g. injected adversary) carry UtcTime
+                # ("2026-03-02 10:24:01.141"), space-separated and tz-naive=UTC.
+                when = _parse_iso(str(rec["UtcTime"]).replace(" ", "T"))
             else:
                 when = None
             if "id.orig_h" in rec:
@@ -320,14 +324,19 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         source = name.split(".", 1)[0]                       # "<source>.<log>.ndjson"
         return _BRIDGE_INDEX.get(source, f"bridge-{source}"), parse_ot_ndjson
 
-    # --- injected adversary NDJSON (EF-P5): "<incident>.<stream>.ndjson" ---
-    # The injected events are host-remapped dicts; route by their stream tag
-    # into the SAME index as the matching benign telemetry so the signal is a
-    # needle in the real haystack (sysmon -> windows-sysmon, zeek -> zeek-conn).
+    # --- injected adversary NDJSON (EF-P5): "<incident>.<stream>.<log>.ndjson" ---
+    # Host-remapped adversary events, routed into the SAME index as the matching
+    # benign telemetry so the signal is a needle in the real haystack. Split by
+    # log so Zeek http (which shares its conn's uid) lands in zeek-http, not
+    # colliding under the uid-keyed zeek-conn.
     if top == "injected" and name.endswith(".ndjson"):
-        stream = name[:-7].rsplit(".", 1)[-1]                # "<incident>.<stream>"
-        idx = {"sysmon": WINDOWS_SYSMON_INDEX, "zeek": "zeek-conn"}.get(stream)
-        return (idx, parse_ot_ndjson) if idx else None
+        tokens = name[:-7].split(".")                        # incident.stream.log
+        stream, log = (tokens[-2], tokens[-1]) if len(tokens) >= 2 else ("", "")
+        if stream == "sysmon":
+            return WINDOWS_SYSMON_INDEX, parse_ot_ndjson
+        if stream == "zeek":
+            return zeek_index(log), parse_ot_ndjson          # zeek-conn / zeek-http / ...
+        return None
 
     # --- EF telemetry under data/ (routed by filename) ---
     if name.endswith(".json") and name[:-5] in ZEEK_LOGTYPES:

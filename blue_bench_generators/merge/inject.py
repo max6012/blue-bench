@@ -64,6 +64,22 @@ class HostRemap:
         return out
 
 
+# Zeek conn boolean columns are encoded "T"/"F" in TSV-derived captures but
+# JSON true/false in EvidenceForge output. Coerce so the injected events match
+# the benign index mapping (else ES rejects them on the boolean field) and are
+# not surface-separable on field type.
+_ZEEK_BOOL_FIELDS = ("local_orig", "local_resp")
+
+
+def _coerce_zeek_bools(ev: dict) -> dict:
+    out = dict(ev)
+    for f in _ZEEK_BOOL_FIELDS:
+        v = out.get(f)
+        if isinstance(v, str) and v in ("T", "F"):
+            out[f] = (v == "T")
+    return out
+
+
 def remap_event(ev: dict, remap: HostRemap) -> dict:
     """Rewrite every string field that mentions the capture identity.
 
@@ -138,25 +154,33 @@ def inject_bundle(
     corpus_dir = Path(corpus_dir)
     events, gt = load_bundle(bundle_dir, incident_id)
 
-    remapped = [remap_event(ev, remap) for ev in events]
+    remapped = [_coerce_zeek_bools(remap_event(ev, remap)) for ev in events]
     leaks = leak_check(remapped, remap)
     if leaks:
         raise ValueError(f"capture-identity leak after remap: {leaks}")
 
-    # Write injected events as NDJSON per stream.
+    # Write injected events as NDJSON per (stream, log), filename
+    # "<incident>.<stream>.<log>.ndjson", so each lands in the SAME index as
+    # the matching benign telemetry (sysmon -> windows-sysmon, zeek conn ->
+    # zeek-conn, zeek http -> zeek-http). Splitting by _log matters for Zeek:
+    # an http record shares its conn record's uid, so co-indexing them under a
+    # uid-keyed zeek-conn would silently collide and orphan a ground-truth
+    # pointer.
     inj_dir = corpus_dir / "injected"
     inj_dir.mkdir(parents=True, exist_ok=True)
-    by_stream: dict[str, list[dict]] = {}
+    by_key: dict[tuple[str, str], list[dict]] = {}
     for ev in remapped:
-        by_stream.setdefault(str(ev.get("_stream", "sysmon")), []).append(ev)
+        stream = str(ev.get("_stream", "sysmon"))
+        logname = str(ev.get("_log", stream))
+        by_key.setdefault((stream, logname), []).append(ev)
     written: dict[str, int] = {}
-    for stream, evs in sorted(by_stream.items()):
-        path = inj_dir / f"{incident_id}.{stream}.ndjson"
+    for (stream, logname), evs in sorted(by_key.items()):
+        path = inj_dir / f"{incident_id}.{stream}.{logname}.ndjson"
         with path.open("w", encoding="utf-8", newline="") as f:
             for ev in evs:
                 doc = {k: v for k, v in ev.items() if not k.startswith("_")}
                 f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
-        written[stream] = len(evs)
+        written[f"{stream}/{logname}"] = len(evs)
 
     # Repoint ground truth: events[].where -> the ES doc_id the ingest will
     # assign. GT event i (1-based, original bundle order) corresponds to

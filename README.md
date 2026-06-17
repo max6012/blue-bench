@@ -91,6 +91,7 @@ blue_bench_cli/           Operator CLI: qualify | aggregate | diff | analyst | s
 blue_bench_eval/          Validation harness: prompt YAML + rubric + aggregator
 blue_bench_frontend/      Browser MCP client (JS, SSE transport)
 docker/                   compose.{tools,llm,frontend,all}.yml + Dockerfiles + mock backends
+scenarios/                EvidenceForge baseline scenarios (benign IT substrate, per tier)
 scripts/                  Data seeding + utilities
 tests/                    Unit + integration tests (pytest)
 docs/                     Architecture, deployment, evaluation methodology

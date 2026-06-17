@@ -67,6 +67,79 @@ def register(server: FastMCP, cfg: ServerConfig) -> None:
         )
 
     @server.tool()
+    async def get_process_events(
+        host: str = "",
+        image: str = "",
+        parent_image: str = "",
+        command_line_contains: str = "",
+        event_id: int = 0,
+        timerange_minutes: int = 240,
+    ) -> str:
+        """Search Sysmon host telemetry (windows-sysmon index) for process and
+        host events — the workhorse for hunting host-side kill-chain activity.
+
+        Field names are Sysmon-specific: Sysmon uses Computer (FQDN host),
+        Image / ParentImage (full process paths), CommandLine, EventID (int),
+        and ProcessGuid / ParentProcessGuid.
+
+        Arguments:
+          host: Computer FQDN, e.g. 'wkst-01.corp.example.invalid'; exact match,
+            empty = no filter.
+          image: full Image path, exact match (e.g. 'C:\\Windows\\System32\\svchost.exe');
+            empty = no filter.
+          parent_image: full ParentImage path, exact match; empty = no filter.
+          command_line_contains: case-insensitive substring matched anywhere in
+            CommandLine; empty = no filter. Use for LotL hunting
+            (e.g. 'powershell', '-enc', 'rundll32').
+          event_id: Sysmon EventID — 1 process-create, 3 network-connect,
+            5 process-terminate, 7 image-load, 8 create-remote-thread,
+            10 process-access, 11 file-create, 12/13 registry, 22 dns.
+            0 = no filter.
+          timerange_minutes: lookback window from now, default 240.
+        Returns a JSON array of matching Sysmon records (fields include EventID,
+        Computer, UtcTime, Image, CommandLine, ParentImage, ParentCommandLine,
+        ProcessGuid, ParentProcessGuid, User, TargetFilename, TargetObject).
+        Empty [] on no match.
+        """
+        return await tool.get_process_events(
+            host=host,
+            image=image,
+            parent_image=parent_image,
+            command_line_contains=command_line_contains,
+            event_id=event_id,
+            timerange_minutes=timerange_minutes,
+        )
+
+    @server.tool()
+    async def get_process_tree(
+        process_guid: str = "",
+        host: str = "",
+        timerange_minutes: int = 240,
+    ) -> str:
+        """Walk the Sysmon process subtree around a ProcessGuid — returns the
+        process itself, its parent, and its direct children so you can trace an
+        attack chain up and down from a single pivot point.
+
+        Field names are Sysmon-specific: the anchor is a ProcessGuid; children
+        are events whose ParentProcessGuid equals that guid.
+
+        Arguments:
+          process_guid: the Sysmon ProcessGuid to anchor on (required). Get one
+            from get_process_events output.
+          host: optional Computer FQDN to scope the walk; empty = all hosts.
+          timerange_minutes: lookback window from now, default 240.
+        Returns a JSON object with keys: 'process_guid' (the anchor),
+        'self_and_parent' (events carrying this ProcessGuid plus the parent's
+        create event), and 'children' (events whose ParentProcessGuid is this
+        guid). Each list is [] on no match.
+        """
+        return await tool.get_process_tree(
+            process_guid=process_guid,
+            host=host,
+            timerange_minutes=timerange_minutes,
+        )
+
+    @server.tool()
     async def count_by_field(
         field: str,
         index: str = "",

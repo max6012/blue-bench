@@ -46,6 +46,16 @@ class ZeekConfig(BaseModel):
     use_elastic: bool = True
 
 
+class SysmonConfig(BaseModel):
+    """Sysmon host-telemetry index settings for get_process_events / get_process_tree.
+
+    Populated by scripts/ingest_ef.py (windows_event_sysmon.xml -> "windows-sysmon").
+    Flat Sysmon EventLog records: EventID (int), Computer, Image, CommandLine,
+    ParentImage, ProcessGuid, ParentProcessGuid, User, TargetFilename, etc.
+    """
+    index: str = "windows-sysmon"
+
+
 class WazuhConfig(BaseModel):
     api_url: str = "https://localhost:55000"
     user: str = ""
@@ -100,6 +110,7 @@ class ServerConfig(BaseModel):
     evidence: EvidenceConfig = Field(default_factory=EvidenceConfig)
     elastic: ElasticConfig = Field(default_factory=ElasticConfig)
     zeek: ZeekConfig = Field(default_factory=ZeekConfig)
+    sysmon: SysmonConfig = Field(default_factory=SysmonConfig)
     wazuh: WazuhConfig = Field(default_factory=WazuhConfig)
     openedr: OpenEDRConfig = Field(default_factory=OpenEDRConfig)
     nmap: NmapConfig = Field(default_factory=NmapConfig)

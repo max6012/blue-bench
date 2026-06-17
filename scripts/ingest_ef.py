@@ -320,6 +320,15 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         source = name.split(".", 1)[0]                       # "<source>.<log>.ndjson"
         return _BRIDGE_INDEX.get(source, f"bridge-{source}"), parse_ot_ndjson
 
+    # --- injected adversary NDJSON (EF-P5): "<incident>.<stream>.ndjson" ---
+    # The injected events are host-remapped dicts; route by their stream tag
+    # into the SAME index as the matching benign telemetry so the signal is a
+    # needle in the real haystack (sysmon -> windows-sysmon, zeek -> zeek-conn).
+    if top == "injected" and name.endswith(".ndjson"):
+        stream = name[:-7].rsplit(".", 1)[-1]                # "<incident>.<stream>"
+        idx = {"sysmon": WINDOWS_SYSMON_INDEX, "zeek": "zeek-conn"}.get(stream)
+        return (idx, parse_ot_ndjson) if idx else None
+
     # --- EF telemetry under data/ (routed by filename) ---
     if name.endswith(".json") and name[:-5] in ZEEK_LOGTYPES:
         return zeek_index(name[:-5]), parse_zeek

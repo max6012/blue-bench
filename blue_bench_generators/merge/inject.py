@@ -29,11 +29,65 @@ import json
 import logging
 import re
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import yaml
 
 log = logging.getLogger(__name__)
+
+_UTCTIME_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _event_time(ev: dict) -> datetime | None:
+    """Best-effort UTC time for a bundle event (Sysmon UtcTime or Zeek ts)."""
+    if ev.get("UtcTime"):
+        try:
+            return datetime.strptime(str(ev["UtcTime"]), _UTCTIME_FMT).replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+    ts = ev.get("ts")
+    if ts not in (None, ""):
+        try:
+            return datetime.fromtimestamp(float(ts), tz=timezone.utc)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _shift_event_time(ev: dict, delta: timedelta) -> dict:
+    """Shift an event's wall-clock time field(s) by ``delta`` (in place-ish)."""
+    out = dict(ev)
+    if out.get("UtcTime"):
+        t = _event_time(ev)
+        if t is not None:
+            out["UtcTime"] = (t + delta).strftime(_UTCTIME_FMT)[:-3]  # ms precision
+    if out.get("ts") not in (None, ""):
+        try:
+            out["ts"] = f"{float(ev['ts']) + delta.total_seconds():.6f}"
+        except (TypeError, ValueError):
+            pass
+    return out
+
+
+def rebase_campaign(events: list[dict], corpus_start: datetime, *, warmup_frac: float = 0.05) -> tuple[list[dict], datetime, datetime, timedelta]:
+    """Shift the whole campaign so its first event lands just after corpus_start.
+
+    A single delta is applied to every event, preserving all relative spacing
+    (the low-and-slow dwell and beacon cadence are the signal — they must
+    survive). Returns (shifted_events, new_start, new_end, delta).
+    """
+    times = [t for t in (_event_time(e) for e in events) if t is not None]
+    if not times:
+        return events, corpus_start, corpus_start, timedelta(0)
+    bundle_start, bundle_end = min(times), max(times)
+    # nudge the campaign start a little past the corpus start so it doesn't
+    # begin exactly at t0 of the benign window.
+    span = bundle_end - bundle_start
+    offset = span * warmup_frac if span else timedelta(0)
+    delta = (corpus_start + offset) - bundle_start
+    shifted = [_shift_event_time(e, delta) for e in events]
+    return shifted, bundle_start + delta, bundle_end + delta, delta
 
 
 @dataclass(frozen=True)
@@ -129,6 +183,22 @@ def leak_check(events: list[dict], remap: HostRemap) -> list[str]:
     return leaks
 
 
+def _corpus_window(corpus_dir: Path) -> tuple[datetime | None, datetime | None]:
+    """Read the EF corpus collection window from GROUND_TRUTH.json (UTC)."""
+    gt_path = corpus_dir / "GROUND_TRUTH.json"
+    if not gt_path.is_file():
+        return None, None
+    cw = json.loads(gt_path.read_text()).get("collection_window", {})
+
+    def _p(s):
+        if not s:
+            return None
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+    return _p(cw.get("start")), _p(cw.get("end"))
+
+
 def load_bundle(bundle_dir: str | Path, incident_id: str) -> tuple[list[dict], dict]:
     bundle_dir = Path(bundle_dir)
     events = [
@@ -158,6 +228,27 @@ def inject_bundle(
     leaks = leak_check(remapped, remap)
     if leaks:
         raise ValueError(f"capture-identity leak after remap: {leaks}")
+
+    # Rebase the campaign onto the EF corpus window (read from GROUND_TRUTH.json)
+    # so the adversary overlays the benign haystack instead of sitting at its
+    # original capture dates. A single delta preserves dwell + beacon cadence.
+    cstart, cend = _corpus_window(corpus_dir)
+    if cstart is not None:
+        remapped, new_start, new_end, _ = rebase_campaign(remapped, cstart)
+        if cend is not None and new_end > cend:
+            log.warning(
+                "injected campaign dwell (%s) exceeds corpus window end %s by %s; "
+                "the low-and-slow campaign is longer than this tier's window — "
+                "use a larger tier (M/L) for full-dwell adversaries",
+                new_end - new_start, cend.isoformat(), new_end - cend,
+            )
+        # reflect the rebased window in the ground truth time_window
+        if "time_window" in gt:
+            tw = dict(gt["time_window"])
+            tw["injection_start"] = new_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+            tw["injection_end"] = new_end.strftime("%Y-%m-%dT%H:%M:%SZ")
+            tw["duration_seconds"] = int((new_end - new_start).total_seconds())
+            gt["time_window"] = tw
 
     # Write injected events as NDJSON per (stream, log), filename
     # "<incident>.<stream>.<log>.ndjson", so each lands in the SAME index as

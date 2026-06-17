@@ -118,3 +118,21 @@ def test_inject_raises_on_count_mismatch(tmp_path: Path):
         assert False, "expected ValueError on count mismatch"
     except ValueError as e:
         assert "event count" in str(e)
+
+
+def test_rebase_shifts_campaign_preserving_dwell():
+    from datetime import datetime, timezone
+    from blue_bench_generators.merge.inject import rebase_campaign, _event_time
+    events = [
+        {"_stream": "sysmon", "UtcTime": "2026-01-05 09:00:00.000"},
+        {"_stream": "sysmon", "UtcTime": "2026-01-15 09:00:00.000"},  # +10 days
+        {"_stream": "zeek", "ts": str(datetime(2026, 1, 10, 9, 0, tzinfo=timezone.utc).timestamp())},
+    ]
+    corpus_start = datetime(2026, 3, 2, 5, 0, tzinfo=timezone.utc)
+    shifted, new_start, new_end, delta = rebase_campaign(events, corpus_start)
+    # dwell preserved (10 days), start lands at/after corpus_start
+    assert (new_end - new_start).days == 10
+    assert new_start >= corpus_start
+    # relative spacing intact: middle zeek event still ~5 days after start
+    mid = _event_time(shifted[2])
+    assert 4 <= (mid - new_start).days <= 6

@@ -245,9 +245,13 @@ def inject_bundle(
         # reflect the rebased window in the ground truth time_window
         if "time_window" in gt:
             tw = dict(gt["time_window"])
-            tw["injection_start"] = new_start.strftime("%Y-%m-%dT%H:%M:%SZ")
-            tw["injection_end"] = new_end.strftime("%Y-%m-%dT%H:%M:%SZ")
-            tw["duration_seconds"] = int((new_end - new_start).total_seconds())
+            # Floor to whole seconds so the formatted endpoints and
+            # duration_seconds agree exactly (schema rule 9 compares them).
+            s0 = new_start.replace(microsecond=0)
+            e0 = new_end.replace(microsecond=0)
+            tw["injection_start"] = s0.strftime("%Y-%m-%dT%H:%M:%SZ")
+            tw["injection_end"] = e0.strftime("%Y-%m-%dT%H:%M:%SZ")
+            tw["duration_seconds"] = int((e0 - s0).total_seconds())
             gt["time_window"] = tw
 
     # Write injected events as NDJSON per (stream, log), filename

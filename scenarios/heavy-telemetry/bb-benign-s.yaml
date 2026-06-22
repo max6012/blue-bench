@@ -47,16 +47,21 @@ environment:
     - {hostname: srv-files-01, ip: "10.20.0.20", os: "Windows Server 2019", type: server, services: ["smb", "dfs", "dns-client"], roles: ["file_server"]}
     - {hostname: srv-app-01, ip: "10.20.0.30", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-app-user, services: ["nginx", "ssh", "dns-client"], roles: ["web_server"]}
     - {hostname: srv-db-01, ip: "10.20.0.40", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-db-user, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+    # IT/OT boundary jump host (Purdue level 3.5). The Blue-Bench IT/OT bridge
+    # routes corp->OT sessions through a jump-host-role system; without one it
+    # would synthesize a host absent from the corpus.
+    - {hostname: jump-ot-01, ip: "10.30.0.10", os: "Windows Server 2022", type: server, services: ["rdp", "dns-client"], roles: ["jump-host"]}
 
   network:
     segments:
       - {name: workstations, cidr: "10.10.0.0/16", exposure: internal, systems: [wkst-01, wkst-02, wkst-03, wkst-04, wkst-05, wkst-06]}
       - {name: servers, cidr: "10.20.0.0/16", exposure: internal, systems: [dc-01, srv-files-01, srv-app-01, srv-db-01]}
+      - {name: ot-dmz, cidr: "10.30.0.0/24", exposure: internal, systems: [jump-ot-01]}
     sensors:
       - type: network
         name: core-span
         hostname: zeek-core
-        monitoring_segments: [workstations, servers]
+        monitoring_segments: [workstations, servers, ot-dmz]
         direction: bidirectional
         placement: span
         log_formats: [zeek]

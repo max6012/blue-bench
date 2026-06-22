@@ -73,6 +73,17 @@ ASA_INDEX = "firewall-asa"
 WEB_INDEX = "web-access"
 PROXY_INDEX = "proxy-access"
 
+# Merged OT / IT-OT-bridge telemetry (EF-P4 merger output, NDJSON).
+OT_HOSTS_INDEX = "ot-hosts"
+# Bridge events are written per (source, log); route by source so the IT-side
+# of a bridge session lands in the IT index and the OT-side in an OT index.
+_BRIDGE_INDEX = {
+    "zeek": "zeek-conn",       # IT-side network leg
+    "ot": "ot-conn",           # OT-side network leg
+    "linux": SYSLOG_INDEX,     # IT/jump-host auth
+    "ot_hosts": OT_HOSTS_INDEX,  # OT host auth
+}
+
 # ip-typed fields per the seed_es.py zeek-conn mapping; everything else dynamic.
 _IP_FIELDS = ("id.orig_h", "id.resp_h")
 _KEYWORD_FIELDS = ("id.orig_p", "id.resp_p", "proto", "service", "uid")
@@ -213,6 +224,33 @@ def parse_lines_passthrough(path: Path) -> Iterable[tuple[dict, datetime | None,
         yield {"raw": raw}, _line_time_best_effort(raw), None
 
 
+def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:
+    """Merged OT / bridge NDJSON. ``ts`` (epoch) or ``timestamp`` (ISO); ``uid``
+    is the native id. Conn-like records get src/dest aliases like Zeek."""
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            ts = rec.get("ts")
+            if ts not in (None, ""):
+                when = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+            elif rec.get("timestamp"):
+                when = _parse_iso(str(rec["timestamp"]))
+            elif rec.get("UtcTime"):
+                # Sysmon-shaped events (e.g. injected adversary) carry UtcTime
+                # ("2026-03-02 10:24:01.141"), space-separated and tz-naive=UTC.
+                when = _parse_iso(str(rec["UtcTime"]).replace(" ", "T"))
+            else:
+                when = None
+            if "id.orig_h" in rec:
+                rec.setdefault("src_ip", rec.get("id.orig_h", ""))
+                rec.setdefault("dest_ip", rec.get("id.resp_h", ""))
+                rec.setdefault("dest_port", rec.get("id.resp_p", ""))
+            yield rec, when, rec.get("uid")
+
+
 # --- timestamp helpers --------------------------------------------------------
 
 _MONTHS = {m: i for i, m in enumerate(
@@ -266,9 +304,41 @@ def _line_time_best_effort(raw: str) -> datetime | None:
 ParserFn = Callable[[Path], Iterable[tuple[dict, datetime | None, str | None]]]
 
 
-def route(filename: str) -> tuple[str, ParserFn] | None:
-    """Map an EF output filename to (index, parser). None = skip."""
-    name = filename.lower()
+def route(relpath: str) -> tuple[str, ParserFn] | None:
+    """Map a corpus-relative path to (index, parser). None = skip.
+
+    EF telemetry lives under ``data/`` (routed by filename); the EF-P4 merger
+    writes OT/bridge NDJSON under ``ot/`` / ``ot_hosts/`` / ``bridge/``.
+    """
+    rel = relpath.replace("\\", "/")
+    parts = rel.split("/")
+    top = parts[0].lower()
+    name = parts[-1].lower()
+
+    # --- merged OT / bridge NDJSON (EF-P4) ---
+    if top == "ot" and name.endswith(".ndjson"):
+        return f"ot-{name[:-7]}", parse_ot_ndjson            # ot/modbus.ndjson -> ot-modbus
+    if top == "ot_hosts" and name.endswith(".ndjson"):
+        return OT_HOSTS_INDEX, parse_ot_ndjson
+    if top == "bridge" and name.endswith(".ndjson"):
+        source = name.split(".", 1)[0]                       # "<source>.<log>.ndjson"
+        return _BRIDGE_INDEX.get(source, f"bridge-{source}"), parse_ot_ndjson
+
+    # --- injected adversary NDJSON (EF-P5): "<incident>.<stream>.<log>.ndjson" ---
+    # Host-remapped adversary events, routed into the SAME index as the matching
+    # benign telemetry so the signal is a needle in the real haystack. Split by
+    # log so Zeek http (which shares its conn's uid) lands in zeek-http, not
+    # colliding under the uid-keyed zeek-conn.
+    if top == "injected" and name.endswith(".ndjson"):
+        tokens = name[:-7].split(".")                        # incident.stream.log
+        stream, log = (tokens[-2], tokens[-1]) if len(tokens) >= 2 else ("", "")
+        if stream == "sysmon":
+            return WINDOWS_SYSMON_INDEX, parse_ot_ndjson
+        if stream == "zeek":
+            return zeek_index(log), parse_ot_ndjson          # zeek-conn / zeek-http / ...
+        return None
+
+    # --- EF telemetry under data/ (routed by filename) ---
     if name.endswith(".json") and name[:-5] in ZEEK_LOGTYPES:
         return zeek_index(name[:-5]), parse_zeek
     if name == "windows_event_sysmon.xml":
@@ -353,15 +423,17 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
 
 
 def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, int]:
-    data_dir = ef_dir / "data" if (ef_dir / "data").is_dir() else ef_dir
+    # Walk the whole corpus root: EF telemetry under data/ + merged OT/bridge
+    # NDJSON under ot/ ot_hosts/ bridge/. Route by corpus-relative path.
+    walk_root = ef_dir
     # Pass 1: collect everything per index, capture native ts + id, find window.
     per_index: dict[str, list[tuple[dict, datetime | None, str | None]]] = {}
     min_ts: datetime | None = None
     max_ts: datetime | None = None
-    for path in sorted(data_dir.rglob("*")):
+    for path in sorted(walk_root.rglob("*")):
         if not path.is_file():
             continue
-        routed = route(path.name)
+        routed = route(str(path.relative_to(walk_root)))
         if routed is None:
             continue
         index, parser = routed

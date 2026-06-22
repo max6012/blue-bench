@@ -102,16 +102,20 @@ environment:
     - {hostname: srv-db-01, ip: "10.20.0.40", os: "Ubuntu 22.04 LTS", type: server, assigned_user: srv-db-user, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
     - {hostname: srv-db-02, ip: "10.20.0.41", os: "Ubuntu 22.04 LTS", type: server, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
     - {hostname: srv-db-03, ip: "10.20.0.42", os: "Ubuntu 22.04 LTS", type: server, services: ["postgresql", "ssh", "dns-client"], roles: ["database"]}
+    # IT/OT boundary jump host (Purdue level 3.5) — the IT/OT bridge routes
+    # corp->OT sessions through a jump-host-role system.
+    - {hostname: jump-ot-01, ip: "10.30.0.10", os: "Windows Server 2022", type: server, services: ["rdp", "dns-client"], roles: ["jump-host"]}
 
   network:
     segments:
       - {name: workstations, cidr: "10.10.0.0/16", exposure: internal, systems: [wkst-01, wkst-02, wkst-03, wkst-04, wkst-05, wkst-06, wkst-07, wkst-08, wkst-09, wkst-10, wkst-11, wkst-12, wkst-13, wkst-14, wkst-15, wkst-16, wkst-17, wkst-18, wkst-19, wkst-20, wkst-21]}
       - {name: servers, cidr: "10.20.0.0/16", exposure: internal, systems: [dc-01, srv-files-01, srv-app-01, srv-app-02, srv-app-03, srv-app-04, srv-db-01, srv-db-02, srv-db-03]}
+      - {name: ot-dmz, cidr: "10.30.0.0/24", exposure: internal, systems: [jump-ot-01]}
     sensors:
       - type: network
         name: core-span
         hostname: zeek-core
-        monitoring_segments: [workstations, servers]
+        monitoring_segments: [workstations, servers, ot-dmz]
         direction: bidirectional
         placement: span
         log_formats: [zeek]

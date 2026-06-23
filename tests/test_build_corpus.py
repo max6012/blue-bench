@@ -69,3 +69,31 @@ def test_default_adversary_mapping_tiers():
     # foil fits all tiers; APT (10-day dwell) only L
     assert [a[0] for a in build._DEFAULT_ADVERSARIES["S"]] == ["cybercrime-bb-001"]
     assert [a[0] for a in build._DEFAULT_ADVERSARIES["L"]] == ["apt-bb-001", "cybercrime-bb-001"]
+
+
+def test_run_corpus_gates_single_class_returns_none(tmp_path: Path):
+    # one class injected -> no discrimination test -> None (gates skipped)
+    inj = tmp_path / "injected"
+    inj.mkdir()
+    (inj / "x.sysmon.sysmon.ndjson").write_text('{"event_id":1,"Image":"x.exe"}\n')
+    res = build._run_corpus_gates(tmp_path, [{"incident": "x", "source_class": "cybercrime"}])
+    assert res is None
+
+
+def test_run_corpus_gates_two_class_returns_verdict(tmp_path: Path):
+    inj = tmp_path / "injected"
+    inj.mkdir()
+    # apt: sparse cadence; foil: dense — behavioral separates, surface matched
+    apt_lines = "\n".join(
+        '{"event_id":1,"Image":"powershell.exe","UtcTime":"2026-03-02 %02d:00:00.000"}' % (9 + i)
+        for i in range(8))
+    foil_lines = "\n".join(
+        '{"event_id":1,"Image":"powershell.exe","UtcTime":"2026-03-02 09:%02d:00.000"}' % i
+        for i in range(8))
+    (inj / "apt-x.sysmon.sysmon.ndjson").write_text(apt_lines + "\n")
+    (inj / "foil-x.sysmon.sysmon.ndjson").write_text(foil_lines + "\n")
+    res = build._run_corpus_gates(tmp_path, [
+        {"incident": "apt-x", "source_class": "apt"},
+        {"incident": "foil-x", "source_class": "cybercrime"},
+    ])
+    assert res is not None and "all_passed" in res and len(res["gates"]) == 4

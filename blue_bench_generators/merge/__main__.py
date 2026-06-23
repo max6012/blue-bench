@@ -118,6 +118,7 @@ def build_corpus(
     adversaries: list[tuple[str, str, str]],
     eforge: str,
     ef_dir: Path | None,
+    enforce_gates: bool = True,
 ) -> dict:
     out = Path(out)
 
@@ -149,15 +150,63 @@ def build_corpus(
     build_hash = _corpus_build_hash(out)
     stamped = _stamp_ground_truth(out, build_hash)
 
-    # reflect the final hash + injected set in the manifest.
+    # 5. RQ3 anti-giveaway gates — enforced on the deterministic corpus output.
+    # When both an APT-class and a cybercrime-class adversary are present, the
+    # corpus is only valid if APT-vs-cybercrime is non-separable on surface and
+    # separable on behaviour. Run on the injected (remapped, rebased) events so
+    # the gate measures the actual corpus, not the pre-injection bundles.
+    gate_summary = _run_corpus_gates(out, injected)
+    if gate_summary is not None and enforce_gates and not gate_summary["all_passed"]:
+        raise SchemaValidationError(
+            "RQ3 gates failed — corpus is not valid. "
+            + "; ".join(f"{g['name']}={g['value']:.3f}(thr {g['threshold']})"
+                        for g in gate_summary["gates"] if not g["passed"])
+            + ". Investigate the surface-feature diagnostic; do not relax gate 1."
+        )
+
+    # reflect the final hash + injected set + gate verdict in the manifest.
     man_path = out / "corpus-manifest.yaml"
     manifest = yaml.safe_load(man_path.read_text()) if man_path.exists() else {}
     manifest["build_hash"] = build_hash
     manifest["injected"] = injected
+    if gate_summary is not None:
+        manifest["rq3_gates"] = gate_summary
     man_path.write_text(yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8")
 
     return {"tier": tier, "out": str(out), "build_hash": build_hash,
-            "injected": injected, "ground_truth": stamped}
+            "injected": injected, "ground_truth": stamped, "gates": gate_summary}
+
+
+def _run_corpus_gates(corpus_dir: Path, injected: list[dict]) -> dict | None:
+    """Run the RQ3 gates on the injected events grouped by source_class.
+
+    Returns None when fewer than two classes are present (no discrimination
+    test to run, e.g. an S tier with the foil only)."""
+    import json as _json
+
+    from blue_bench_generators.merge.gates import run_gates
+
+    by_class: dict[str, list[dict]] = {}
+    for inj in injected:
+        evs: list[dict] = []
+        for f in sorted((corpus_dir / "injected").glob(f"{inj['incident']}.*.ndjson")):
+            evs += [_json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+        by_class.setdefault(inj["source_class"], []).extend(evs)
+
+    if "apt" not in by_class or "cybercrime" not in by_class:
+        return None
+
+    rep = run_gates(by_class["apt"], by_class["cybercrime"])
+    log.info("RQ3 gates: %s", "ALL PASS" if rep.all_passed else "FAILED")
+    for r in rep.results:
+        log.info("  [%s] %-26s %.3f (thr %s)", "PASS" if r.passed else "FAIL",
+                 r.name, r.value, r.threshold)
+    return {
+        "all_passed": rep.all_passed,
+        "gates": [{"name": r.name, "passed": r.passed, "value": round(r.value, 4),
+                   "threshold": r.threshold} for r in rep.results],
+        "surface_diagnostic": [{"feature": k, "auc": round(a, 4)} for k, a in rep.diagnostic[:6]],
+    }
 
 
 def cmd_build(args: argparse.Namespace) -> int:
@@ -185,6 +234,7 @@ def cmd_build(args: argparse.Namespace) -> int:
             tier=tier, out=Path(args.out), scenario=scenario, seed=args.seed,
             adversaries=adversaries, eforge=args.eforge,
             ef_dir=Path(args.ef_dir) if args.ef_dir else None,
+            enforce_gates=not args.no_enforce_gates,
         )
     except (SchemaValidationError, subprocess.CalledProcessError) as exc:
         print(f"ABORT: build failed: {exc}", file=sys.stderr)
@@ -194,6 +244,11 @@ def cmd_build(args: argparse.Namespace) -> int:
     for inj in result["injected"]:
         print(f"  injected {inj['incident']:18s} {inj['source_class']:11s} {inj['host']:32s} {inj['events']} events")
     print(f"  ground-truth: {', '.join(result['ground_truth']) or '(none)'}")
+    if result.get("gates") is not None:
+        g = result["gates"]
+        print(f"  RQ3 gates: {'ALL PASS' if g['all_passed'] else 'FAILED'}")
+        for r in g["gates"]:
+            print(f"    [{'PASS' if r['passed'] else 'FAIL'}] {r['name']:26s} {r['value']:.3f} (thr {r['threshold']})")
     print(f"  out: {result['out']}")
     return 0
 
@@ -208,6 +263,8 @@ def _build_parser() -> argparse.ArgumentParser:
     b.add_argument("--seed", type=int, default=0)
     b.add_argument("--ef-dir", default=None, help="use a pre-generated EF output dir instead of running eforge")
     b.add_argument("--eforge", default=str(Path.home() / "ef-venv" / "bin" / "eforge"), help="path to the eforge CLI")
+    b.add_argument("--no-enforce-gates", action="store_true",
+                   help="run the RQ3 gates but do not fail the build if they fail (report only)")
     b.add_argument("--inject", action="append", default=None,
                    help="override adversaries: <incident>:<bundle_subdir>:<host> (repeatable)")
     b.set_defaults(func=cmd_build)

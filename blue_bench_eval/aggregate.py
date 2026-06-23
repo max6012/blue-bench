@@ -188,11 +188,17 @@ def aggregate(
     for s in scores:
         by_cat[categories.get(s.prompt_id, "uncategorized")].append(s)
     for cat, cat_scores in by_cat.items():
-        cat_dims = {
-            dim: mean(_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions)
-            for dim in dimensions
-        }
-        cat_dims["overall"] = mean(cat_dims.values())
+        # Phase-3 prompts are heterogeneous (RQ2 prompts score attribution but
+        # not discrimination, RQ3 the reverse), so only average a dimension over
+        # the prompts that actually scored it; skip dimensions no prompt in the
+        # category used rather than averaging an empty set.
+        cat_dims: dict[str, float] = {}
+        for dim in dimensions:
+            pcts = [_score_to_pct(sc.dimensions[dim].score)
+                    for sc in cat_scores if dim in sc.dimensions]
+            if pcts:
+                cat_dims[dim] = mean(pcts)
+        cat_dims["overall"] = mean(cat_dims.values()) if cat_dims else 0.0
         result.per_category[cat] = cat_dims
 
     # Per-prompt verdict detail.

@@ -13,7 +13,8 @@ Composes the tested pieces into one deterministic build:
      ground-truth bundle and validated (schema rule 8).
 
 Tier -> adversary mapping (the dwell must fit the window): the cybercrime foil
-(~2 h smash-and-grab) fits every tier; the low-and-slow APT (~10-day dwell) only
+(~2 h hands-on-keyboard burst, ~7 h total telemetry footprint once the C2/exfil
+Zeek tail is counted) fits every tier; the low-and-slow APT (~10-day dwell) only
 fits L. Defaults follow this; override with ``--inject``.
 
 Determinism: same (tier, seed, scenario, bundles) -> byte-identical corpus.

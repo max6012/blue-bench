@@ -1,6 +1,8 @@
 # Blue-Bench
 
-**Deployment scaffolding for self-hosted open-weight LLMs in defender workflows.** Blue-Bench wires a local LLM (via Ollama) or a frontier cloud model (via the Anthropic API) into a curated set of Blue Team tools — Elasticsearch queries, Wazuh alerts, OpenEDR detections, Sigma/YARA validation, forensic triage, nmap — through the [Model Context Protocol](https://modelcontextprotocol.io/). Swapping models is a YAML profile change, not a code change.
+**Deployment scaffolding _and_ a capability benchmark for self-hosted open-weight LLMs in defender workflows.** Blue-Bench wires a local LLM (via Ollama) or a frontier cloud model (via the Anthropic API) into a curated set of Blue Team tools — Elasticsearch queries, Wazuh alerts, OpenEDR detections, Sigma/YARA validation, forensic triage, nmap — through the [Model Context Protocol](https://modelcontextprotocol.io/). Swapping models is a YAML profile change, not a code change.
+
+Two pillars sit side by side: the **runtime** (this MCP server + clients + composable prompts) and the **corpus** — a reproducible, tiered heavy-telemetry build that exercises three research questions about open-weight capability. See [The corpus](#the-corpus).
 
 ## Why this exists
 
@@ -13,6 +15,7 @@ Wiring open-weight LLMs into real defender tooling is the hard part. Tool schema
 - **Iterate coaching for a specific deployment.** Site overlay (indices, hostnames, IRP conventions) + per-model coaching markdown + git-tracked iteration loop. One commit per lesson. Coaching is opt-in per profile; most models work with the shared role, guidelines, and site overlay alone.
 - **Use the same tool surface from any MCP client.** Claude Code, Cline, Continue, the browser frontend, and the analyst CLI all talk to the same MCP server. The server does not know or care which client is on the other end.
 - **Validate wiring with a frontier reference run.** A fixed corpus and rubric let you confirm the tool surface, data fixtures, and coaching are sound before attributing results to local-model capability. See [docs/EVAL.md](docs/EVAL.md).
+- **Build a tiered, deterministic heavy-telemetry corpus.** One command composes an EvidenceForge benign-IT baseline, OT telemetry, the IT/OT bridge, and an injected adversary into an S/M/L corpus with a content `build_hash` and ground-truth answer keys. Anti-giveaway gates enforce that APT-vs-cybercrime stays a real test. See [The corpus](#the-corpus).
 
 ## Quickstart
 
@@ -82,6 +85,33 @@ Three orthogonal design primitives — tools, models, prompts — each a separat
 
 The MCP server speaks two transports (stdio and SSE) from the same process. Deployment is three independently hostable tiers (tools, LLM, frontend). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full contract and [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for operational setup.
 
+## The corpus
+
+The corpus is built to answer **three research questions** about open-weight capability — every generator and the scoring rubric trace back to one of them:
+
+1. **IT ↔ OT discrimination.** Does the model recognize OT protocols and communication norms (predictable polling, rare writes), and *not* apply IT heuristics to OT — where "rare destination" or "low volume" can be entirely normal?
+2. **APT detection.** Can it pick up targeted, low-and-slow, Living-off-the-Land activity — native admin tools, signed LOLBins, sparse C2, dwell measured in days?
+3. **APT ↔ cybercrime discrimination.** With both signals present, can it tell them apart and *attribute* each (per-incident MITRE ATT&CK TTPs) — discrimination, not suppression? Cybercrime is the ambient foil, not a labeled scenario.
+
+**One command builds a tiered corpus.** It composes the tested pieces into one deterministic build: an [EvidenceForge](https://github.com/Cisco-Talos/EvidenceForge) benign-IT baseline → OT + IT/OT-bridge merge → adversary injection (APT and/or cybercrime foil, each remapped onto a real corpus host) → a single content `build_hash` stamped into every ground-truth bundle.
+
+```bash
+python -m blue_bench_generators.merge build --tier S --out ./out/s
+python -m blue_bench_generators.merge build --tier L --out ./out/l --seed 0
+# then ingest into Elasticsearch for the MCP tools:
+python scripts/ingest_ef.py --ef-dir ./out/s --anchor-end-to-now
+```
+
+| Tier | Benign baseline | Generated size | Default adversary |
+| --- | --- | --- | --- |
+| S | 10 hosts × 1 day | ~165 MB | cybercrime foil |
+| M | 15 hosts × 3 days | ~660 MB | cybercrime foil |
+| L | 30 hosts × 18 days | ~7–8 GB | APT (low-and-slow) + cybercrime foil |
+
+The dwell must fit the window: the ~2 h cybercrime burst (≈7 h total footprint) fits every tier; the ~10-day APT only fits L. Override the default mapping with `--inject <incident>:<bundle_subdir>:<host>`.
+
+**RQ3 anti-giveaway gates.** When both an APT-class and a cybercrime-class adversary are present, the build runs four gates on the injected events and **fails the build** unless the corpus is non-separable on surface features and separable on behaviour — so "it's on port X" or "it beacons" can't classify, but inter-event timing and dwell can. Gate verdicts land in `corpus-manifest.yaml`. (`--no-enforce-gates` reports without failing.) See `blue_bench_generators/merge/gates.py` and `scenarios/heavy-telemetry/README.md`.
+
 ## Layout
 
 ```
@@ -89,6 +119,7 @@ blue_bench_mcp/           MCP server — tools, profiles, composable prompts
 blue_bench_client/        Reference MCP client + Ollama runner
 blue_bench_cli/           Operator CLI: qualify | aggregate | diff | analyst | server
 blue_bench_eval/          Validation harness: prompt YAML + rubric + aggregator
+blue_bench_generators/    Corpus build: EF-IT + OT + bridge + adversary injection + RQ3 gates
 blue_bench_frontend/      Browser MCP client (JS, SSE transport)
 docker/                   compose.{tools,llm,frontend,all}.yml + Dockerfiles + mock backends
 scenarios/                EvidenceForge baseline scenarios (benign IT substrate, per tier)
@@ -104,6 +135,7 @@ docs/internal/            Internal planning + narrative
 results/                  Run traces + scored JSONs + BLUFs
 data/raw/                 Source telemetry (AIT-ADS, Brim, etc.)
 data/evidence/            Forensic samples
+data/bundles/             Emitted adversary bundles + ground-truth answer keys
 .plandb.db                Agent task graph state
 .claude/                  Assistant session state
 ```

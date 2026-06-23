@@ -84,9 +84,15 @@ def _byte_bucket(v) -> int:
     return int(math.log10(n + 1))
 
 
+def _is_network(ev: dict) -> bool:
+    # Network (Zeek) events carry id.resp_h; host (Sysmon) events do not.
+    # Detect by field presence, NOT by ``_stream`` — the corpus strips the
+    # internal ``_``-prefixed routing fields, so gates must not depend on them.
+    return "id.resp_h" in ev or "id.orig_h" in ev
+
+
 def surface_features(ev: dict) -> dict[str, float]:
-    stream = ev.get("_stream")
-    feats: dict[str, float] = {"is_network": 1.0 if stream == "zeek" else 0.0}
+    feats: dict[str, float] = {"is_network": 1.0 if _is_network(ev) else 0.0}
     # network 5-tuple-ish (port/proto/service) — dest IP intentionally omitted
     # except an "external dest" flag (class-shared C2 infra, kept honestly).
     dport = ev.get("id.resp_p") or ev.get("DestinationPort")
@@ -278,7 +284,7 @@ def _has_periodic_egress(events: list[dict], min_hits: int = 3) -> bool:
     """True if some external dest:port is contacted >= min_hits times (beacon-like)."""
     counts: dict[tuple[str, str], int] = {}
     for e in events:
-        if e.get("_stream") != "zeek":
+        if not _is_network(e):   # field-based, not _stream (stripped in corpus)
             continue
         dst = str(e.get("id.resp_h", ""))
         if _is_external(dst):

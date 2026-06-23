@@ -8,6 +8,9 @@ question: |
   IT-to-OT crossing (a host bridging the enterprise and the plant) that a defender
   should scrutinize? Treat the OT segment with segment-appropriate caution: normal
   ICS polling looks very different from an IT compromise.
+
+  Note: set your tool time windows wide enough to cover the full corpus period
+  (pass a large timerange_minutes); the default lookback may miss most of it.
 expected_tools:
   - count_by_field
   - get_connections

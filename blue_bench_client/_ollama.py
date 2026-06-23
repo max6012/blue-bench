@@ -20,8 +20,23 @@ a profile whose model_id is the cloud model tag — no runner change.
 from __future__ import annotations
 
 import os
+from urllib.parse import urlparse
 
 import ollama
+
+_CLOUD_HOST = "ollama.com"
+
+
+def _is_cloud_host(host: str) -> bool:
+    """True only when the URL's hostname IS ollama.com (or a subdomain) — a
+    parsed-hostname check, not a substring match (which would also match a
+    hostile URL like https://evil.com/ollama.com)."""
+    if not host:
+        return False
+    # urlparse needs an authority marker to populate .hostname for bare hosts.
+    parsed = urlparse(host if "//" in host else f"//{host}")
+    name = (parsed.hostname or "").lower()
+    return name == _CLOUD_HOST or name.endswith("." + _CLOUD_HOST)
 
 
 def _client_kwargs() -> dict:
@@ -48,6 +63,6 @@ def make_client() -> "ollama.Client":
 
 def is_cloud() -> bool:
     """True when configured to talk to a remote/cloud Ollama endpoint."""
-    return bool(os.environ.get("OLLAMA_API_KEY")) or (
-        "ollama.com" in os.environ.get("OLLAMA_HOST", "")
+    return bool(os.environ.get("OLLAMA_API_KEY")) or _is_cloud_host(
+        os.environ.get("OLLAMA_HOST", "")
     )

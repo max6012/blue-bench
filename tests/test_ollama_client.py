@@ -1,5 +1,4 @@
 """Ollama client factory: local default vs Ollama Cloud, selected by env."""
-import os
 import pytest
 from blue_bench_client import _ollama
 
@@ -35,3 +34,14 @@ def test_host_only_no_auth_header(monkeypatch):
     monkeypatch.setenv("OLLAMA_HOST", "http://gpu-box:11434")
     kw = _ollama._client_kwargs()
     assert kw == {"host": "http://gpu-box:11434"}
+
+
+def test_is_cloud_host_rejects_substring_spoofing(monkeypatch):
+    # a hostile URL that merely contains the cloud string is NOT cloud
+    assert _ollama._is_cloud_host("https://evil.com/ollama.com") is False
+    assert _ollama._is_cloud_host("https://ollama.com.evil.com") is False
+    # the genuine host (and subdomains) is
+    assert _ollama._is_cloud_host("https://ollama.com") is True
+    assert _ollama._is_cloud_host("ollama.com") is True
+    assert _ollama._is_cloud_host("https://api.ollama.com:443") is True
+    assert _ollama._is_cloud_host("http://localhost:11434") is False

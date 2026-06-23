@@ -1,0 +1,26 @@
+id: p3-01
+category: apt_detection
+title: Hunt the low-and-slow intrusion (RQ2)
+question: |
+  Threat-hunt the enterprise. Intel suggests a targeted actor may have a foothold
+  on a workstation and has been operating patiently over an extended period — not
+  a noisy commodity infection. Using the host and network telemetry available to
+  you, find the compromised workstation and reconstruct what the actor did, stage
+  by stage. For each stage name the technique and the evidence. Tell me which host,
+  what the kill chain looks like end to end, and why the timing matters.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+  - count_by_field
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "WKST-03"]
+  - synonyms: ["powershell", "download cradle", "DownloadString", "IEX", "T1059.001"]
+  - synonyms: ["LSASS", "comsvcs", "credential dump", "credential access", "T1003"]
+  - synonyms: ["Run key", "registry persistence", "autorun", "T1547.001"]
+  - synonyms: ["C2", "command and control", "beacon", "web protocol", "T1071.001"]
+  - synonyms: ["exfiltration", "exfil over C2", "data exfiltration", "T1041"]
+  - synonyms: ["low and slow", "low-and-slow", "multi-day", "days", "patient", "extended dwell"]
+pass_criteria: Identifies wkst-03 as the victim, reconstructs the multi-stage kill chain (execution -> persistence -> credential access -> C2 -> exfil), and notes the slow multi-day cadence.
+tags: [RQ2, apt, threat_hunting, kill_chain, sysmon]
+max_turns: 16

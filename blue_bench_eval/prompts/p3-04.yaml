@@ -1,0 +1,25 @@
+id: p3-04
+category: apt_attribution
+title: Attribute the kill chain to ATT&CK (RQ2)
+question: |
+  You have confirmed a targeted intrusion on a corporate workstation. Produce the
+  ATT&CK attribution: walk the kill chain from initial foothold through to data
+  leaving the network, and map each observed action to its MITRE ATT&CK technique.
+  Pull the host process telemetry and the network egress to support each mapping.
+  I want the technique IDs, the order they occurred in, and the artifact that
+  evidences each one.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+expected_findings:
+  - synonyms: ["T1059.001", "PowerShell", "command and scripting interpreter"]
+  - synonyms: ["T1547.001", "Run key", "registry run keys", "boot or logon autostart"]
+  - synonyms: ["T1218.005", "mshta", "system binary proxy execution"]
+  - synonyms: ["T1003", "T1003.001", "LSASS", "OS credential dumping", "comsvcs"]
+  - synonyms: ["T1071.001", "web protocol", "application layer protocol", "C2 beacon"]
+  - synonyms: ["T1041", "exfiltration over C2", "exfil over c2 channel"]
+  - synonyms: ["T1560", "T1560.001", "archive collected data", "makecab", "compress"]
+pass_criteria: Maps the chain to the correct ATT&CK techniques (T1059.001, T1547.001, T1218.005, T1003.001, T1560.001, T1071.001, T1041) in kill-chain order with supporting artifacts.
+tags: [RQ2, apt, attribution, attack, mitre]
+max_turns: 16

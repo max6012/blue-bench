@@ -1,0 +1,23 @@
+id: p3-03
+category: ot_segment
+title: Characterize the OT/plant network (RQ1)
+question: |
+  Beyond the corporate IT subnets, this environment includes an OT/plant network.
+  Characterize it: which industrial control protocols are in use and on what
+  ports, what kinds of OT devices are talking, and — importantly — is there any
+  IT-to-OT crossing (a host bridging the enterprise and the plant) that a defender
+  should scrutinize? Treat the OT segment with segment-appropriate caution: normal
+  ICS polling looks very different from an IT compromise.
+expected_tools:
+  - count_by_field
+  - get_connections
+expected_findings:
+  - synonyms: ["Modbus", "modbus", "port 502", "502"]
+  - synonyms: ["DNP3", "dnp3", "port 20000", "20000"]
+  - synonyms: ["IEC-104", "iec104", "IEC 60870", "port 2404", "2404"]
+  - synonyms: ["S7", "s7comm", "S7comm", "port 102", "102"]
+  - synonyms: ["HMI", "historian", "engineering workstation", "PLC", "controller", "RTU"]
+  - synonyms: ["jump host", "jump-ot-01", "IT/OT bridge", "IT-OT", "Purdue", "DMZ", "crossing", "pivot"]
+pass_criteria: Enumerates the ICS protocols (Modbus/DNP3/IEC-104/S7comm) and their ports, identifies OT device roles, and flags the IT/OT jump host as the crossing point.
+tags: [RQ1, ot, ics, segment, bridge]
+max_turns: 14

@@ -9,6 +9,10 @@ question: |
   infection, and justify your call. Be explicit about what evidence drives the
   distinction — if the surface indicators (process names, ports, protocols) are
   the same on both, what actually separates them?
+
+  Note: one of these campaigns is deliberately slow and may span weeks — set
+  your tool time windows wide enough (a large timerange_minutes) to see the full
+  timeline of each host, since the tempo difference is the whole point.
 expected_tools:
   - get_process_events
   - get_process_tree

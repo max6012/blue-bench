@@ -8,6 +8,10 @@ question: |
   you, find the compromised workstation and reconstruct what the actor did, stage
   by stage. For each stage name the technique and the evidence. Tell me which host,
   what the kill chain looks like end to end, and why the timing matters.
+
+  Note: a patient actor's activity can span weeks. Set your tool time windows
+  wide enough to cover the full period (pass a large timerange_minutes) — the
+  default lookback is far too short to see a low-and-slow campaign.
 expected_tools:
   - get_process_events
   - get_process_tree

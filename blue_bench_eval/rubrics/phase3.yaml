@@ -1,11 +1,12 @@
 name: phase3
 version: 1
 prompt_prefix: "p3-"
+# Universal gating dimensions (apply to every prompt). attribution is scored on
+# all RQ2 prompts and discrimination only on RQ3 prompts, so neither is a global
+# gate — they are scored per-prompt where applicable, not required everywhere.
 key_dimensions:
   - tool_usage
   - findings
-  - attribution
-  - discrimination
 description: |
   Phase 3 scoring rubric for Blue-Bench — the heavy-telemetry RQ corpus.
   Unlike phase 2 (generic triage on the archive corpus), phase 3 prompts drive

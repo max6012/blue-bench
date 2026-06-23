@@ -34,6 +34,8 @@ from typing import Any, AsyncIterator, Literal
 
 import ollama
 
+from blue_bench_client._ollama import make_async_client
+
 from blue_bench_client.mcp_client import MCPStdioClient, ToolSpec
 from blue_bench_client.runner import (
     _build_context,
@@ -381,7 +383,7 @@ class InteractiveSession:
         self._messages.append({"role": "user", "content": question})
 
         tool_specs = _tool_specs_to_ollama(self.tools_available)
-        client = ollama.AsyncClient()
+        client = make_async_client()
 
         turn_start = time.monotonic()
         turns_used = 0
@@ -702,7 +704,7 @@ class InteractiveSession:
             self._native_seeded = True
         self._messages.append({"role": "user", "content": question})
 
-        client = ollama.AsyncClient()
+        client = make_async_client()
         turn_start = time.monotonic()
         turns_used = 0
         tool_calls_total = 0

@@ -1,0 +1,31 @@
+# Larger Ollama Cloud model profile (vs the local Gemma-4-class small models).
+# Runs on Ollama Cloud: set OLLAMA_HOST=https://ollama.com and OLLAMA_API_KEY in
+# the environment (.env), then `blue-bench qualify --profile gpt-oss-120b-cloud
+# --phase 3`. model_id must match the tag your Ollama Cloud account exposes
+# (check `ollama list` after sign-in, or the cloud catalogue) — adjust if your
+# tag differs (e.g. gpt-oss:120b vs gpt-oss:120b-cloud). Copy this file to add
+# other large cloud models (qwen3-coder:480b, deepseek-v3.1:671b, etc.).
+name: gpt-oss-120b-cloud
+model_id: gpt-oss:120b-cloud
+tool_protocol: native
+prompt_style: terse
+context_size: 32768
+generation:
+  temperature: 0.3
+  top_p: 0.9
+coaching_hints:
+  - Native tool-call protocol — emit structured tool_calls, no fenced JSON in the assistant text.
+  - Prefer aggregation (count_by_field, top-N) over raw reads during triage.
+  - Chain tools across host and network sources for correlation; for low-and-slow hunts, widen the tool time windows (large timerange_minutes).
+  - Flag data inconsistencies honestly rather than fabricating around them.
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+  - correlation
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: investigation_protocol.md
+
+require_task_class: false

@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import ollama
+
+from blue_bench_client._ollama import make_async_client
 from dotenv import load_dotenv
 
 from blue_bench_client.mcp_client import MCPStdioClient, ToolSpec
@@ -300,7 +302,7 @@ async def _run_native(
         {"role": "user", "content": question},
     ]
     tool_specs = _tool_specs_to_ollama(tools)
-    client = ollama.AsyncClient()
+    client = make_async_client()
 
     for _ in range(max_turns):
         t0 = time.monotonic()
@@ -409,7 +411,7 @@ async def _run_text_embedded(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question},
     ]
-    client = ollama.AsyncClient()
+    client = make_async_client()
 
     for _ in range(max_turns):
         t0 = time.monotonic()

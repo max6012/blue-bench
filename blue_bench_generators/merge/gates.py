@@ -276,7 +276,8 @@ def _dest_ports(events: list[dict]) -> set[int]:
             if p not in (None, ""):
                 out.add(int(p))
         except (TypeError, ValueError):
-            pass
+            # Ignore malformed/missing port values; only valid integer ports are collected.
+            continue
     return out
 
 

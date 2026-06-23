@@ -1,0 +1,24 @@
+id: p3-02
+category: discrimination
+title: APT vs commodity cybercrime (RQ3)
+question: |
+  Two workstations show malicious activity this period. Both run PowerShell
+  download cradles, both dump credentials, and both beacon out over web protocols
+  — on the surface they look alike. Your job is to tell them apart: for EACH host,
+  decide whether it is a targeted APT intrusion or a commodity-cybercrime
+  infection, and justify your call. Be explicit about what evidence drives the
+  distinction — if the surface indicators (process names, ports, protocols) are
+  the same on both, what actually separates them?
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "WKST-03"]
+  - synonyms: ["APT", "targeted", "low and slow", "low-and-slow", "patient", "advanced persistent"]
+  - synonyms: ["commodity", "cybercrime", "smash and grab", "smash-and-grab", "opportunistic", "fast", "loader", "stealer"]
+  - synonyms: ["cadence", "dwell", "timeline", "timing", "tempo", "inter-event", "over days", "over hours", "minutes"]
+  - synonyms: ["matched surface", "same tools", "surface looks alike", "behavior not surface", "behavioral", "not the indicators"]
+pass_criteria: Classifies wkst-03 as the targeted/low-and-slow APT and the other malicious host as commodity cybercrime, and grounds the distinction in cadence/dwell/timeline rather than the matched surface indicators.
+tags: [RQ3, discrimination, apt, cybercrime, behavioral]
+max_turns: 16

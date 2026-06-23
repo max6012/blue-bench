@@ -1,0 +1,59 @@
+name: phase3
+version: 1
+prompt_prefix: "p3-"
+key_dimensions:
+  - tool_usage
+  - findings
+  - attribution
+  - discrimination
+description: |
+  Phase 3 scoring rubric for Blue-Bench — the heavy-telemetry RQ corpus.
+  Unlike phase 2 (generic triage on the archive corpus), phase 3 prompts drive
+  the model through the live MCP tool surface against a GENERATED corpus with an
+  injected adversary (a low-and-slow APT kill chain) and a matched-surface
+  cybercrime foil, plus OT/plant telemetry. The prompts map to the three
+  research questions:
+    RQ1 — IT vs OT discrimination (segment-appropriate analysis)
+    RQ2 — APT detection (low-and-slow, LotL, multi-stage kill chain)
+    RQ3 — APT vs cybercrime discrimination (cadence/dwell/targeting, not surface)
+  Applied by Claude (not self-scoring) to each trace. Findings/attribution/
+  discrimination are scored against each prompt's expected_findings synonym
+  sets and the corpus ground truth (the injected bundles' ttps + source_class).
+
+threshold:
+  overall_pct: 75
+  tool_usage_pct: 85
+  findings_pct: 90
+
+dimensions:
+  tool_usage:
+    description: Were the expected tool categories invoked to investigate the live corpus (host telemetry via Sysmon tools, network via Zeek, OT via the ot-* indices), in a sensible order with reasonable arguments?
+    scale:
+      0: No expected tool called, OR every call failed, OR a hallucinated tool.
+      1: At least one expected tool called but most skipped, OR excessive redundant calls with no new information.
+      2: Most expected tools called; arguments mostly correct; pivots across host+network where the question needed it.
+      3: All expected tools called in a sensible order; chained host->network->aggregation; well-formed arguments; no redundant looping.
+
+  findings:
+    description: Did the final answer surface the correct security findings (the injected kill-chain events / the victim host / the OT activity)? Scored against the prompt's expected_findings synonym sets.
+    scale:
+      0: Core finding missed entirely, OR a material hallucination (fabricated host/IP/technique presented as real).
+      1: Some findings identified but the primary conclusion is wrong or critically incomplete.
+      2: Primary finding correct (right victim host / right activity); one or more secondary findings missed.
+      3: All expected finding synonym sets matched. No hallucinations. The victim host and the multi-stage nature are identified.
+
+  attribution:
+    description: Did the model attribute the activity to the correct MITRE ATT&CK techniques / kill-chain stages present in the corpus ground truth (the injected bundle's ttps)?
+    scale:
+      0: No technique attribution, OR attributions are fabricated / wrong.
+      1: A technique or two named but the kill chain is not reconstructed.
+      2: Most kill-chain stages attributed to plausible techniques; minor gaps or one mis-attribution.
+      3: The multi-stage chain is reconstructed and attributed to the correct techniques (initial access -> execution -> persistence -> cred access -> C2 -> exfil), matching the ground-truth ttps (parent/sibling techniques accepted).
+
+  discrimination:
+    description: "RQ3 — did the model correctly classify each malicious host as targeted-APT vs commodity-cybercrime, and justify on BEHAVIOR (cadence, dwell, targeting) rather than surface (which tools/ports, since those are matched)? Not applicable to RQ1/RQ2-only prompts (score N/A)."
+    scale:
+      0: Classes swapped, OR classification rests purely on surface tells (ports/process names) that are matched across both.
+      1: One class identified; the other wrong or unjustified.
+      2: Both classes broadly correct; justification partly behavioral but leans on surface.
+      3: Both correct AND justified on cadence/dwell/targeting (low-and-slow days vs smash-and-grab hours); explicitly notes the surface is matched so behavior is the discriminator.

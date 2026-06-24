@@ -428,14 +428,64 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
 # --- main ingest --------------------------------------------------------------
 
 
-def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, int]:
-    # Walk the whole corpus root: EF telemetry under data/ + merged OT/bridge
-    # NDJSON under ot/ ot_hosts/ bridge/. Route by corpus-relative path.
+def _corpus_window(ef_dir: Path) -> tuple[datetime | None, datetime | None]:
+    """The corpus collection window (UTC), read from GROUND_TRUTH.json (EF) or
+    the merge manifest — NOT by scanning events. Used to anchor timestamps and
+    infer the year for line-format logs without holding the corpus in memory."""
+    def _p(s):
+        if not s:
+            return None
+        try:
+            dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except ValueError:
+            return None
+
+    gt = ef_dir / "GROUND_TRUTH.json"
+    if gt.is_file():
+        cw = json.loads(gt.read_text()).get("collection_window", {})
+        return _p(cw.get("start")), _p(cw.get("end"))
+    man = ef_dir / "corpus-manifest.yaml"
+    if man.is_file():
+        import yaml
+        w = (yaml.safe_load(man.read_text()) or {}).get("window", {})
+        return _p(w.get("start")), _p(w.get("end"))
+    return None, None
+
+
+def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2000) -> dict[str, int]:
+    """Stream the corpus into ES with constant memory.
+
+    The parsers are per-file generators; we flush each index's docs to ES in
+    batches as they're produced rather than accumulating the whole corpus in a
+    dict first (which OOMs on an L-scale ~17 GB-of-OT corpus). The time anchor
+    + year are derived from the corpus WINDOW (GROUND_TRUTH / manifest), not by
+    scanning every event, so a single streaming pass suffices.
+    """
     walk_root = ef_dir
-    # Pass 1: collect everything per index, capture native ts + id, find window.
-    per_index: dict[str, list[tuple[dict, datetime | None, str | None]]] = {}
-    min_ts: datetime | None = None
-    max_ts: datetime | None = None
+    win_start, win_end = _corpus_window(ef_dir)
+    if win_end is not None:
+        _CORPUS_YEAR["y"] = win_end.year  # for snort/ASA line-format year inference
+    # Shift the whole window so it ends ~now (relative spacing preserved). Anchor
+    # on the declared window end rather than the max event — same semantics,
+    # no full-corpus scan.
+    delta = (datetime.now(timezone.utc) - win_end) if (anchor_end_to_now and win_end) else None
+
+    from collections import defaultdict
+    counts: dict[str, int] = defaultdict(int)
+    buffers: dict[str, list[tuple[str, dict]]] = defaultdict(list)
+    created: set[str] = set()
+
+    def _flush(index: str) -> None:
+        docs = buffers[index]
+        if not docs:
+            return
+        if index not in created:
+            _recreate_index(es_url, index, _index_mappings(docs[0][1].keys()))
+            created.add(index)
+        counts[index] += _bulk(es_url, index, docs)
+        buffers[index] = []
+
     for path in sorted(walk_root.rglob("*")):
         if not path.is_file():
             continue
@@ -444,44 +494,22 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, i
             continue
         index, parser = routed
         for rec, when, native_id in parser(path):
-            per_index.setdefault(index, []).append((rec, when, native_id))
-            if when is not None:
-                min_ts = when if min_ts is None or when < min_ts else min_ts
-                max_ts = when if max_ts is None or when > max_ts else max_ts
-    if max_ts is not None:
-        _CORPUS_YEAR["y"] = max_ts.year
-        # Re-resolve any line-format events that had no year on pass 1.
-        for index, items in per_index.items():
-            for i, (rec, when, nid) in enumerate(items):
-                if when is None and "raw" in rec:
-                    fixed = _line_time_best_effort(rec["raw"])
-                    if fixed is not None:
-                        items[i] = (rec, fixed, nid)
-                        max_ts = max(max_ts, fixed)
-                        min_ts = min(min_ts, fixed) if min_ts else fixed
-
-    # Single global shift (preserves all relative spacing).
-    delta = (datetime.now(timezone.utc) - max_ts) if (anchor_end_to_now and max_ts) else None
-
-    counts: dict[str, int] = {}
-    for index, items in sorted(per_index.items()):
-        docs: list[tuple[str, dict]] = []
-        for rec, when, native_id in items:
             doc = dict(rec)
             eff = (when + delta) if (delta and when) else when
             if eff is not None:
                 doc["@timestamp"] = eff.isoformat()
-            _id = native_id or _sha_id(rec)
-            docs.append((_id, doc))
-        _recreate_index(es_url, index, _index_mappings(docs[0][1].keys()) if docs else {"mappings": {}})
-        ok = _bulk(es_url, index, docs)
-        httpx.post(f"{es_url}/{index}/_refresh", timeout=15)
-        counts[index] = ok
-        log.info("ingested %d -> %s", ok, index)
-    if min_ts and max_ts:
-        log.info("corpus window: %s .. %s (shift=%s)", min_ts.isoformat(), max_ts.isoformat(),
+            buffers[index].append((native_id or _sha_id(rec), doc))
+            if len(buffers[index]) >= batch:
+                _flush(index)
+    for index in list(buffers):
+        _flush(index)
+    for index in created:
+        httpx.post(f"{es_url}/{index}/_refresh", timeout=30)
+        log.info("ingested %d -> %s", counts[index], index)
+    if win_start and win_end:
+        log.info("corpus window: %s .. %s (shift=%s)", win_start.isoformat(), win_end.isoformat(),
                  "end->now" if delta else "none")
-    return counts
+    return dict(counts)
 
 
 def main(argv: list[str] | None = None) -> int:

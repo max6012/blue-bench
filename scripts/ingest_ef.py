@@ -131,10 +131,15 @@ def parse_zeek(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
 
 
 def _evtx_records(path: Path) -> Iterable[dict]:
-    root = ET.fromstring(path.read_text())
-    for ev in root.findall(f"{EVTX_NS}Event"):
+    # Stream with iterparse and clear each <Event> after use — constant memory.
+    # ET.fromstring(read_text()) loads the whole tree and OOMs on L-scale logs
+    # (18 days x 30 hosts -> hundreds of MB of Windows Security XML).
+    ev_tag = f"{EVTX_NS}Event"
+    for _evt, elem in ET.iterparse(str(path), events=("end",)):
+        if elem.tag != ev_tag:
+            continue
         rec: dict[str, Any] = {}
-        sysd = ev.find(f"{EVTX_NS}System")
+        sysd = elem.find(f"{EVTX_NS}System")
         if sysd is not None:
             for child in sysd:
                 tag = child.tag.replace(EVTX_NS, "")
@@ -149,13 +154,14 @@ def _evtx_records(path: Path) -> Iterable[dict]:
                 elif tag == "Execution":
                     rec["ProcessID"] = child.get("ProcessID")
                     rec["ThreadID"] = child.get("ThreadID")
-        data = ev.find(f"{EVTX_NS}EventData")
+        data = elem.find(f"{EVTX_NS}EventData")
         if data is not None:
             for d in data.findall(f"{EVTX_NS}Data"):
                 name = d.get("Name")
                 if name:
                     rec[name] = d.text
         yield rec
+        elem.clear()  # free the processed <Event> to keep memory flat
 
 
 def parse_evtx(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:

@@ -1,0 +1,42 @@
+# Phase-3 (heavy-telemetry RQ corpus) MCP config. The demo's config.yaml is
+# left intact; pass this with `qualify --phase 3 --config config.phase3.yaml`.
+#
+# Scoped to ONLY the corpus under test: no old demo evidence fixtures, and no
+# pre-baked Suricata/Wazuh alerts. Phase 3 tests the model HUNTING the host +
+# network telemetry and then RECOMMENDING detections (Wazuh alerting logic,
+# Suricata/Sigma rules) from its findings — so there are no canned alerts to
+# consume; search_alerts is scoped to the corpus's own (benign) IDS noise.
+limits:
+  query_timeout: 30
+  max_result_chars: 8000
+
+evidence:
+  evidence_dir: data/evidence-phase3        # empty — telemetry corpus has no forensic files
+
+elastic:
+  url: ${BLUE_BENCH_ES_URL:-http://localhost:9200}
+  index_pattern: "snort-alerts"             # the corpus's own IDS; excludes the old demo alert indices
+
+zeek:
+  index: zeek-conn                          # L corpus Zeek (get_connections)
+
+sysmon:
+  index: windows-sysmon                     # L corpus Sysmon (get_process_events / tree)
+
+wazuh:
+  api_url: ${BLUE_BENCH_WAZUH_URL:-https://localhost:55000}
+  es_fallback_index: "snort-alerts"         # no old wazuh-alerts contamination on fallback
+
+openedr:
+  url: ${BLUE_BENCH_OPENEDR_URL:-http://localhost:9443}
+
+nmap:
+  scanner_container: ${BLUE_BENCH_NMAP_SCANNER-blue-bench-scanner}
+
+transport:
+  sse:
+    host: 127.0.0.1
+    port: 8765
+    origins:
+      - "http://localhost:*"
+      - "http://127.0.0.1:*"

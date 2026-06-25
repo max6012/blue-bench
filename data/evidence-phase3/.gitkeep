@@ -1,0 +1,2 @@
+# Phase-3 corpus carries no forensic files (telemetry-only). Kept empty so
+# config.phase3.yaml evidence_dir resolves; list_evidence returns [].

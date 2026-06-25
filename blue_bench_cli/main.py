@@ -33,17 +33,57 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="Blue-Bench o
 
 @app.command()
 def qualify(
-    profile: str = typer.Option(..., "--profile", "-p", help="Profile YAML stem, e.g. gemma4-e4b"),
+    profile: str = typer.Option(..., "--profile", "-p", help="Profile stem (local), OR with --cloud the Ollama Cloud model id, e.g. gpt-oss:120b"),
     phase: str = typer.Option("2", "--phase", help="Eval phase: 1 or 2 (default: 2)"),
     tag: str = typer.Option("", "--tag", "-t", help="Filter prompts by tag or category"),
     limit: int = typer.Option(None, "--limit", "-n", help="Stop after N prompts"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
+    cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
 ) -> None:
-    """Run the prompt corpus under PROFILE and write traces."""
+    """Run the prompt corpus under PROFILE and write traces.
+
+    Local (default): PROFILE is a profiles/<stem>.yaml. With --cloud, PROFILE is
+    an Ollama Cloud model id (see `blue-bench models --cloud`) run via a generic
+    cloud profile — no per-model file needed.
+    """
+    override = None
+    if cloud:
+        import os
+        os.environ.setdefault("OLLAMA_HOST", "https://ollama.com")
+        if not os.environ.get("OLLAMA_API_KEY"):
+            typer.echo("ERROR: --cloud needs OLLAMA_API_KEY (put it in .env).", err=True)
+            raise typer.Exit(1)
+        from blue_bench_client.cloud_models import generic_cloud_profile
+        override = generic_cloud_profile(profile)
+        profile = override.name  # for the run-dir label
     run_dir = asyncio.run(
-        run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase)
+        run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
+                   profile_override=override)
     )
     typer.echo(f"\nRun dir: {run_dir}")
+
+
+@app.command()
+def models(
+    cloud: bool = typer.Option(True, "--cloud/--local", help="List Ollama Cloud catalogue (default) or local profiles"),
+    since_months: float = typer.Option(6.0, "--since-months", help="Cloud: only models modified within N months (0 = all)"),
+    size: str = typer.Option(None, "--size", help="Cloud size band: small (<=100GB) | mid (100-500GB) | large (>500GB)"),
+) -> None:
+    """List the models you can run. Cloud defaults to a recency+size shortlist
+    (the full catalogue is too long); pass to --profile with --cloud."""
+    if not cloud:
+        for p in sorted((REPO / "blue_bench_mcp" / "profiles").glob("*.yaml")):
+            typer.echo(f"  {p.stem}")
+        return
+    from blue_bench_client.cloud_models import list_cloud_models
+    rows = list_cloud_models(since_months=since_months or None, size=size)
+    typer.echo(f"Ollama Cloud — {len(rows)} models"
+               + (f", last {since_months:g}mo" if since_months else "")
+               + (f", size={size}" if size else "") + " (newest first):")
+    for m in rows:
+        sz = f"{m.size_gb:6.0f} GB" if m.size_gb else "  hosted "
+        typer.echo(f"  {m.model:24s} {m.modified.date()}  {sz}  ({m.age_months:.1f}mo)")
+    typer.echo("\nRun one:  blue-bench qualify --cloud --profile <model> --phase 3")
 
 
 @app.command("aggregate")

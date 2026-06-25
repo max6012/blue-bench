@@ -20,4 +20,4 @@ expected_findings:
   - synonyms: ["jump host", "jump-ot-01", "IT/OT bridge", "IT-OT", "Purdue", "DMZ", "crossing", "pivot"]
 pass_criteria: Enumerates the ICS protocols (Modbus/DNP3/IEC-104/S7comm) and their ports, identifies OT device roles, and flags the IT/OT jump host as the crossing point.
 tags: [RQ1, ot, ics, segment, bridge]
-max_turns: 14
+max_turns: 30

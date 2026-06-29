@@ -83,10 +83,14 @@ def list_cloud_models(
     return sorted(models, key=lambda m: m.modified, reverse=True)
 
 
-def generic_cloud_profile(model_id: str):
+def generic_cloud_profile(model_id: str, *, guidelines: str = "threat_hunting_protocol.md"):
     """An in-memory ModelProfile for any cloud model_id — native tool-calling,
     large context, standard blue-team coaching. Lets the bench run any filtered
-    catalogue model without a per-model profile file."""
+    catalogue model without a per-model profile file.
+
+    ``guidelines`` selects the prompt-parts guidelines file; defaults to the
+    phase-3 threat-hunting protocol (cloud bake-offs run the heavy-telemetry
+    hunt). Pass ``investigation_protocol.md`` for phase-2 triage."""
     from blue_bench_mcp.profiles import ModelProfile
     return ModelProfile.model_validate({
         "name": f"cloud-{model_id.replace(':', '-').replace('/', '-')}",
@@ -104,6 +108,6 @@ def generic_cloud_profile(model_id: str):
         ],
         "recommended_workflows": ["triage", "forensics-lite", "detection-rules", "correlation"],
         "prompt_parts": {"role": "blue_team_analyst.md", "site": "default.md",
-                         "guidelines": "investigation_protocol.md"},
+                         "guidelines": guidelines},
         "require_task_class": False,
     })

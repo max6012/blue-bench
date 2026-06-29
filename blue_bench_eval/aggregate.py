@@ -171,10 +171,13 @@ def aggregate(
         result.model_id = first.get("model_id", "")
         result.total_duration_ms = sum(t.get("total_duration_ms", 0) for t in traces.values())
 
-    # Dimension percentages (run-level).
+    # Dimension percentages (run-level). A dimension that NO prompt scored
+    # (e.g. discrimination/RQ3 on an RQ1/RQ2-only run, marked N/A by omission)
+    # is excluded entirely — counting it as 0 would wrongly drag overall down.
     for dim in dimensions:
         dim_pcts = [_score_to_pct(s.dimensions[dim].score) for s in scores if dim in s.dimensions]
-        result.dim_pct[dim] = mean(dim_pcts) if dim_pcts else 0.0
+        if dim_pcts:
+            result.dim_pct[dim] = mean(dim_pcts)
     result.overall_pct = mean(result.dim_pct.values()) if result.dim_pct else 0.0
 
     # Threshold check.
@@ -188,11 +191,12 @@ def aggregate(
     for s in scores:
         by_cat[categories.get(s.prompt_id, "uncategorized")].append(s)
     for cat, cat_scores in by_cat.items():
-        cat_dims = {
-            dim: mean(_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions)
-            for dim in dimensions
-        }
-        cat_dims["overall"] = mean(cat_dims.values())
+        cat_dims: dict[str, float] = {}
+        for dim in dimensions:
+            pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions]
+            if pcts:
+                cat_dims[dim] = mean(pcts)
+        cat_dims["overall"] = mean(cat_dims.values()) if cat_dims else 0.0
         result.per_category[cat] = cat_dims
 
     # Per-prompt verdict detail.
@@ -226,6 +230,11 @@ def render_bluf(result: AggregateResult) -> str:
         lines.append(f"- **Total wall time:** {result.total_duration_ms / 1000:.1f}s")
     lines.append("")
 
+    # A dimension absent from dim_pct was N/A for every prompt (e.g. RQ3
+    # discrimination on an RQ1/RQ2-only run) — show N/A, not a spurious 0.0%.
+    def _pct(dim: str) -> str:
+        return f"{result.dim_pct[dim]:.1f}%" if dim in result.dim_pct else "N/A"
+
     lines.append("## Threshold check")
     lines.append("")
     lines.append("| Dimension | Score | Threshold | Pass |")
@@ -237,10 +246,12 @@ def render_bluf(result: AggregateResult) -> str:
     )
     for kd in key_dimensions:
         kd_threshold = dim_thresholds.get(kd, 0.0)
+        na = kd not in result.dim_pct
         kd_pass = result.passes_key_dims.get(kd, True)
+        pass_mark = "—" if na else ("✓" if kd_pass else "✗")
         lines.append(
-            f"| {kd.replace('_', ' ').title()} | {result.dim_pct.get(kd, 0.0):.1f}% | "
-            f"≥{kd_threshold:.0f}% | {'✓' if kd_pass else '✗'} |"
+            f"| {kd.replace('_', ' ').title()} | {_pct(kd)} | "
+            f"≥{kd_threshold:.0f}% | {pass_mark} |"
         )
     lines.append("")
 
@@ -254,7 +265,7 @@ def render_bluf(result: AggregateResult) -> str:
     lines.append("| Dimension | Score |")
     lines.append("|-----------|-------|")
     for dim in dimensions:
-        lines.append(f"| {dim} | {result.dim_pct.get(dim, 0.0):.1f}% |")
+        lines.append(f"| {dim} | {_pct(dim)} |")
     lines.append("")
 
     if result.per_category:
@@ -266,7 +277,7 @@ def render_bluf(result: AggregateResult) -> str:
         lines.append(sep)
         for cat, dims in sorted(result.per_category.items()):
             row = f"| {cat} | {dims.get('overall', 0.0):.1f}% | "
-            row += " | ".join(f"{dims.get(d, 0.0):.1f}%" for d in dimensions)
+            row += " | ".join(f"{dims[d]:.1f}%" if d in dims else "N/A" for d in dimensions)
             row += " |"
             lines.append(row)
         lines.append("")

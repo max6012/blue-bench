@@ -100,10 +100,16 @@ async def run_corpus(
     profiles_dir: Path = PROFILES_DIR,
     results_dir: Path = RESULTS_DIR,
     phase: str = "2",
+    profile_override: "ModelProfile | None" = None,
 ) -> Path:
-    """Execute the prompt corpus under `profile_name` and return the run dir."""
+    """Execute the prompt corpus under `profile_name` and return the run dir.
+
+    ``profile_override`` lets the caller supply a pre-built ModelProfile (e.g. a
+    generic cloud profile synthesised for an arbitrary Ollama Cloud model id)
+    instead of loading a ``profiles/<name>.yaml`` file.
+    """
     prefix = f"p{phase}-"
-    profile = load_profile(profiles_dir / f"{profile_name}.yaml")
+    profile = profile_override or load_profile(profiles_dir / f"{profile_name}.yaml")
     specs = _select(load_all(prompts_dir, prefix=prefix), tag=tag, limit=limit)
     if not specs:
         raise ValueError(
@@ -176,7 +182,7 @@ async def run_corpus(
 def main() -> None:
     p = argparse.ArgumentParser(description="Run Blue-Bench prompts under a profile")
     p.add_argument("--profile", required=True, help="Profile YAML stem (e.g., gemma4-e4b)")
-    p.add_argument("--phase", default="2", choices=["1", "2"], help="Eval phase (1 or 2, default: 2)")
+    p.add_argument("--phase", default="2", choices=["1", "2", "3"], help="Eval phase (1, 2, or 3; default: 2)")
     p.add_argument("--tag", default="", help="Filter prompts by tag or category")
     p.add_argument("--limit", type=int, default=None, help="Stop after N prompts")
     p.add_argument("--config", type=Path, default=REPO / "config.yaml", help="MCP server config.yaml")

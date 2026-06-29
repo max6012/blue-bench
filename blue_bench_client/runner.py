@@ -543,10 +543,13 @@ async def _run_anthropic(
             "system": system_blocks,
             "messages": messages,
             "tools": tool_specs,
-            "temperature": g.temperature,
         }
-        # Anthropic API rejects temperature + top_p together — pass only temperature.
-        # top_p in the profile is ignored for this path.
+        # Only send temperature when the profile sets it: newer models (e.g.
+        # claude-opus-4-8) reject `temperature` outright ("deprecated for this
+        # model"). Anthropic also rejects temperature + top_p together, so
+        # top_p in the profile is ignored for this path regardless.
+        if g.temperature is not None:
+            kwargs["temperature"] = g.temperature
         resp = await client.messages.create(**kwargs)
         dur = int((time.monotonic() - t0) * 1000)
 

@@ -1,0 +1,41 @@
+id: p3-05
+category: detection_authoring
+title: From hunt to detections (RQ2 → detection engineering)
+question: |
+  You have hunted the host and network telemetry and confirmed a targeted
+  intrusion on a corporate workstation. Now close the loop: based on what you
+  actually found in the data, author the detections that would have caught this
+  earlier, and would catch the next actor using the same tradecraft.
+
+  Produce two things, each grounded in a specific observation you made:
+    1. A Suricata IDS rule (or rules) for the network side — the C2 / exfil
+       behaviour you saw (protocol, beacon pattern, user-agent, destination
+       characteristics). Give the rule text.
+    2. A Wazuh / Sigma detection for the host side — the credential-access and
+       persistence behaviour you saw (e.g. the LSASS access technique, the
+       autostart mechanism). Give the rule text and validate the Sigma syntax
+       with the tool before returning it.
+
+  For each rule, state the specific evidence (host, command line, technique,
+  destination) it is built from, and why it would fire on this actor without
+  drowning the SOC in false positives.
+
+  Note: there are no pre-built alerts for you to copy — you are writing the
+  alerting. Set your tool time windows wide enough (large timerange_minutes) to
+  see the full low-and-slow campaign before you generalise it into a rule.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+  - validate_sigma_rule
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "10.10.0.13"]
+  - synonyms: ["Suricata", "suricata rule", "alert http", "alert tcp", "sid:", "IDS rule"]
+  - synonyms: ["Sigma", "Wazuh", "detection rule", "logsource", "detection:"]
+  - synonyms: ["LSASS", "comsvcs", "T1003.001", "credential access", "MiniDump"]
+  - synonyms: ["Run key", "registry persistence", "T1547.001", "autostart"]
+  - synonyms: ["C2", "beacon", "web protocol", "user-agent", "T1071.001", "exfiltration"]
+  - synonyms: ["false positive", "tuning", "fidelity", "noise", "baseline"]
+pass_criteria: Hunts the telemetry to confirm the wkst-03 intrusion, then authors a Suricata rule for the C2/exfil and a validated Sigma/Wazuh rule for the LSASS dump and/or Run-key persistence, each grounded in a specific observed artifact, with a note on false-positive control.
+tags: [RQ2, detection_engineering, sigma, suricata, wazuh, blue]
+max_turns: 30

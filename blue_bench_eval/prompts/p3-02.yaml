@@ -21,4 +21,4 @@ expected_findings:
   - synonyms: ["matched surface", "same tools", "surface looks alike", "behavior not surface", "behavioral", "not the indicators"]
 pass_criteria: Classifies wkst-03 as the targeted/low-and-slow APT and the other malicious host as commodity cybercrime, and grounds the distinction in cadence/dwell/timeline rather than the matched surface indicators.
 tags: [RQ3, discrimination, apt, cybercrime, behavioral]
-max_turns: 16
+max_turns: 30

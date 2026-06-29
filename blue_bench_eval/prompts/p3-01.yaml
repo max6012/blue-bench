@@ -23,4 +23,4 @@ expected_findings:
   - synonyms: ["low and slow", "low-and-slow", "multi-day", "days", "patient", "extended dwell"]
 pass_criteria: Identifies wkst-03 as the victim, reconstructs the multi-stage kill chain (execution -> persistence -> credential access -> C2 -> exfil), and notes the slow multi-day cadence.
 tags: [RQ2, apt, threat_hunting, kill_chain, sysmon]
-max_turns: 16
+max_turns: 30

@@ -135,7 +135,7 @@ def test_render_bluf_smoke(tmp_path: Path):
     _write_scored(run, "p2-01", 3, 3, 3, 3)
     result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
     md = render_bluf(result)
-    assert "# Phase 2 BLUF" in md
+    assert "# BLUF — gemma4-e4b" in md
     assert "gemma4-e4b" in md
     assert "CLEARS THRESHOLD" in md
     assert "| p2-01 |" in md

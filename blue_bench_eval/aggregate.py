@@ -28,6 +28,9 @@ class PromptScore(BaseModel):
     dimensions: dict[str, DimensionScore]
     verdict: Verdict
     hallucinations: list[str] = Field(default_factory=list)
+    # Per the rubric's tuning_recommendations item: concrete bench/profile
+    # changes to lift the lowest-scoring dimensions (not fixes to the model).
+    tuning_recommendations: list[str] = Field(default_factory=list)
 
 
 class RubricThreshold(BaseModel):
@@ -208,6 +211,7 @@ def aggregate(
                 "verdict": s.verdict,
                 "dimensions": {dim: s.dimensions[dim].score for dim in dimensions if dim in s.dimensions},
                 "hallucinations": s.hallucinations,
+                "tuning_recommendations": s.tuning_recommendations,
             }
         )
 
@@ -295,6 +299,20 @@ def render_bluf(result: AggregateResult) -> str:
         dim_cols = " | ".join(str(d.get(dim, "-")) for dim in dimensions)
         lines.append(f"| {v['id']} | {v['category']} | {v['verdict']} | {dim_cols} | {halluc} |")
     lines.append("")
+
+    # Tuning recommendations (rubric output item) — bench/profile changes to
+    # lift the lowest-scoring dimensions, grouped per prompt.
+    if any(v.get("tuning_recommendations") for v in result.verdicts):
+        lines.append("## Tuning recommendations")
+        lines.append("")
+        for v in result.verdicts:
+            recs = v.get("tuning_recommendations") or []
+            if not recs:
+                continue
+            lines.append(f"**{v['id']}** ({v['category']}):")
+            for r in recs:
+                lines.append(f"- {r}")
+            lines.append("")
 
     return "\n".join(lines)
 

@@ -8,17 +8,22 @@ key_dimensions:
   - discrimination
 description: |
   Phase 3 scoring rubric for Blue-Bench — the heavy-telemetry RQ corpus.
-  Unlike phase 2 (generic triage on the archive corpus), phase 3 prompts drive
-  the model through the live MCP tool surface against a GENERATED corpus with an
-  injected adversary (a low-and-slow APT kill chain) and a matched-surface
-  cybercrime foil, plus OT/plant telemetry. The prompts map to the three
-  research questions:
+  Phase 3 prompts drive the model through the live MCP tool surface against a
+  GENERATED corpus with an injected adversary (a low-and-slow APT kill chain)
+  and a matched-surface cybercrime foil, plus OT/plant telemetry. The prompts
+  map to the three research questions:
     RQ1 — IT vs OT discrimination (segment-appropriate analysis)
     RQ2 — APT detection (low-and-slow, LotL, multi-stage kill chain)
     RQ3 — APT vs cybercrime discrimination (cadence/dwell/targeting, not surface)
-  Applied by Claude (not self-scoring) to each trace. Findings/attribution/
-  discrimination are scored against each prompt's expected_findings synonym
-  sets and the corpus ground truth (the injected bundles' ttps + source_class).
+  Findings/attribution/discrimination are scored against each prompt's
+  expected_findings synonym sets and the corpus ground truth (the injected
+  bundles' ttps + source_class).
+
+# Judge: an independent grader reads each trace and applies this rubric. It is
+# never the model under test self-scoring.
+judge:
+  model: claude-opus-4-8        # latest Opus family
+  reasoning_effort: high
 
 threshold:
   overall_pct: 75
@@ -57,3 +62,19 @@ dimensions:
       1: One class identified; the other wrong or unjustified.
       2: Both classes broadly correct; justification partly behavioral but leans on surface.
       3: Both correct AND justified on cadence/dwell/targeting (low-and-slow days vs smash-and-grab hours); explicitly notes the surface is matched so behavior is the discriminator.
+
+# Not a scored dimension — a separate output item. For each trace the judge
+# also emits concrete, actionable tuning recommendations targeting the
+# lowest-scoring dimensions: what to change in the BENCH/profile to lift the
+# score (coaching hints to add, tool-arg defaults, max_turns budget, prompt
+# clarifications, corpus/grounding gaps). Each item names the dimension it
+# targets and the specific change. These tune the harness, NOT the model under
+# test (which is graded as-is).
+tuning_recommendations:
+  min: 1
+  max: 5
+  guidance: |
+    Lead with the change most likely to move a failing key dimension. Be
+    specific and verifiable (name the hint/arg/turn-count/prompt line), not
+    generic advice. If the trace already clears threshold, recommendations may
+    be empty.

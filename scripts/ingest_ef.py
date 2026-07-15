@@ -42,7 +42,7 @@ import logging
 import re
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -268,6 +268,45 @@ def _parse_iso(s: str) -> datetime | None:
         return None
 
 
+# Sysmon UtcTime is "YYYY-MM-DD HH:MM:SS.fff" (space, ms precision).
+_UTCTIME_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _shift_embedded_times(doc: dict, delta: timedelta) -> None:
+    """Shift EVERY embedded time field by the same delta as @timestamp.
+
+    ``--anchor-end-to-now`` shifts @timestamp, but the record also carries its
+    own clocks — Sysmon ``UtcTime``/``TimeCreated``, Zeek ``ts``, eCAR
+    ``timestamp_ms`` — and if those keep the original capture time the analyst
+    reads two clocks 3 months apart and can't correlate host<->network. Rewrite
+    them in place so a single timeline holds across all sources.
+    """
+    secs = delta.total_seconds()
+    v = doc.get("ts")
+    if v not in (None, ""):
+        try:
+            doc["ts"] = f"{float(v) + secs:.6f}"
+        except (TypeError, ValueError):
+            pass
+    v = doc.get("timestamp_ms")
+    if v not in (None, ""):
+        try:
+            doc["timestamp_ms"] = int(v) + int(round(secs * 1000))
+        except (TypeError, ValueError):
+            pass
+    v = doc.get("UtcTime")
+    if v:
+        t = _parse_iso(str(v).replace(" ", "T"))
+        if t is not None:
+            doc["UtcTime"] = (t + delta).strftime(_UTCTIME_FMT)[:-3]  # keep ms precision
+    for f in ("TimeCreated", "EventTime", "timestamp"):
+        v = doc.get(f)
+        if v and not str(v).replace(".", "", 1).isdigit():  # ISO-shaped only
+            t = _parse_iso(str(v).replace(" ", "T"))
+            if t is not None:
+                doc[f] = (t + delta).isoformat()
+
+
 def _parse_apache(s: str) -> datetime | None:
     try:
         return datetime.strptime(s, "%d/%b/%Y:%H:%M:%S %z").astimezone(timezone.utc)
@@ -465,6 +504,10 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, i
             eff = (when + delta) if (delta and when) else when
             if eff is not None:
                 doc["@timestamp"] = eff.isoformat()
+            # Keep the record's own clocks (Sysmon UtcTime, Zeek ts, ...) in sync
+            # with the shifted @timestamp so host<->network correlation holds.
+            if delta:
+                _shift_embedded_times(doc, delta)
             _id = native_id or _sha_id(rec)
             docs.append((_id, doc))
         _recreate_index(es_url, index, _index_mappings(docs[0][1].keys()) if docs else {"mappings": {}})

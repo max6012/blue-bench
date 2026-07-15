@@ -33,7 +33,7 @@ from pathlib import Path
 import yaml
 
 from blue_bench_generators.cybercrime_foil.bundle import SchemaValidationError, validate_bundle
-from blue_bench_generators.merge.inject import HostRemap, inject_bundle
+from blue_bench_generators.merge.inject import BeaconSpec, HostRemap, inject_bundle
 from blue_bench_generators.merge.merger import _EF_META, merge_corpus
 from blue_bench_generators.merge.scenario_topology import shim_from_scenario
 
@@ -52,6 +52,24 @@ _CAPTURE = HostRemap(
 
 # tier -> [(incident_id, bundle_subdir, target_host_short), ...].
 # Foil fits all tiers; the APT's 10-day dwell only fits L (see module docstring).
+# Low-and-slow C2 beacon synthesized into APT bundles only (the foil stays a
+# smash-and-grab burst). Dest is a dedicated, unremarkable hosting-range IP
+# (DigitalOcean-class) contacted ONLY by the victim — realistic targeted-actor
+# C2 infra. Surface (port/proto/service/bytes) is matched to the foil's github
+# stager so the RQ3 gates stay green (dest IP is not a surface feature); the
+# signal is "rare external destination + regular full-window cadence", found by
+# hunting, not by destination reputation. A famous-CDN dest (GitHub/Google) is
+# waved through as benign even by a frontier model — see the oracle A/B run.
+_BEACON_SPECS: dict[str, BeaconSpec] = {
+    # Rotate across 5 IPs in one /24: each IP stays under a per-IP detector's
+    # connection threshold; /24 aggregation reveals the merged cadence. Tests
+    # whether the analyst reads the tool's rotation blind-spot and retries /24
+    # rather than reading a per-IP negative as "no C2".
+    "apt-bb-001": BeaconSpec(dest_ips=(
+        "146.190.62.150", "146.190.62.151", "146.190.62.152",
+        "146.190.62.153", "146.190.62.154")),
+}
+
 _DEFAULT_ADVERSARIES: dict[str, list[tuple[str, str, str]]] = {
     "S": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
     "M": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
@@ -140,7 +158,8 @@ def build_corpus(
     injected = []
     for incident, subdir, host in adversaries:
         remap = _remap_for_host(scenario, tier, host)
-        summary = inject_bundle(out, DEFAULT_BUNDLES / subdir, incident, remap)
+        summary = inject_bundle(out, DEFAULT_BUNDLES / subdir, incident, remap,
+                                beacon=_BEACON_SPECS.get(incident), seed=seed)
         injected.append({"incident": incident, "source_class": summary["source_class"],
                          "host": remap.to_fqdn, "events": summary["events"]})
         log.info("injected %s (%s) -> %s: %d events",

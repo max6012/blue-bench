@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -37,6 +38,9 @@ import yaml
 log = logging.getLogger(__name__)
 
 _UTCTIME_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+# base62 alphabet for Zeek-style uids on synthesized beacon events.
+_UID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 
 def _event_time(ev: dict) -> datetime | None:
@@ -67,6 +71,112 @@ def _shift_event_time(ev: dict, delta: timedelta) -> dict:
             out["ts"] = f"{float(ev['ts']) + delta.total_seconds():.6f}"
         except (TypeError, ValueError):
             pass
+    return out
+
+
+@dataclass(frozen=True)
+class BeaconSpec:
+    """A low-and-slow C2 beacon to synthesize into an APT bundle.
+
+    The beacon is the *behavioral* signal (gate 2): regular callbacks across the
+    whole campaign window, so ``gap_log`` (inter-event cadence) and ``dwell_frac``
+    (window position) separate it from the cybercrime foil's smash-and-grab burst.
+    Its *surface* is matched to the foil (same port/proto/service and a byte
+    envelope that overlaps benign traffic to the same shared-CDN destination), so
+    it stays non-separable on gate 1: only the cadence gives it away, found by
+    per-(host->dest) inter-arrival analysis, not by destination reputation.
+
+    ``dest_ips`` (a rotation set) round-robins callbacks across several IPs in a
+    single /24 — realistic targeted-actor infra rotation that evades per-IP
+    beacon detection (each IP stays under the connection threshold) but is caught
+    by /24 aggregation. Leave it empty and set ``dest_ip`` for a single-IP beacon.
+    """
+    dest_ip: str = ""                         # single dedicated C2 IP
+    dest_ips: tuple[str, ...] = ()            # rotation set (round-robin); overrides dest_ip
+    dest_port: str = "443"
+    proto: str = "tcp"
+    service: str = "ssl"
+    interval_seconds: float = 10800.0         # ~3h low-and-slow cadence
+    jitter_fraction: float = 0.3              # ±30% so it isn't a perfect metronome
+    orig_bytes_range: tuple[int, int] = (300, 800)     # small check-in
+    resp_bytes_range: tuple[int, int] = (2000, 18000)  # variable tasking
+    tasking_every: int = 8                    # 1-in-N callbacks pulls a larger payload
+    technique: str = "T1071.001"              # application-layer C2
+
+    def targets(self) -> tuple[str, ...]:
+        """The C2 IP(s) to round-robin across (rotation set, else the single IP)."""
+        return self.dest_ips or ((self.dest_ip,) if self.dest_ip else ())
+
+
+def _seed_int(incident_id: str, seed: int) -> int:
+    """Deterministic per-incident seed: same (incident, seed) -> same beacon."""
+    h = hashlib.sha256(f"{incident_id}:{seed}".encode()).hexdigest()
+    return int(h[:8], 16)
+
+
+def _beacon_uid(rng: random.Random) -> str:
+    return "C" + "".join(rng.choice(_UID_ALPHABET) for _ in range(16))
+
+
+def synthesize_beacon(
+    orig_h: str, window_start: datetime, window_end: datetime, spec: BeaconSpec, *, seed: int
+) -> list[dict]:
+    """Generate cadenced Zeek ``conn`` beacon events across [start, end].
+
+    ``orig_h`` is the bundle's capture source IP (rewritten to the victim by the
+    normal remap downstream); the beacon rides ``inject_bundle``'s remap+rebase
+    like any other bundle event. Deterministic given ``seed``.
+    """
+    targets = spec.targets()
+    if window_end <= window_start or spec.interval_seconds <= 0 or not targets:
+        return []
+    rng = random.Random(seed)
+    out: list[dict] = []
+    t = window_start.timestamp()
+    end = window_end.timestamp()
+    i = 0
+    while t <= end:
+        obytes = rng.randint(*spec.orig_bytes_range)
+        # occasional larger tasking pull, else a modest check-in response
+        if i % spec.tasking_every == 0:
+            rbytes = rng.randint(spec.resp_bytes_range[1] // 2, spec.resp_bytes_range[1])
+        else:
+            rbytes = rng.randint(spec.resp_bytes_range[0], spec.resp_bytes_range[1] // 2)
+        opkts = max(4, obytes // 120)
+        rpkts = max(4, rbytes // 700)
+        dur = round(rng.uniform(0.15, 3.5), 6)
+        out.append({
+            "_stream": "zeek",
+            "_log": "conn",
+            "_stage": "command-and-control",
+            "_technique": spec.technique,
+            "_campaign_ts": datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            "ts": f"{t:.6f}",
+            "uid": _beacon_uid(rng),
+            "id.orig_h": orig_h,
+            "id.orig_p": str(rng.randint(49152, 65535)),
+            "id.resp_h": targets[i % len(targets)],   # round-robin rotation
+            "id.resp_p": spec.dest_port,
+            "proto": spec.proto,
+            "service": spec.service,
+            "duration": f"{dur:.6f}",
+            "orig_bytes": str(obytes),
+            "resp_bytes": str(rbytes),
+            "orig_ip_bytes": str(obytes + opkts * 40),
+            "resp_ip_bytes": str(rbytes + rpkts * 40),
+            "orig_pkts": str(opkts),
+            "resp_pkts": str(rpkts),
+            "missed_bytes": "0",
+            "conn_state": "SF",
+            "history": "ShADadFf",
+            "local_orig": "T",
+            "local_resp": "F",
+            "ip_proto": "6",
+            "tunnel_parents": "-",
+        })
+        i += 1
+        step = spec.interval_seconds * (1.0 + rng.uniform(-spec.jitter_fraction, spec.jitter_fraction))
+        t += max(1.0, step)
     return out
 
 
@@ -215,14 +325,31 @@ def inject_bundle(
     bundle_dir: str | Path,
     incident_id: str,
     remap: HostRemap,
+    *,
+    beacon: BeaconSpec | None = None,
+    seed: int = 0,
 ) -> dict:
     """Remap a bundle onto a real EF host, write it into the corpus tree, and
     repoint its ground truth. Returns a summary dict.
+
+    ``beacon`` (APT bundles only) synthesizes a low-and-slow C2 beacon across the
+    bundle's own campaign window before remap, so it rides the same remap+rebase
+    and lands on the victim with cadence intact — the RQ2 network signal the raw
+    capture lacks. ``seed`` makes the beacon deterministic.
 
     Raises ``ValueError`` if any capture identity leaks past the remap.
     """
     corpus_dir = Path(corpus_dir)
     events, gt = load_bundle(bundle_dir, incident_id)
+
+    if beacon is not None:
+        times = [t for t in (_event_time(e) for e in events) if t is not None]
+        if times:
+            b = synthesize_beacon(remap.from_ip, min(times), max(times), beacon,
+                                  seed=_seed_int(incident_id, seed))
+            log.info("synthesized %d beacon events across the campaign window, rotating over %s",
+                     len(b), ",".join(beacon.targets()))
+            events = events + b
 
     remapped = [_coerce_zeek_bools(remap_event(ev, remap)) for ev in events]
     leaks = leak_check(remapped, remap)
@@ -282,11 +409,16 @@ def inject_bundle(
     # remapped[i-1]; the doc_id is content/uid-derived and independent of which
     # per-stream file the event lands in, so re-grouping by stream above does
     # not affect this mapping.
+    #
+    # Synthesized beacon events (BeaconSpec) are appended AFTER the captured
+    # bundle events, so the GT-aligned prefix remapped[0:len(gt_events)] is
+    # unchanged. They are supporting C2 telemetry with no per-event ground-truth
+    # pointer, so we repoint only that prefix and allow the extra suffix.
     gt_out = dict(gt)
     gt_events = gt.get("events", [])
-    if len(gt_events) != len(remapped):
+    if len(remapped) < len(gt_events):
         raise ValueError(
-            f"ground-truth event count {len(gt_events)} != bundle event count "
+            f"ground-truth event count {len(gt_events)} > injected event count "
             f"{len(remapped)}; cannot repoint by index"
         )
     new_events = []

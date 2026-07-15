@@ -105,17 +105,19 @@ def test_inject_repoints_gt_to_doc_ids_in_bundle_order(tmp_path: Path):
     assert "_stream" not in blob                         # internal field stripped
 
 
-def test_inject_raises_on_count_mismatch(tmp_path: Path):
+def test_inject_raises_when_gt_exceeds_events(tmp_path: Path):
+    # GT with MORE events than the bundle can't be repointed by index (dangling
+    # pointer). GT with fewer is fine — the surplus is un-referenced supporting
+    # telemetry (e.g. synthesized beacon callbacks).
     bd = _make_bundle(tmp_path)
-    # corrupt GT to have a different event count
     gt = yaml.safe_load((bd / "x.ground-truth.yaml").read_text())
-    gt["events"] = gt["events"][:1]
+    gt["events"] = gt["events"] + gt["events"]  # double -> exceeds bundle events
     (bd / "x.ground-truth.yaml").write_text(yaml.safe_dump(gt))
     corpus = tmp_path / "corpus"
     corpus.mkdir()
     try:
         inject_bundle(corpus, bd, "x", REMAP)
-        assert False, "expected ValueError on count mismatch"
+        assert False, "expected ValueError when GT exceeds injected events"
     except ValueError as e:
         assert "event count" in str(e)
 

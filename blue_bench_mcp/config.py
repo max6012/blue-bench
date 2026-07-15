@@ -56,6 +56,25 @@ class SysmonConfig(BaseModel):
     index: str = "windows-sysmon"
 
 
+class BeaconingConfig(BaseModel):
+    """Tuning envelope for the detect_beaconing analytic.
+
+    These are the exercise-control DEFAULTS and legal floors — players
+    re-baseline their SOC's beacon detector between rounds by editing
+    config.yaml or setting the env vars (``${BB_BEACON_*:-default}``); the model
+    tunes WITHIN this envelope per-query via the tool's parameters. Loosening
+    the floors makes low-and-slow actors easier to catch (and floods FPs);
+    tightening them makes the range harder.
+    """
+    default_window_minutes: int = 10080     # 7d — beacons need a wide lookback
+    default_min_connections: int = 20        # a cadence needs enough callbacks
+    min_connections_floor: int = 5           # the model may not go below this
+    default_max_jitter: float = 0.35         # interval-CV cutoff for "regular"
+    max_jitter_ceiling: float = 1.0          # the model may not go above this
+    agg_granularity: str = "ip"              # ip | /24 | domain (rotation handling)
+    top_n: int = 50                          # max candidate pairs returned
+
+
 class WazuhConfig(BaseModel):
     api_url: str = "https://localhost:55000"
     user: str = ""
@@ -111,6 +130,7 @@ class ServerConfig(BaseModel):
     elastic: ElasticConfig = Field(default_factory=ElasticConfig)
     zeek: ZeekConfig = Field(default_factory=ZeekConfig)
     sysmon: SysmonConfig = Field(default_factory=SysmonConfig)
+    beaconing: BeaconingConfig = Field(default_factory=BeaconingConfig)
     wazuh: WazuhConfig = Field(default_factory=WazuhConfig)
     openedr: OpenEDRConfig = Field(default_factory=OpenEDRConfig)
     nmap: NmapConfig = Field(default_factory=NmapConfig)

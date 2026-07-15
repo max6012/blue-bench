@@ -169,3 +169,50 @@ def register(server: FastMCP, cfg: ServerConfig) -> None:
             timerange_minutes=timerange_minutes,
             top_n=top_n,
         )
+
+    @server.tool()
+    async def detect_beaconing(
+        timerange_minutes: int = 0,
+        min_connections: int = 0,
+        max_jitter: float = 0.0,
+        aggregation: str = "",
+        src_ip: str = "",
+        dest_ip: str = "",
+    ) -> str:
+        """Rank internal->external (src,dest) pairs by how BEACON-LIKE they are —
+        the interval-regularity analytic for finding low-and-slow C2 that raw
+        connection listings bury in benign volume.
+
+        Returns a JSON object with two parts:
+          - "analysis": a COVERAGE envelope — the method, the thresholds used,
+            how many pairs were analyzed / excluded / deep-checked, and a
+            "blind_spots" list. READ THIS: an empty "candidates" list is NOT
+            proof of "no C2" — it is bounded by these blind spots. If you need
+            to rule C2 out, address the blind spots (widen the window, lower
+            min_connections toward the floor, retry aggregation='/24' for
+            rotated C2) or corroborate on host telemetry — do not treat a bare
+            negative as a true negative.
+          - "candidates": ranked (src->dest) pairs with connections,
+            mean_interval_s, interval_cv (lower = more regular), regularity_score,
+            distinct_src_hosts (1 = dedicated infra), span_hours, mean_orig_bytes.
+
+        Arguments (all optional; omitted values use the configured envelope):
+          timerange_minutes: lookback (beacons need days — default is wide).
+          min_connections: min callbacks to qualify (floored by config; a
+            slower beacon needs a lower value to be seen).
+          max_jitter: interval-CV cutoff for "regular" (attackers add jitter to
+            evade; raise this to catch jittered beacons, at the cost of FPs).
+          aggregation: 'ip' (exact dest) or '/24' (merge a rotated subnet).
+          src_ip / dest_ip: scope to one host or destination.
+
+        Benign automation (updates, NTP, telemetry) also beacons — a high rank
+        is a lead to triage, not a verdict.
+        """
+        return await tool.detect_beaconing(
+            timerange_minutes=timerange_minutes,
+            min_connections=min_connections,
+            max_jitter=max_jitter,
+            aggregation=aggregation,
+            src_ip=src_ip,
+            dest_ip=dest_ip,
+        )

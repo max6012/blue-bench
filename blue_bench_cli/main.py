@@ -39,6 +39,7 @@ def qualify(
     limit: int = typer.Option(None, "--limit", "-n", help="Stop after N prompts"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
     cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
+    no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
 ) -> None:
     """Run the prompt corpus under PROFILE and write traces.
 
@@ -54,8 +55,8 @@ def qualify(
             typer.echo("ERROR: --cloud needs OLLAMA_API_KEY (put it in .env).", err=True)
             raise typer.Exit(1)
         from blue_bench_client.cloud_models import generic_cloud_profile
-        override = generic_cloud_profile(profile)
-        profile = override.name  # for the run-dir label
+        override = generic_cloud_profile(profile, coached=not no_coaching)
+        profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
     run_dir = asyncio.run(
         run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
                    profile_override=override)
@@ -84,6 +85,32 @@ def models(
         sz = f"{m.size_gb:6.0f} GB" if m.size_gb else "  hosted "
         typer.echo(f"  {m.model:24s} {m.modified.date()}  {sz}  ({m.age_months:.1f}mo)")
     typer.echo("\nRun one:  blue-bench qualify --cloud --profile <model> --phase 3")
+
+
+@app.command("judge")
+def judge_cmd(
+    run_dir: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
+    phase: str = typer.Option("3", "--phase", help="Eval phase (selects the rubric)"),
+    rubric: Path = typer.Option(None, "--rubric", "-r", help="Rubric YAML (overrides --phase default)"),
+    prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Re-judge traces already in scored/"),
+    model: str = typer.Option(None, "--model", help="Override the rubric's judge model"),
+) -> None:
+    """Score a run's traces with the LLM-as-judge → writes scored/*.json.
+
+    Reads the rubric's `judge:` block (model + reasoning_effort), grades each
+    trace in RUN_DIR/prompts/ against the rubric grounded on expected_findings,
+    and writes RUN_DIR/scored/<id>.json. Follow with `aggregate` for the BLUF.
+    Needs ANTHROPIC_API_KEY.
+    """
+    if rubric is None:
+        rubric = REPO / "blue_bench_eval" / "rubrics" / f"phase{phase}.yaml"
+    from blue_bench_eval.judge import judge_run
+    scores = judge_run(run_dir, rubric, prompts_dir=prompts, overwrite=overwrite, model_override=model)
+    for s in scores:
+        dims = " ".join(f"{k}={v.score}" for k, v in s.dimensions.items())
+        typer.echo(f"  {s.prompt_id}: {s.verdict}  [{dims}]", err=True)
+    typer.echo(f"scored {len(scores)} prompt(s) → {run_dir}/scored/  (run `aggregate` for the BLUF)")
 
 
 @app.command("aggregate")

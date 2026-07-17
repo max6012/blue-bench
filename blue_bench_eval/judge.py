@@ -207,19 +207,28 @@ def _call_judge(cfg: JudgeConfig, system: str, user: str) -> str:
     if not os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError("judge needs ANTHROPIC_API_KEY in the environment (.env)")
     client = anthropic.Anthropic()
-    budget = cfg.thinking_budget
+    effort = (cfg.reasoning_effort or "high").lower()
     kwargs: dict = {
         "model": cfg.model,
-        "max_tokens": _MAX_TOKENS + budget,
+        "max_tokens": _MAX_TOKENS + cfg.thinking_budget,
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
-    if budget:
-        kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
-        kwargs["temperature"] = 1.0
+    if effort in ("high", "medium", "low"):
+        # opus-4.8+ uses ADAPTIVE thinking with effort in output_config
+        # (the old thinking.type=enabled + budget_tokens form is rejected).
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": effort}
     else:
         kwargs["temperature"] = 0.0
-    resp = client.messages.create(**kwargs)
+    try:
+        resp = client.messages.create(**kwargs)
+    except anthropic.BadRequestError:
+        # Older/other models: retry as a plain deterministic call.
+        for k in ("thinking", "output_config"):
+            kwargs.pop(k, None)
+        kwargs["temperature"] = 0.0
+        resp = client.messages.create(**kwargs)
     # Concatenate text blocks, skipping thinking blocks.
     return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
 

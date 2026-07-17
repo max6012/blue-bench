@@ -83,31 +83,35 @@ def list_cloud_models(
     return sorted(models, key=lambda m: m.modified, reverse=True)
 
 
-def generic_cloud_profile(model_id: str, *, guidelines: str = "threat_hunting_protocol.md"):
+def generic_cloud_profile(model_id: str, *, guidelines: str | None = None, coached: bool = True):
     """An in-memory ModelProfile for any cloud model_id — native tool-calling,
-    large context, standard blue-team coaching. Lets the bench run any filtered
-    catalogue model without a per-model profile file.
+    large context. Lets the bench run any filtered catalogue model without a
+    per-model profile file.
 
-    ``guidelines`` selects the prompt-parts guidelines file; defaults to the
-    phase-3 threat-hunting protocol (cloud bake-offs run the heavy-telemetry
-    hunt). Pass ``investigation_protocol.md`` for phase-2 triage."""
+    ``coached`` (default True) selects the threat-hunting analyst-method coaching
+    (threat_hunting_protocol.md + coaching hints). ``coached=False`` is the
+    baseline arm: the plain investigation_protocol.md and NO coaching hints, so a
+    with/without-coaching A/B isolates the coaching's effect. ``guidelines``
+    overrides the guidelines file explicitly."""
     from blue_bench_mcp.profiles import ModelProfile
+    g = guidelines or ("threat_hunting_protocol.md" if coached else "investigation_protocol.md")
+    hints = [
+        "Native tool-call protocol — emit structured tool_calls, no fenced JSON in the assistant text.",
+        "Prefer aggregation (count_by_field, top-N) over raw reads during triage.",
+        "Chain tools across host and network sources for correlation.",
+        "For low-and-slow hunts, widen the tool time windows (large timerange_minutes).",
+        "Flag data inconsistencies honestly rather than fabricating around them.",
+    ] if coached else []
     return ModelProfile.model_validate({
-        "name": f"cloud-{model_id.replace(':', '-').replace('/', '-')}",
+        "name": f"cloud-{model_id.replace(':', '-').replace('/', '-')}{'' if coached else '-uncoached'}",
         "model_id": model_id,
         "tool_protocol": "native",
         "prompt_style": "terse",
         "context_size": 32768,
         "generation": {"temperature": 0.3, "top_p": 0.9},
-        "coaching_hints": [
-            "Native tool-call protocol — emit structured tool_calls, no fenced JSON in the assistant text.",
-            "Prefer aggregation (count_by_field, top-N) over raw reads during triage.",
-            "Chain tools across host and network sources for correlation.",
-            "For low-and-slow hunts, widen the tool time windows (large timerange_minutes).",
-            "Flag data inconsistencies honestly rather than fabricating around them.",
-        ],
+        "coaching_hints": hints,
         "recommended_workflows": ["triage", "forensics-lite", "detection-rules", "correlation"],
         "prompt_parts": {"role": "blue_team_analyst.md", "site": "default.md",
-                         "guidelines": guidelines},
+                         "guidelines": g},
         "require_task_class": False,
     })

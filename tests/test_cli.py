@@ -64,7 +64,7 @@ def test_aggregate_writes_bluf(tmp_path: Path):
     result = runner.invoke(app, ["aggregate", str(tmp_path)])
     assert result.exit_code == 0, result.stdout + result.stderr
     bluf = (tmp_path / "BLUF.md").read_text()
-    assert "Phase 2 BLUF" in bluf
+    assert "# BLUF —" in bluf
     assert "CLEARS THRESHOLD" in bluf
     assert "overall=100.0%" in result.stderr
 
@@ -73,7 +73,7 @@ def test_aggregate_no_write_mode(tmp_path: Path):
     _write_run(tmp_path)
     result = runner.invoke(app, ["aggregate", str(tmp_path), "--no-write"])
     assert result.exit_code == 0
-    assert "Phase 2 BLUF" in result.stdout
+    assert "# BLUF —" in result.stdout
     assert not (tmp_path / "BLUF.md").exists()
 
 

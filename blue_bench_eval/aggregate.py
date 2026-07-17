@@ -87,14 +87,14 @@ def _score_to_pct(score: int) -> float:
 
 
 def _verdict_from_rubric(dim_scores: dict[str, int], key_dimensions: list[str]) -> Verdict:
+    # A key dimension that is ABSENT is N/A (e.g. discrimination on an RQ2 prompt),
+    # not a zero — it must not force FAIL. Only scored dimensions count.
     if any(s == 0 for s in dim_scores.values()):
         return "FAIL"
-    for kd in key_dimensions:
-        if dim_scores.get(kd, 0) == 0:
-            return "FAIL"
-    if all(s >= 2 for s in dim_scores.values()) and all(
-        dim_scores.get(kd, 0) >= 2 for kd in key_dimensions
-    ):
+    present_keys = [kd for kd in key_dimensions if kd in dim_scores]
+    if any(dim_scores[kd] == 0 for kd in present_keys):
+        return "FAIL"
+    if all(s >= 2 for s in dim_scores.values()) and all(dim_scores[kd] >= 2 for kd in present_keys):
         return "PASS"
     return "PARTIAL"
 

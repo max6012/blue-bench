@@ -60,15 +60,14 @@ _CAPTURE = HostRemap(
 # signal is "rare external destination + regular full-window cadence", found by
 # hunting, not by destination reputation. A famous-CDN dest (GitHub/Google) is
 # waved through as benign even by a frontier model — see the oracle A/B run.
-_BEACON_SPECS: dict[str, BeaconSpec] = {
-    # Rotate across 5 IPs in one /24: each IP stays under a per-IP detector's
-    # connection threshold; /24 aggregation reveals the merged cadence. Tests
-    # whether the analyst reads the tool's rotation blind-spot and retries /24
-    # rather than reading a per-IP negative as "no C2".
-    "apt-bb-001": BeaconSpec(dest_ips=(
-        "146.190.62.150", "146.190.62.151", "146.190.62.152",
-        "146.190.62.153", "146.190.62.154")),
-}
+# DISABLED (2026-07-17, Max): beacons should NOT be findable. The synthesized
+# low-and-slow beacon made the APT's network C2 artificially detectable — that
+# fudges the test. The captured bundle's real C2 (a handful of connections
+# buried in legit GitHub/Google traffic) stays as-is: realistically near-
+# invisible, so RQ2 detection must rest on HOST-side tradecraft. The synthesizer
+# code (inject.BeaconSpec) is kept but unused. Re-enable only if the exercise
+# deliberately wants a findable network signal.
+_BEACON_SPECS: dict[str, BeaconSpec] = {}
 
 _DEFAULT_ADVERSARIES: dict[str, list[tuple[str, str, str]]] = {
     "S": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],

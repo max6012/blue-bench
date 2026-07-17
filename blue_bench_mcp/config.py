@@ -66,6 +66,9 @@ class BeaconingConfig(BaseModel):
     the floors makes low-and-slow actors easier to catch (and floods FPs);
     tightening them makes the range harder.
     """
+    enabled: bool = False                    # gate the detect_beaconing tool OFF by
+                                             # default: beacons are not meant to be
+                                             # network-findable (host-side detection).
     default_window_minutes: int = 10080     # 7d — beacons need a wide lookback
     default_min_connections: int = 20        # a cadence needs enough callbacks
     min_connections_floor: int = 5           # the model may not go below this

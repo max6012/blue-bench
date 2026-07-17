@@ -170,7 +170,6 @@ def register(server: FastMCP, cfg: ServerConfig) -> None:
             top_n=top_n,
         )
 
-    @server.tool()
     async def detect_beaconing(
         timerange_minutes: int = 0,
         min_connections: int = 0,
@@ -216,3 +215,9 @@ def register(server: FastMCP, cfg: ServerConfig) -> None:
             src_ip=src_ip,
             dest_ip=dest_ip,
         )
+
+    # Off by default — beacons are not meant to be network-findable, so this
+    # beacon-finder stays out of the measurement tool surface unless a config
+    # explicitly sets beaconing.enabled.
+    if cfg.beaconing.enabled:
+        server.tool()(detect_beaconing)

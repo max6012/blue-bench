@@ -120,8 +120,8 @@ def build_bruteforce() -> BundleSpec:
         "cred_bruteforce", "ssh-bruteforce-01", "cybercrime", ["T1110.001"],
         "SSH brute-force against srv-app-01 from a single external source, ~40 failed logons for a "
         "nonexistent user then a successful login; Wazuh rule 5710 fires.",
-        ["SSH brute-force against srv-app-01 from a single external source, ~40 failed logons for a "
-         "nonexistent user then a successful login; Wazuh rule 5710 fires.",
+        [("SSH brute-force against srv-app-01 from a single external source, ~40 failed logons for a "
+          "nonexistent user then a successful login; Wazuh rule 5710 fires."),
          "Detect via the auth-log burst from one source IP and the Wazuh authentication_failed alerts."],
         events)
 
@@ -156,8 +156,8 @@ def build_spray() -> BundleSpec:
         "cred_spray", "pw-spray-01", "cybercrime", ["T1110.003"],
         "Low-and-slow password spray against dc-01: one source IP attempts a single password across ~15 "
         "domain accounts, plus Kerberos pre-auth failures.",
-        ["Low-and-slow password spray against dc-01: one source IP attempts a single password across ~15 "
-         "domain accounts, plus Kerberos pre-auth failures.",
+        [("Low-and-slow password spray against dc-01: one source IP attempts a single password across ~15 "
+          "domain accounts, plus Kerberos pre-auth failures."),
          "Detect via one source hitting many distinct TargetUserName with 4625/4771, low per-account count."],
         events)
 
@@ -185,10 +185,10 @@ def build_dormant() -> BundleSpec:
         "cred_dormant", "dormant-cred-01", "benign-anomaly", ["T1078.002"],
         "Service account svc_backup normally logs on only as a nightly batch job (LogonType 4); here it "
         "performs an off-hours RemoteInteractive logon (LogonType 10) from an unusual host.",
-        ["Service account svc_backup normally logs on only as a nightly batch job (LogonType 4); here it "
-         "performs an off-hours RemoteInteractive logon (LogonType 10) from an unusual host.",
-         "Detect via the off-baseline interactive logon for a service account that otherwise only runs "
-         "scheduled."],
+        [("Service account svc_backup normally logs on only as a nightly batch job (LogonType 4); here it "
+          "performs an off-hours RemoteInteractive logon (LogonType 10) from an unusual host."),
+         ("Detect via the off-baseline interactive logon for a service account that otherwise only runs "
+          "scheduled.")],
         events)
 
 
@@ -218,10 +218,10 @@ def build_pth() -> BundleSpec:
         "cred_pth", "pass-the-hash-01", "cybercrime", ["T1550.002"],
         "Pass-the-hash into srv-files-01: a Type-3 NTLM network logon for the privileged corp-admin "
         "account from an unexpected source host (wkst-11), followed by special-privilege assignment.",
-        ["Pass-the-hash into srv-files-01: a Type-3 NTLM network logon for the privileged corp-admin "
-         "account from an unexpected source host (wkst-11), followed by special-privilege assignment.",
-         "Detect via NTLM network logon (LogonType 3, NtLmSsp) for a privileged account from an unusual "
-         "source IP."],
+        [("Pass-the-hash into srv-files-01: a Type-3 NTLM network logon for the privileged corp-admin "
+          "account from an unexpected source host (wkst-11), followed by special-privilege assignment."),
+         ("Detect via NTLM network logon (LogonType 3, NtLmSsp) for a privileged account from an unusual "
+          "source IP.")],
         events)
 
 
@@ -253,10 +253,10 @@ def build_travel() -> BundleSpec:
         "cred_travel", "impossible-travel-01", "benign-anomaly", ["T1078"],
         "Impossible travel for user ekim: two successful logons from geographically distant external IPs "
         "(203.0.113.50 then 198.51.100.77) within 35 minutes.",
-        ["Impossible travel for user ekim: two successful logons from geographically distant external IPs "
-         "(203.0.113.50 then 198.51.100.77) within 35 minutes.",
-         "Detect via one account authenticating from two far-apart source IPs in a window too short to "
-         "travel."],
+        [("Impossible travel for user ekim: two successful logons from geographically distant external IPs "
+          "(203.0.113.50 then 198.51.100.77) within 35 minutes."),
+         ("Detect via one account authenticating from two far-apart source IPs in a window too short to "
+          "travel.")],
         events)
 
 
@@ -295,11 +295,11 @@ def build_commodity() -> BundleSpec:
         "Noisy commodity infection on wkst-11: encoded PowerShell loader + download cradle, comsvcs LSASS "
         "dump, and loud beaconing to a known-bad C2 that trips ET MALWARE Suricata signatures (the "
         "true-positive alerts for triage).",
-        ["Noisy commodity infection on wkst-11: encoded PowerShell loader + download cradle, comsvcs LSASS "
-         "dump, and loud beaconing to a known-bad C2 that trips ET MALWARE Suricata signatures (the "
-         "true-positive alerts for triage).",
-         "This host is deliberately LOUD (network IDS alerts fire) — the opposite of the stealthy APT; it "
-         "is NOT part of the APT-vs-cybercrime discrimination pair."],
+        [("Noisy commodity infection on wkst-11: encoded PowerShell loader + download cradle, comsvcs LSASS "
+          "dump, and loud beaconing to a known-bad C2 that trips ET MALWARE Suricata signatures (the "
+          "true-positive alerts for triage)."),
+         ("This host is deliberately LOUD (network IDS alerts fire) — the opposite of the stealthy APT; it "
+          "is NOT part of the APT-vs-cybercrime discrimination pair.")],
         events)
 
 

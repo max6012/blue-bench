@@ -7,7 +7,7 @@ import inspect
 
 import pytest
 
-from blue_bench_mcp.config import AuthConfig, ElasticConfig, LimitsConfig, ServerConfig
+from blue_bench_mcp.config import ElasticConfig, LimitsConfig, ServerConfig
 from blue_bench_mcp.tool_classes.auth import AuthTool
 
 

@@ -21,7 +21,7 @@ import yaml
 
 import blue_bench_eval.qualify as qualify
 from blue_bench_eval.qualify import PreflightError, run_corpus
-from blue_bench_eval.judge import VoidRunError, judge_run, load_rubric
+from blue_bench_eval.judge import VoidRunError, judge_run
 
 RUBRIC = Path("blue_bench_eval/rubrics/phase3.yaml")
 

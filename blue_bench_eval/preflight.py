@@ -46,17 +46,9 @@ import httpx
 from blue_bench_mcp.config import ServerConfig, load_config
 
 # --- tool -> ES index resolution --------------------------------------------
-# Only ES-backed tools contribute indices to a per-prompt probe. Tools whose
-# data does not live in Elasticsearch (OpenEDR, evidence files, nmap, sigma
-# validation) are listed so an all-non-ES prompt reports "n/a" instead of
-# silently mapping to nothing.
-_NON_ES_TOOLS = frozenset({
-    "get_detections",       # OpenEDR API
-    "list_endpoints",       # OpenEDR API
-    "file_hash", "file_metadata", "strings_extract", "list_evidence",  # evidence files
-    "nmap_scan", "nmap_quick_scan",  # live scan
-    "validate_sigma_rule",  # pure/offline
-})
+# Only ES-backed tools contribute indices to a per-prompt probe; a prompt whose
+# expected_tools resolve to no ES index (OpenEDR / evidence files / nmap / sigma
+# validation) reports "n/a" — see _indices_for_tools.
 
 
 def _split_pattern(pattern: str) -> list[str]:
@@ -126,19 +118,15 @@ class ESClient(Protocol):
 
     def ping(self) -> tuple[bool, str]:
         """(reachable, detail). Never raises."""
-        ...
 
     def count(self, index: str) -> int | None:
         """Doc count for a single index; None if the index is missing (404)."""
-        ...
 
     def max_timestamp(self, indices: list[str]) -> datetime | None:
         """Max @timestamp across the given indices, or None if unavailable."""
-        ...
 
     def probe_hits(self, indices: list[str], window_hours: int) -> int:
         """Count docs in [now-window_hours, now] across indices (0 if none)."""
-        ...
 
 
 class HttpxESClient:

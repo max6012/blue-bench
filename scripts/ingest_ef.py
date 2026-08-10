@@ -300,13 +300,13 @@ def _shift_embedded_times(doc: dict, delta: timedelta) -> None:
         try:
             doc["ts"] = f"{float(v) + secs:.6f}"
         except (TypeError, ValueError):
-            pass
+            pass  # non-numeric/unparseable clock value — leave the field untouched
     v = doc.get("timestamp_ms")
     if v not in (None, ""):
         try:
             doc["timestamp_ms"] = int(v) + int(round(secs * 1000))
         except (TypeError, ValueError):
-            pass
+            pass  # non-numeric/unparseable clock value — leave the field untouched
     v = doc.get("UtcTime")
     if v:
         t = _parse_iso(str(v).replace(" ", "T"))

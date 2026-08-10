@@ -58,8 +58,13 @@ class AggregateResult:
     dim_pct: dict[str, float] = field(default_factory=dict)
     overall_pct: float = 0.0
 
-    # Per-category rollups.
+    # Per-category rollups (category = RQ/topic axis).
     per_category: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    # Per-tier rollups (tier = complexity axis, orthogonal to category).
+    # Keyed by int tier (1|2|3); each value mirrors per_category's dim map +
+    # "overall", plus an integer "count" of prompts in that tier.
+    per_tier: dict[int, dict[str, float]] = field(default_factory=dict)
 
     # Threshold check.
     threshold: RubricThreshold | None = None
@@ -149,6 +154,20 @@ def _load_prompt_categories(prompts_dir: Path, prefix: str = "p2-") -> dict[str,
     return cats
 
 
+def _load_prompt_tiers(prompts_dir: Path, prefix: str = "p2-") -> dict[str, int]:
+    """Map prompt_id -> complexity tier (1|2|3) by reading the YAML specs.
+
+    Mirrors the PromptSpec schema default: a prompt that omits `tier` is
+    treated as tier 3 (the complex/leading tier).
+    """
+    tiers: dict[str, int] = {}
+    for f in sorted(prompts_dir.glob(f"{prefix}*.yaml")):
+        with open(f) as fh:
+            data = yaml.safe_load(fh)
+        tiers[data["id"]] = int(data.get("tier", 3))
+    return tiers
+
+
 def aggregate(
     run_dir: Path,
     rubric_path: Path,
@@ -158,6 +177,7 @@ def aggregate(
     traces = _load_traces(run_dir)
     threshold, dimensions, key_dimensions, prompt_prefix = _load_rubric(rubric_path)
     categories = _load_prompt_categories(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
+    tiers = _load_prompt_tiers(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
 
     result = AggregateResult(
         run_dir=run_dir,
@@ -201,6 +221,22 @@ def aggregate(
                 cat_dims[dim] = mean(pcts)
         cat_dims["overall"] = mean(cat_dims.values()) if cat_dims else 0.0
         result.per_category[cat] = cat_dims
+
+    # Per-tier rollup (complexity axis). Tier defaults to 3 for any prompt
+    # whose spec omits the field, matching the PromptSpec schema default.
+    by_tier: dict[int, list[PromptScore]] = defaultdict(list)
+    for s in scores:
+        by_tier[tiers.get(s.prompt_id, 3)].append(s)
+    for tier, tier_scores in by_tier.items():
+        tier_dims: dict[str, float] = {}
+        for dim in dimensions:
+            pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in tier_scores if dim in sc.dimensions]
+            if pcts:
+                tier_dims[dim] = mean(pcts)
+        # Rollup over the dimension means present for this tier.
+        tier_dims["overall"] = mean([v for k, v in tier_dims.items()]) if tier_dims else 0.0
+        tier_dims["count"] = float(len(tier_scores))
+        result.per_tier[tier] = tier_dims
 
     # Per-prompt verdict detail.
     for s in scores:
@@ -281,6 +317,26 @@ def render_bluf(result: AggregateResult) -> str:
         lines.append(sep)
         for cat, dims in sorted(result.per_category.items()):
             row = f"| {cat} | {dims.get('overall', 0.0):.1f}% | "
+            row += " | ".join(f"{dims[d]:.1f}%" if d in dims else "N/A" for d in dimensions)
+            row += " |"
+            lines.append(row)
+        lines.append("")
+
+    if result.per_tier:
+        # Complexity axis (orthogonal to category). Shows where a model falls
+        # off the complexity curve. 1 = simple/single-pivot, 2 = middle/
+        # scoped-work-mode, 3 = complex/leading.
+        tier_labels = {1: "1 (simple)", 2: "2 (middle)", 3: "3 (complex)"}
+        lines.append("## Per tier")
+        lines.append("")
+        header = "| Tier | Prompts | Overall | " + " | ".join(d.replace("_", " ").title() for d in dimensions) + " |"
+        sep = "|------|---------|---------|" + "|".join("-" * max(len(d.replace("_", " ").title()) + 2, 9) for d in dimensions) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for tier in sorted(result.per_tier):
+            dims = result.per_tier[tier]
+            count = int(dims.get("count", 0))
+            row = f"| {tier_labels.get(tier, str(tier))} | {count} | {dims.get('overall', 0.0):.1f}% | "
             row += " | ".join(f"{dims[d]:.1f}%" if d in dims else "N/A" for d in dimensions)
             row += " |"
             lines.append(row)

@@ -1,0 +1,20 @@
+id: p3-06
+category: exfiltration
+title: Signs of data exfiltration?
+question: |
+  Are there any indications that data is being taken out of the environment? If
+  you find something, tell me which host it's coming from, where it's going, and
+  what makes you think it's exfiltration rather than normal traffic.
+expected_tools:
+  - get_process_events
+  - get_connections
+  - count_by_field
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "WKST-03"]
+  - synonyms: ["exfiltration", "exfil over C2", "data exfiltration", "T1041"]
+  - synonyms: ["collection", "staged", "archive", "makecab", "compress", "T1560"]
+  - synonyms: ["C2 channel", "web protocol", "over the C2", "beacon channel", "T1071.001"]
+pass_criteria: Identifies wkst-03 staging/collection and exfil over the C2 web channel, and grounds the call in the observed staging + outbound activity rather than asserting it.
+tags: [tier1, exfiltration, apt, wkst-03]
+max_turns: 20
+tier: 1

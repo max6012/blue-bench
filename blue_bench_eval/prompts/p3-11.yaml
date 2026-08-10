@@ -1,0 +1,20 @@
+id: p3-11
+category: credential_access
+title: Password spraying?
+question: |
+  Is there any sign of password spraying — one source trying a small number of
+  passwords across many accounts rather than hammering one? If so, where is it
+  aimed, how many accounts, and what's the source?
+expected_tools:
+  - search_auth_events
+  - count_by_field
+expected_findings:
+  - synonyms: ["password spray", "spraying", "one password many accounts", "many accounts", "T1110.003"]
+  - synonyms: ["dc-01", "domain controller", "10.20.0.10"]
+  - synonyms: ["single source IP", "one source", "same source"]
+  - synonyms: ["4625", "4771", "Kerberos pre-auth", "pre-authentication failure", "failed logon"]
+  - synonyms: ["low per-account", "low and slow", "distinct TargetUserName", "spread over time"]
+pass_criteria: Identifies the low-and-slow password spray against dc-01 — one source hitting ~15 distinct domain accounts with a low per-account failure count (4625/4771) — grounded in the cross-account auth pattern rather than a single-account burst.
+tags: [tier1, credential_access, spray, auth]
+max_turns: 20
+tier: 1

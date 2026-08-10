@@ -1,0 +1,20 @@
+id: p3-15
+category: alert_triage
+title: Triage the alert queue — real or noise?
+question: |
+  Take a look at the alerts firing in the environment. Is any of this a genuine
+  threat, or is it background noise? Walk me through which alerts are true
+  positives worth acting on and which are false positives you'd close, and why.
+expected_tools:
+  - search_alerts
+  - count_by_field
+  - get_agent_alerts
+expected_findings:
+  - synonyms: ["true positive", "real", "worth acting", "genuine threat"]
+  - synonyms: ["ET MALWARE", "Cobalt Strike", "malware C2", "commodity", "beacon signature"]
+  - synonyms: ["wkst-11", "WKST-11"]
+  - synonyms: ["false positive", "benign", "noise", "close", "ET INFO", "ET POLICY", "port scan", "high-entropy SNI"]
+pass_criteria: Separates the true-positive commodity-malware alerts (ET MALWARE on wkst-11) from the benign false-positive noise (ET INFO/POLICY), grounding each call in the signature + host rather than treating every alert the same.
+tags: [tier1, alert_triage, fp_tp, suricata, wazuh]
+max_turns: 20
+tier: 1

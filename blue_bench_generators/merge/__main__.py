@@ -73,8 +73,24 @@ _DEFAULT_ADVERSARIES: dict[str, list[tuple[str, str, str]]] = {
     "S": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
     "M": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
     "L": [("apt-bb-001", "apt_inject", "wkst-03"),
-          ("cybercrime-bb-001", "cybercrime_foil", "wkst-07")],
+          ("cybercrime-bb-001", "cybercrime_foil", "wkst-07"),
+          # Credential-attack + noisy-commodity injections (single-host each).
+          # These are NOT the RQ3 discrimination pair; the non-separability gate
+          # is scoped to apt-bb-001 vs cybercrime-bb-001 only (see _RQ3_PAIR).
+          ("ssh-bruteforce-01", "cred_bruteforce", "srv-app-01"),
+          ("pw-spray-01", "cred_spray", "dc-01"),
+          ("dormant-cred-01", "cred_dormant", "wkst-14"),
+          ("pass-the-hash-01", "cred_pth", "srv-files-01"),
+          ("impossible-travel-01", "cred_travel", "wkst-16"),
+          ("commodity-01", "commodity", "wkst-11")],
 }
+
+# The RQ3 non-separability gate compares ONLY this designated pair — the targeted
+# APT intrusion vs the commodity-cybercrime foil. Other injected attacks (the
+# credential + noisy-commodity bundles above) must NOT enter the gate computation,
+# or their distinct telemetry (Windows-auth EIDs, loud IDS alerts) would push the
+# surface-separability AUC past the gate threshold and abort the build.
+_RQ3_PAIR = ("apt-bb-001", "cybercrime-bb-001")
 
 # Files/dirs excluded from the corpus build_hash: EF metadata (generated_at
 # varies) and the ground-truth dir (it CONTAINS the hash — would be circular).
@@ -196,25 +212,34 @@ def build_corpus(
 
 
 def _run_corpus_gates(corpus_dir: Path, injected: list[dict]) -> dict | None:
-    """Run the RQ3 gates on the injected events grouped by source_class.
+    """Run the RQ3 non-separability gates on the DESIGNATED pair only.
 
-    Returns None when fewer than two classes are present (no discrimination
-    test to run, e.g. an S tier with the foil only)."""
+    Scoped to ``_RQ3_PAIR`` — the targeted APT intrusion vs the commodity-
+    cybercrime foil, matched by incident id — NOT all apt-class vs all
+    cybercrime-class events. Other injected attacks (credential + noisy-
+    commodity bundles) are deliberately excluded: their distinct telemetry
+    (Windows-auth EIDs, loud IDS alerts) is not part of the RQ3 discrimination
+    test and would otherwise inflate surface-separability and abort the build.
+
+    Returns None when the designated pair isn't both present (e.g. an S tier
+    with the foil only — no discrimination test to run)."""
     import json as _json
 
     from blue_bench_generators.merge.gates import run_gates
 
-    by_class: dict[str, list[dict]] = {}
-    for inj in injected:
-        evs: list[dict] = []
-        for f in sorted((corpus_dir / "injected").glob(f"{inj['incident']}.*.ndjson")):
-            evs += [_json.loads(l) for l in f.read_text().splitlines() if l.strip()]
-        by_class.setdefault(inj["source_class"], []).extend(evs)
+    apt_incident, cyber_incident = _RQ3_PAIR
 
-    if "apt" not in by_class or "cybercrime" not in by_class:
+    def _load_incident(incident: str) -> list[dict]:
+        evs: list[dict] = []
+        for f in sorted((corpus_dir / "injected").glob(f"{incident}.*.ndjson")):
+            evs += [_json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+        return evs
+
+    present = {inj["incident"] for inj in injected}
+    if apt_incident not in present or cyber_incident not in present:
         return None
 
-    rep = run_gates(by_class["apt"], by_class["cybercrime"])
+    rep = run_gates(_load_incident(apt_incident), _load_incident(cyber_incident))
     log.info("RQ3 gates: %s", "ALL PASS" if rep.all_passed else "FAILED")
     for r in rep.results:
         log.info("  [%s] %-26s %.3f (thr %s)", "PASS" if r.passed else "FAIL",

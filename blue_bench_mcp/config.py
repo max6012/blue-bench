@@ -44,6 +44,10 @@ class ZeekConfig(BaseModel):
     """Zeek index settings for get_connections (ES-backed)."""
     index: str = "zeek-conn"
     use_elastic: bool = True
+    # OT/plant connection log lives in a separate index (the OT VLAN is not on the
+    # Zeek IT sensor). get_connections searches it alongside zeek-conn so a defender
+    # can see OT protocol traffic (Modbus/DNP3/IEC-104/S7) with the same tool.
+    ot_conn_index: str = "ot-conn"
 
 
 class SysmonConfig(BaseModel):
@@ -54,6 +58,25 @@ class SysmonConfig(BaseModel):
     ParentImage, ProcessGuid, ParentProcessGuid, User, TargetFilename, etc.
     """
     index: str = "windows-sysmon"
+
+
+class AuthConfig(BaseModel):
+    """Authentication-log index settings for search_auth_events.
+
+    Two auth substrates the other tools do not touch:
+      - windows-security: Windows Security EventLog auth records. EventID (int)
+        4624 logon / 4625 failed logon / 4768 TGT / 4769 TGS / 4771 Kerberos
+        pre-auth fail / 4776 NTLM validation. Fields: Computer, SubjectUserName,
+        TargetUserName, TargetDomainName, LogonType, IpAddress, WorkstationName,
+        Status, FailureReason. Benign records carry time in TimeCreated; injected
+        adversary records carry UtcTime — both are range-filtered via @timestamp
+        (set by ingest) and surfaced natively.
+      - linux-syslog: sshd/auth syslog lines. Fields: timestamp, host, process,
+        pid, message, raw. Auth outcome ("Failed password"/"Accepted") and the
+        source IP live in the message text.
+    """
+    windows_security_index: str = "windows-security"
+    linux_syslog_index: str = "linux-syslog"
 
 
 class BeaconingConfig(BaseModel):
@@ -133,6 +156,7 @@ class ServerConfig(BaseModel):
     elastic: ElasticConfig = Field(default_factory=ElasticConfig)
     zeek: ZeekConfig = Field(default_factory=ZeekConfig)
     sysmon: SysmonConfig = Field(default_factory=SysmonConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
     beaconing: BeaconingConfig = Field(default_factory=BeaconingConfig)
     wazuh: WazuhConfig = Field(default_factory=WazuhConfig)
     openedr: OpenEDRConfig = Field(default_factory=OpenEDRConfig)

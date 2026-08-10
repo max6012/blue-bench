@@ -53,7 +53,10 @@ class ElasticTool:
         self.cfg = cfg
         self.url = cfg.elastic.url.rstrip("/")
         self.index_pattern = cfg.elastic.index_pattern
-        self.zeek_index = cfg.zeek.index if cfg.zeek.use_elastic else cfg.elastic.index_pattern
+        self.zeek_index = (
+            f"{cfg.zeek.index},{cfg.zeek.ot_conn_index}"
+            if cfg.zeek.use_elastic else cfg.elastic.index_pattern
+        )
         self.sysmon_index = cfg.sysmon.index
         self.verify_ssl = cfg.elastic.verify_ssl
         self.user = cfg.elastic.user
@@ -67,7 +70,9 @@ class ElasticTool:
 
     async def _query(self, body: dict, index: str | None = None) -> list[dict]:
         idx = index or self.index_pattern
-        url = f"{self.url}/{idx}/_search"
+        # tolerate a missing index in a comma-separated pattern (e.g. ot-conn absent
+        # in an IT-only deployment) instead of 404-ing the whole query.
+        url = f"{self.url}/{idx}/_search?ignore_unavailable=true&allow_no_indices=true"
         async with httpx.AsyncClient(
             verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
         ) as client:
@@ -78,7 +83,7 @@ class ElasticTool:
 
     async def _agg(self, body: dict, index: str | None = None) -> dict:
         idx = index or self.index_pattern
-        url = f"{self.url}/{idx}/_search"
+        url = f"{self.url}/{idx}/_search?ignore_unavailable=true&allow_no_indices=true"
         async with httpx.AsyncClient(
             verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
         ) as client:
@@ -197,16 +202,35 @@ class ElasticTool:
             timerange_minutes: Lookback window
             top_n: Number of top values to return
         """
-        body = {
-            "size": 0,
-            "query": {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}},
-            "aggs": {"top_values": {"terms": {"field": field, "size": top_n}}},
-        }
-        try:
-            data = await self._agg(body, index=index or self.index_pattern)
-        except httpx.HTTPError as e:
-            return f"Error: ES aggregation failed: {e}"
-        buckets = data.get("aggregations", {}).get("top_values", {}).get("buckets", [])
+        idx = index or self.index_pattern
+
+        async def _agg_on(f: str) -> list[dict]:
+            body = {
+                "size": 0,
+                "query": {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}},
+                "aggs": {"top_values": {"terms": {"field": f, "size": top_n}}},
+            }
+            data = await self._agg(body, index=idx)
+            return data.get("aggregations", {}).get("top_values", {}).get("buckets", [])
+
+        # Dynamic string fields (src_ip, dest_ip, dest_port, …) are text-mapped and
+        # not aggregatable — a raw terms agg 400s. ES auto-creates a `.keyword`
+        # subfield for them, so fall back to it when the raw field errors or is empty.
+        used = field
+        buckets: list[dict] = []
+        last_err: Exception | None = None
+        for cand in (field, f"{field}.keyword"):
+            try:
+                buckets = await _agg_on(cand)
+            except httpx.HTTPError as e:
+                last_err = e
+                continue
+            used = cand
+            if buckets:
+                break
+        if not buckets and last_err is not None and used == field:
+            return f"Error: ES aggregation failed for '{field}' (also tried '{field}.keyword'): {last_err}"
+        field = used
         lines = [f"Top {top_n} values for '{field}' (last {timerange_minutes}m):"]
         if not buckets:
             lines.append("  (no results — check field name, index pattern, or timerange)")

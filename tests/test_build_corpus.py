@@ -68,7 +68,16 @@ def test_remap_resolves_target_host_from_scenario():
 def test_default_adversary_mapping_tiers():
     # foil fits all tiers; APT (10-day dwell) only L
     assert [a[0] for a in build._DEFAULT_ADVERSARIES["S"]] == ["cybercrime-bb-001"]
-    assert [a[0] for a in build._DEFAULT_ADVERSARIES["L"]] == ["apt-bb-001", "cybercrime-bb-001"]
+    L = [a[0] for a in build._DEFAULT_ADVERSARIES["L"]]
+    # RQ3 discrimination pair leads the L list...
+    assert L[:2] == ["apt-bb-001", "cybercrime-bb-001"]
+    # ...followed by the single-host credential + noisy-commodity injections.
+    assert set(L[2:]) == {
+        "ssh-bruteforce-01", "pw-spray-01", "dormant-cred-01",
+        "pass-the-hash-01", "impossible-travel-01", "commodity-01",
+    }
+    # the non-separability gate is scoped to the designated pair only
+    assert build._RQ3_PAIR == ("apt-bb-001", "cybercrime-bb-001")
 
 
 def test_run_corpus_gates_single_class_returns_none(tmp_path: Path):
@@ -83,6 +92,9 @@ def test_run_corpus_gates_single_class_returns_none(tmp_path: Path):
 def test_run_corpus_gates_two_class_returns_verdict(tmp_path: Path):
     inj = tmp_path / "injected"
     inj.mkdir()
+    # The gate is scoped to the DESIGNATED pair (build._RQ3_PAIR): the APT
+    # intrusion vs the cybercrime foil, matched by incident id.
+    apt_id, foil_id = build._RQ3_PAIR
     # apt: sparse cadence; foil: dense — behavioral separates, surface matched
     apt_lines = "\n".join(
         '{"event_id":1,"Image":"powershell.exe","UtcTime":"2026-03-02 %02d:00:00.000"}' % (9 + i)
@@ -90,10 +102,28 @@ def test_run_corpus_gates_two_class_returns_verdict(tmp_path: Path):
     foil_lines = "\n".join(
         '{"event_id":1,"Image":"powershell.exe","UtcTime":"2026-03-02 09:%02d:00.000"}' % i
         for i in range(8))
-    (inj / "apt-x.sysmon.sysmon.ndjson").write_text(apt_lines + "\n")
-    (inj / "foil-x.sysmon.sysmon.ndjson").write_text(foil_lines + "\n")
+    (inj / f"{apt_id}.sysmon.sysmon.ndjson").write_text(apt_lines + "\n")
+    (inj / f"{foil_id}.sysmon.sysmon.ndjson").write_text(foil_lines + "\n")
     res = build._run_corpus_gates(tmp_path, [
-        {"incident": "apt-x", "source_class": "apt"},
-        {"incident": "foil-x", "source_class": "cybercrime"},
+        {"incident": apt_id, "source_class": "apt"},
+        {"incident": foil_id, "source_class": "cybercrime"},
     ])
     assert res is not None and "all_passed" in res and len(res["gates"]) == 4
+
+
+def test_run_corpus_gates_scoped_to_designated_pair(tmp_path: Path):
+    """Off-pair attacks (credential/commodity bundles) must NOT enter the gate,
+    even if labeled apt/cybercrime — the gate compares only build._RQ3_PAIR."""
+    inj = tmp_path / "injected"
+    inj.mkdir()
+    apt_id, foil_id = build._RQ3_PAIR
+    # An extra cybercrime-class attack with a DIFFERENT incident id + very
+    # different telemetry (Windows-auth EIDs) that would skew the gate if pooled.
+    (inj / "pw-spray-01.winsec.security.ndjson").write_text(
+        '{"EventID":4625,"UtcTime":"2026-03-02 09:00:00.000"}\n')
+    # The designated pair is NOT both present -> no discrimination test to run.
+    res = build._run_corpus_gates(tmp_path, [
+        {"incident": foil_id, "source_class": "cybercrime"},
+        {"incident": "pw-spray-01", "source_class": "cybercrime"},
+    ])
+    assert res is None

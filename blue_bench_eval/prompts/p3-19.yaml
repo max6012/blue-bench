@@ -1,0 +1,23 @@
+id: p3-19
+category: attack_mapping
+title: Map a host's activity to ATT&CK
+question: |
+  Workstation wkst-03 is confirmed compromised. Map the activity you can observe
+  on it to MITRE ATT&CK: for each technique, give the technique ID and the
+  specific artifact in the telemetry that evidences it.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+expected_findings:
+  - synonyms: ["T1059.001", "PowerShell", "download cradle"]
+  - synonyms: ["T1547.001", "Run key", "registry persistence"]
+  - synonyms: ["T1218.005", "mshta"]
+  - synonyms: ["T1003.001", "LSASS", "comsvcs", "credential dumping"]
+  - synonyms: ["T1071.001", "web protocol", "C2"]
+  - synonyms: ["T1041", "exfiltration over C2"]
+  - synonyms: ["T1560.001", "makecab", "archive collected data"]
+pass_criteria: Maps wkst-03's observed activity to the correct ATT&CK techniques (execution, persistence, defense evasion, credential access, collection, C2, exfil) with a supporting artifact cited for each.
+tags: [tier2, attack_mapping, mitre, sysmon]
+max_turns: 30
+tier: 2

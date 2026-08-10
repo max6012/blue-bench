@@ -1,0 +1,21 @@
+id: p3-10
+category: credential_access
+title: Brute-force login attempts?
+question: |
+  Are we seeing brute-force login activity anywhere — a host getting hammered with
+  failed logons? If so, which host and account were targeted, where is it coming
+  from, and did any attempt succeed?
+expected_tools:
+  - search_auth_events
+  - get_agent_alerts
+  - search_alerts
+expected_findings:
+  - synonyms: ["brute force", "brute-force", "failed logins", "failed password", "authentication_failed", "T1110.001"]
+  - synonyms: ["srv-app-01", "web server", "10.20.0.30"]
+  - synonyms: ["single source", "one source IP", "185.220.101.42", "external"]
+  - synonyms: ["successful login after failures", "success", "then accepted", "nonexistent user"]
+  - synonyms: ["Wazuh", "rule 5710", "SSH", "sshd"]
+pass_criteria: Identifies the SSH brute-force against srv-app-01 from a single external source (~40 failures then a success), grounded in the auth-log burst and/or the Wazuh authentication-failure alerts.
+tags: [tier1, credential_access, brute_force, auth]
+max_turns: 20
+tier: 1

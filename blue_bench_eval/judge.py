@@ -23,12 +23,15 @@ it without network access.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+
+log = logging.getLogger(__name__)
 
 from blue_bench_eval.aggregate import DimensionScore, PromptScore, _verdict_from_rubric
 from blue_bench_eval.prompts._schema import PromptSpec, load_all
@@ -89,6 +92,20 @@ def _is_rq3(spec: PromptSpec | None) -> bool:
     return any(t.upper() == "RQ3" for t in spec.tags) or "discrimination" in spec.category
 
 
+# Categories with no injected kill chain to attribute (RQ1 OT characterization /
+# baseline, network/site discovery, and the DNS true-negative). Scoring an ATT&CK
+# "attribution" dimension against these forces a spurious ~0 unrelated to the
+# model's performance, so it is omitted (N/A) — same treatment as discrimination
+# for non-RQ3 prompts.
+_NO_ATTRIBUTION_CATEGORIES = {"ot_segment", "discovery", "dns"}
+
+
+def _scores_attribution(spec: PromptSpec | None) -> bool:
+    if spec is None:
+        return True
+    return spec.category not in _NO_ATTRIBUTION_CATEGORIES
+
+
 def _tool_ledger(trace: dict, max_result_chars: int = 1200) -> str:
     """Flatten the trace into a compact call -> result ledger for the judge."""
     lines: list[str] = []
@@ -115,7 +132,12 @@ def _tool_ledger(trace: dict, max_result_chars: int = 1200) -> str:
 
 
 def _dimensions_for(spec: PromptSpec | None) -> list[str]:
-    return ["tool_usage", "findings", "attribution"] + (["discrimination"] if _is_rq3(spec) else [])
+    dims = ["tool_usage", "findings"]
+    if _scores_attribution(spec):
+        dims.append("attribution")
+    if _is_rq3(spec):
+        dims.append("discrimination")
+    return dims
 
 
 def build_system_prompt(rubric: Rubric) -> str:
@@ -195,41 +217,86 @@ def build_user_prompt(spec: PromptSpec | None, trace: dict) -> str:
 # --- the one networked call (mocked in tests) --------------------------------
 
 
-def _call_judge(cfg: JudgeConfig, system: str, user: str) -> str:
-    """Single Anthropic call. Returns the raw assistant text (JSON expected).
+def _oauth_token() -> str | None:
+    """The Claude subscription OAuth token, from CLAUDE_CODE_OAUTH_TOKEN or an
+    sk-ant-oat… value in ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY."""
+    tok = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if tok:
+        return tok
+    for v in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
+        if os.environ.get(v, "").startswith("sk-ant-oat"):
+            return os.environ[v]
+    return None
 
-    Isolated so tests monkeypatch it. Uses extended thinking for high effort
-    (temperature pinned to 1 as the API requires); falls back to temperature 0
-    when thinking is disabled for maximum determinism.
+
+def _call_judge(cfg: JudgeConfig, system: str, user: str) -> str:
+    """Single grader call → raw assistant text (JSON expected). Isolated for mocking.
+
+    A subscription OAuth token only authenticates through the `claude` CLI
+    (Claude Code) — a hand-rolled bearer call on the raw SDK is throttled/rejected
+    — so route those to `claude -p`. A real sk-ant-api key uses the SDK (metered).
     """
+    oauth = _oauth_token()
+    if oauth:
+        return _call_judge_cli(cfg, system, user, oauth)
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return _call_judge_sdk(cfg, system, user)
+    raise RuntimeError(
+        "judge needs a Claude subscription token (CLAUDE_CODE_OAUTH_TOKEN / sk-ant-oat…, "
+        "via the claude CLI) or a metered ANTHROPIC_API_KEY (sk-ant-api…)")
+
+
+def _call_judge_cli(cfg: JudgeConfig, system: str, user: str, oauth: str) -> str:
+    """Grade via the `claude` CLI headless (subscription-billed). Prompt on stdin,
+    JSON output; the assistant text is the ``result`` field."""
+    import shutil
+    import subprocess
+
+    claude = shutil.which("claude") or "claude"
+    env = dict(os.environ)
+    env["CLAUDE_CODE_OAUTH_TOKEN"] = oauth
+    env.pop("ANTHROPIC_API_KEY", None)     # force the subscription token, not a metered key
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    args = [claude, "-p", "--output-format", "json", "--model", cfg.model,
+            "--allowed-tools", ""]         # self-contained grading; no tools
+    r = subprocess.run(args, input=f"{system}\n\n{user}", capture_output=True,
+                       text=True, env=env, timeout=600)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude CLI failed ({r.returncode}): {(r.stderr or '')[:500]}")
+    try:
+        data = json.loads(r.stdout)
+    except json.JSONDecodeError:
+        return r.stdout
+    if isinstance(data, dict):
+        if data.get("is_error"):
+            raise RuntimeError(f"claude CLI error: {str(data.get('result') or data)[:300]}")
+        return data.get("result", "") or ""
+    return r.stdout
+
+
+def _call_judge_sdk(cfg: JudgeConfig, system: str, user: str) -> str:
+    """Grade via the Anthropic SDK on a metered API key (ANTHROPIC_API_KEY)."""
     import anthropic
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("judge needs ANTHROPIC_API_KEY in the environment (.env)")
-    client = anthropic.Anthropic()
-    effort = (cfg.reasoning_effort or "high").lower()
+    client = anthropic.Anthropic(max_retries=8)
+    effort = (os.environ.get("JUDGE_EFFORT") or cfg.reasoning_effort or "high").lower()
+    use_thinking = effort in ("high", "medium", "low")
     kwargs: dict = {
         "model": cfg.model,
-        "max_tokens": _MAX_TOKENS + cfg.thinking_budget,
+        "max_tokens": (_MAX_TOKENS + cfg.thinking_budget) if use_thinking else _MAX_TOKENS,
         "system": system,
         "messages": [{"role": "user", "content": user}],
     }
-    if effort in ("high", "medium", "low"):
-        # opus-4.8+ uses ADAPTIVE thinking with effort in output_config
-        # (the old thinking.type=enabled + budget_tokens form is rejected).
-        kwargs["thinking"] = {"type": "adaptive"}
+    if use_thinking:
+        kwargs["thinking"] = {"type": "adaptive"}       # opus-4.8+ adaptive thinking
         kwargs["output_config"] = {"effort": effort}
-    else:
-        kwargs["temperature"] = 0.0
     try:
         resp = client.messages.create(**kwargs)
     except anthropic.BadRequestError:
-        # Older/other models: retry as a plain deterministic call.
         for k in ("thinking", "output_config"):
             kwargs.pop(k, None)
-        kwargs["temperature"] = 0.0
+        kwargs["max_tokens"] = _MAX_TOKENS
         resp = client.messages.create(**kwargs)
-    # Concatenate text blocks, skipping thinking blocks.
     return "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
 
 
@@ -256,7 +323,14 @@ def score_trace(
     system = build_system_prompt(rubric)
     user = build_user_prompt(spec, trace)
     raw = call(rubric.judge, system, user)
-    data = _parse_judge_json(raw)
+    try:
+        data = _parse_judge_json(raw)
+    except (json.JSONDecodeError, ValueError):
+        # The judge model occasionally emits malformed JSON (an unescaped quote in
+        # a justification, a dropped delimiter). It's stochastic — one retry almost
+        # always yields valid JSON. Don't let it crash the whole run.
+        raw = call(rubric.judge, system, user)
+        data = _parse_judge_json(raw)
 
     applicable = set(_dimensions_for(spec))
     dims: dict[str, DimensionScore] = {}
@@ -275,6 +349,69 @@ def score_trace(
         hallucinations=[str(h) for h in (data.get("hallucinations") or [])],
         tuning_recommendations=[str(t) for t in (data.get("tuning_recommendations") or [])],
     )
+
+
+class VoidRunError(RuntimeError):
+    """A run whose tool results are ~100% empty — the void-SIEM failure signature.
+
+    A prior run graded models against an EMPTY Elasticsearch: every tool_call
+    returned an empty ``[]``/``""``, so "the model failed" was indistinguishable
+    from "there was nothing to find", and the grader emitted a meaningless
+    "all models fail" BLUF. This is the second (defensive) layer behind the
+    qualify-path preflight gate: rather than score a dead corpus, refuse it.
+    """
+
+
+def _result_is_empty(content: str) -> bool:
+    """True if a tool-result payload carries no data (empty string / list / obj).
+
+    Normalizes rather than string-matching a fixed set: strips, then parses JSON
+    so ``[]``, ``[ ]``, ``\\n[]\\n``, ``{}``, ``null`` and ``""`` all read as empty
+    while any real hit does not.
+    """
+    s = (content or "").strip()
+    if not s:
+        return True
+    try:
+        val = json.loads(s)
+    except (json.JSONDecodeError, ValueError):
+        return False  # non-JSON text is real content
+    if val is None:
+        return True
+    if isinstance(val, (list, dict, str)) and len(val) == 0:
+        return True
+    return False
+
+
+def _void_run_signature(traces: list[dict]) -> tuple[int, int]:
+    """Count (tool_result_turns, empty_ones) aggregated ACROSS the whole run.
+
+    Aggregated corpus-wide on purpose: a single trace with an empty result is
+    normal (nothing to find for that prompt); EVERY tool result empty across the
+    run is the void-SIEM signature.
+    """
+    total = empty = 0
+    for trace in traces:
+        for turn in trace.get("turns", []) or []:
+            if turn.get("role") != "tool":
+                continue
+            total += 1
+            if _result_is_empty(str(turn.get("content", ""))):
+                empty += 1
+    return total, empty
+
+
+def _guard_not_void(traces: list[dict], run_dir: Path) -> None:
+    """Refuse to score a run whose tool results are ~100% empty. Fail-closed."""
+    total, empty = _void_run_signature(traces)
+    if total >= 1 and empty / total >= 0.99:
+        raise VoidRunError(
+            f"VOID RUN — refusing to score {run_dir}: {empty}/{total} tool results "
+            "across the run are empty ([]/\"\"). This is the empty-SIEM signature "
+            "(un-anchored/absent corpus); grading it would emit a meaningless "
+            "'all models fail' BLUF. Fix the corpus (see blue_bench_eval.preflight) "
+            "and re-run — do not judge this run."
+        )
 
 
 def judge_run(
@@ -299,7 +436,21 @@ def judge_run(
     scored_dir = run_dir / "scored"
     scored_dir.mkdir(parents=True, exist_ok=True)
 
+    # Defensive second layer (t-pfwire): scan every trace up front and hard-fail
+    # BEFORE spending any judge calls if the run is void (all-empty tool results).
+    trace_files = [
+        tf for tf in sorted(prompts.glob("*.json")) if not tf.name.endswith(".error.json")
+    ]
+    _guard_not_void([json.loads(tf.read_text()) for tf in trace_files], run_dir)
+
+    # The judge shares its OAuth token's rate window with any concurrent Claude
+    # Code session; pace calls so a batch doesn't trip the shared per-window
+    # limit (429). JUDGE_PACE_SECONDS overrides the gap between graded prompts.
+    import time
+    pace = float(os.environ.get("JUDGE_PACE_SECONDS", "8"))
+
     out: list[PromptScore] = []
+    graded = 0
     for tf in sorted(prompts.glob("*.json")):
         if tf.name.endswith(".error.json"):
             continue
@@ -309,7 +460,19 @@ def judge_run(
         if dest.exists() and not overwrite:
             out.append(PromptScore.model_validate_json(dest.read_text()))
             continue
-        score = score_trace(trace, specs.get(pid), rubric, call=call)
+        if graded and pace:
+            time.sleep(pace)
+        try:
+            score = score_trace(trace, specs.get(pid), rubric, call=call)
+        except Exception as e:
+            # Isolate per-prompt failures (e.g. a judge reply that stays malformed
+            # even after the retry): warn and skip so the other prompts still score.
+            # scored/ is written per-prompt, so a later re-run resumes and retries
+            # this one instead of losing the whole batch.
+            log.warning("judge failed on %s: %s: %s — skipping (re-run to retry)",
+                        pid, type(e).__name__, e)
+            continue
         dest.write_text(score.model_dump_json(indent=2))
         out.append(score)
+        graded += 1
     return out

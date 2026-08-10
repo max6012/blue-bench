@@ -1,0 +1,19 @@
+id: p3-09
+category: persistence
+title: Suspicious autorun / persistence?
+question: |
+  Is anything set up to run automatically that shouldn't be — a persistence
+  mechanism an attacker might have planted? If so, which hosts and what is the
+  mechanism?
+expected_tools:
+  - get_process_events
+  - count_by_field
+expected_findings:
+  - synonyms: ["Run key", "registry run key", "CurrentVersion\\Run", "autorun", "autostart", "T1547.001"]
+  - synonyms: ["Atomic Red Team"]
+  - synonyms: ["wkst-03", "WKST-03"]
+  - synonyms: ["wkst-07", "WKST-07"]
+pass_criteria: Finds the registry Run-key persistence (value "Atomic Red Team") on wkst-03 and wkst-07, grounded in the registry-write process evidence.
+tags: [tier1, persistence, registry, sysmon]
+max_turns: 20
+tier: 1

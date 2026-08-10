@@ -22,3 +22,4 @@ expected_findings:
 pass_criteria: Classifies wkst-03 as the targeted/low-and-slow APT and the other malicious host as commodity cybercrime, and grounds the distinction in cadence/dwell/timeline rather than the matched surface indicators.
 tags: [RQ3, discrimination, apt, cybercrime, behavioral]
 max_turns: 30
+tier: 3

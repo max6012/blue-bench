@@ -1,34 +1,35 @@
 ## Site Context — Blue-Bench reference deployment
 
-This section describes the specific environment this Blue-Bench instance is running against. Site operators replace this file with their own when deploying elsewhere.
+This describes the environment this instance runs against and the data you can
+query. It orients you; it does not substitute for the telemetry — verify every
+conclusion from tool output.
 
-### Data sources available via Elasticsearch tools
+### Environment
+- Active Directory domain `corp.example.invalid`; site timezone America/New_York.
+- Corporate IT: user workstations and Windows/Linux servers on RFC-1918 `10.x`
+  space (workstations and servers on separate subnets).
+- An OT/plant network is also present, on subnets separate from corporate IT.
+- Benign background noise is expected — automation, software updates, telemetry,
+  and routine administrative activity all generate events. A signature firing or
+  an unusual connection is a lead to triage, not a verdict.
 
-- **Suricata IDS alerts.** Accessible through `search_alerts` and `count_by_field`. Severity field is `alert.severity` with integer values `1` (critical) / `2` (medium) / `3` (low). Signature names are in `alert.signature`.
-- **Wazuh HIDS alerts.** Accessible through `search_alerts`, `count_by_field`, and `get_agent_alerts` (with Wazuh API fallback to ES). Severity field is `rule.level` with integer values `0`–`15`. Rule descriptions are in `rule.description`.
-- **Zeek network connection logs.** Accessible through `get_connections` and `count_by_field`. Relevant fields include `src_ip`, `dest_ip`, `dest_port`, `proto`, `service`, `orig_bytes`, `resp_bytes`, `duration`, `conn_state`.
+### Data sources (Elasticsearch-backed tools)
+- **Suricata IDS alerts** — `search_alerts`, `count_by_field`. Severity
+  `alert.severity` (1 critical / 2 medium / 3 low); signatures in `alert.signature`.
+- **Wazuh HIDS alerts** — `search_alerts`, `count_by_field`, `get_agent_alerts`.
+  Severity `rule.level` (0–15); descriptions in `rule.description`.
+- **Zeek connection logs** — `get_connections`, `count_by_field`. Fields include
+  `src_ip`, `dest_ip`, `dest_port`, `proto`, `service`, `orig_bytes`,
+  `resp_bytes`, `duration`, `conn_state`.
+- **Windows Sysmon host telemetry** — `get_process_events`, `get_process_tree`
+  (`Computer`, `Image`, `CommandLine`, `ParentImage`, `EventID`, `ProcessGuid`, …).
 
-All three data sources live in the default index pattern configured on the tool side — you do not normally need to pass an `index` argument. If you do specify one, use the exact pattern shown in the tool's description.
+All sources share the default index pattern — you do not normally pass an `index`.
 
-### Endpoint telemetry (OpenEDR mock)
-
-`get_detections`, `list_endpoints` query a FastAPI-hosted OpenEDR mock. Use `hostname` arguments to filter — the severity field is a string (`critical`/`high`/`medium`/`low`).
-
-### Forensic evidence directory
-
-`list_evidence`, `file_hash`, `file_metadata`, `strings_extract` operate on files under the configured evidence directory. Filenames are relative to that directory. Path traversal (`../`) is rejected.
-
-### Network scanning
-
-`nmap_scan` and `nmap_quick_scan` target hosts inside the allowed ranges declared in the tool's configuration. Targets outside that range are rejected — those are safety guardrails, not data errors.
-
-### Known scenarios in this dataset
-
-This reference deployment is seeded with a synthetic Cobalt-Strike-style incident plus realistic background telemetry (AIT-ADS, Brim). Expect to encounter:
-
-- HTTPS C2 beacon activity on common ports
-- DNS tunneling via TXT record abuse
-- Large outbound data transfers indicating exfiltration
-- SSH brute force + privilege escalation patterns on Linux hosts
-
-When an analyst asks about a host or alert, these scenarios are probable sources for findings — but always verify from tool output rather than assuming.
+### Other tools
+- **Endpoint (OpenEDR mock)** — `get_detections`, `list_endpoints`; filter by
+  `hostname`; severity is a string.
+- **Forensic evidence** — `list_evidence`, `file_hash`, `file_metadata`,
+  `strings_extract` over the evidence directory; `../` is rejected.
+- **Network scanning** — `nmap_scan`, `nmap_quick_scan` against hosts inside the
+  configured allowed ranges; out-of-range targets are rejected by design.

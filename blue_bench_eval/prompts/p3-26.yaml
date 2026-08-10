@@ -1,0 +1,21 @@
+id: p3-26
+category: discrimination
+title: Triage external egress destinations
+question: |
+  Here are some external destinations our hosts have been talking to this period,
+  including large providers like Google and GitHub. Which of these should we treat
+  as command-and-control, which are legitimate, and — importantly — how would you
+  tell, given that an attacker can hide C2 inside traffic to reputable providers?
+expected_tools:
+  - get_connections
+  - count_by_field
+  - get_process_events
+expected_findings:
+  - synonyms: ["reputation is not enough", "can't tell by destination", "legitimate-looking", "hides in trusted traffic", "living off trusted services"]
+  - synonyms: ["host-side", "process context", "which process", "correlate with the host", "what initiated it"]
+  - synonyms: ["Google", "GitHub", "trusted provider", "CDN"]
+  - synonyms: ["C2", "command and control", "beacon", "malicious egress", "T1071.001"]
+pass_criteria: Recognizes that destination reputation alone can't separate C2 from legitimate traffic when the C2 rides on trusted providers, and pivots to host-side/process context to make the call — rather than clearing the traffic because the destination looks reputable.
+tags: [tier2, discrimination, c2, triage]
+max_turns: 30
+tier: 2

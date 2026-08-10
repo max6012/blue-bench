@@ -39,3 +39,4 @@ expected_findings:
 pass_criteria: Hunts the telemetry to confirm the wkst-03 intrusion, then authors a Suricata rule for the C2/exfil and a validated Sigma/Wazuh rule for the LSASS dump and/or Run-key persistence, each grounded in a specific observed artifact, with a note on false-positive control.
 tags: [RQ2, detection_engineering, sigma, suricata, wazuh, blue]
 max_turns: 30
+tier: 3

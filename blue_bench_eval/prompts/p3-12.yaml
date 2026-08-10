@@ -1,0 +1,19 @@
+id: p3-12
+category: credential_access
+title: Dormant / service-account misuse?
+question: |
+  Is any account behaving out of character — for instance a service account that
+  normally only runs scheduled jobs suddenly logging in interactively? If so,
+  which account, and what's off about how it was used?
+expected_tools:
+  - search_auth_events
+  - count_by_field
+expected_findings:
+  - synonyms: ["service account", "svc_backup", "svc-backup", "dormant", "stale credential", "T1078.002"]
+  - synonyms: ["interactive logon", "RemoteInteractive", "LogonType 10", "LogonType 2", "off-hours", "off baseline"]
+  - synonyms: ["normally batch", "scheduled", "LogonType 4", "nightly", "baseline"]
+  - synonyms: ["unusual host", "unexpected source"]
+pass_criteria: Identifies that svc_backup, which normally logs on only as a nightly batch job (LogonType 4), performed an off-hours interactive logon (LogonType 10) from an unusual host — grounded in the contrast against its normal logon baseline, not just the presence of a logon.
+tags: [tier1, credential_access, valid_accounts, auth]
+max_turns: 20
+tier: 1

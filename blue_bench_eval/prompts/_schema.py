@@ -27,6 +27,10 @@ class PromptSpec(BaseModel):
     pass_criteria: str = ""
     tags: list[str] = Field(default_factory=list)
     max_turns: int = 10
+    # Complexity tier (orthogonal to `category`, which is the RQ/topic axis):
+    # 1 = simple/single-pivot, 2 = middle/scoped-work-mode, 3 = complex/leading.
+    # Defaults to 3 so pre-tier prompts are treated as the hardest tier.
+    tier: int = Field(default=3, ge=1, le=3)
 
 
 def load_prompt(path: Path) -> PromptSpec:

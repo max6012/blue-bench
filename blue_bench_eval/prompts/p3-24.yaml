@@ -1,0 +1,20 @@
+id: p3-24
+category: incident_scoping
+title: Reconstruct the incident timeline
+question: |
+  Reconstruct a timeline of the intrusion on wkst-03. Put the key events in order
+  with their timestamps, from first foothold through to the latest activity, and
+  note anything the timing itself tells you.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+expected_findings:
+  - synonyms: ["timeline", "chronological", "in order", "sequence of events", "timestamps"]
+  - synonyms: ["wkst-03", "WKST-03"]
+  - synonyms: ["execution", "persistence", "credential access", "C2", "exfiltration", "kill chain order"]
+  - synonyms: ["low and slow", "multi-day", "days apart", "extended dwell", "spread over time", "patient cadence"]
+pass_criteria: Produces an ordered, timestamped timeline of the wkst-03 kill chain and observes that the activity is spread out over multiple days (the low-and-slow cadence).
+tags: [tier2, incident_scoping, timeline, apt]
+max_turns: 30
+tier: 2

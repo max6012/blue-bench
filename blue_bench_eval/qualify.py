@@ -20,6 +20,7 @@ from pathlib import Path
 
 from blue_bench_client.runner import run
 from blue_bench_client.trace import Trace
+from blue_bench_eval.preflight import run_preflight
 from blue_bench_eval.prompts._schema import PromptSpec, load_all
 from blue_bench_mcp.profiles import ModelProfile, load_profile
 
@@ -44,6 +45,37 @@ class RunMeta:
     started_at: str = ""
     finished_at: str = ""
     prompt_ids: list[str] = field(default_factory=list)
+
+
+class PreflightError(RuntimeError):
+    """Preflight gate failed — the SIEM is not ready, so the run is refused.
+
+    Raised BEFORE any model calls are spent. A prior run graded models against an
+    empty Elasticsearch and produced meaningless "all fail" grades; this gate
+    makes that impossible to repeat. The only intentional bypass is
+    ``--skip-preflight`` (dry runs).
+    """
+
+
+def _preflight_gate(config_path: Path | None, prompts_dir: Path, prompts_prefix: str) -> None:
+    """Fail-closed readiness check, run ONCE at the start of a corpus run.
+
+    Prints the full preflight summary and raises ``PreflightError`` if the SIEM
+    is not ready (unreachable / empty / stale window / a prompt with no data).
+    Per-prompt probes are ``critical=True`` in the preflight module — a single
+    legitimately-sparse prompt aborts the whole run; that is the deliberate
+    fail-closed posture, and ``--skip-preflight`` is the escape hatch.
+    """
+    cfg_path = config_path or (REPO / "config.yaml")
+    report = run_preflight(cfg_path, prompts_dir=prompts_dir, prompts_prefix=prompts_prefix)
+    print(report.summary())
+    if not report.ok:
+        raise PreflightError(
+            "PREFLIGHT FAILED — refusing to spend model calls on an unready SIEM "
+            "(see the summary above). This is the guard against grading an empty "
+            "Elasticsearch. Fix the corpus/ingest, or pass --skip-preflight for an "
+            "intentional dry run."
+        )
 
 
 def _git_head() -> str:
@@ -101,6 +133,7 @@ async def run_corpus(
     results_dir: Path = RESULTS_DIR,
     phase: str = "2",
     profile_override: "ModelProfile | None" = None,
+    skip_preflight: bool = False,
 ) -> Path:
     """Execute the prompt corpus under `profile_name` and return the run dir.
 
@@ -109,6 +142,13 @@ async def run_corpus(
     instead of loading a ``profiles/<name>.yaml`` file.
     """
     prefix = f"p{phase}-"
+
+    # Primary gate (t-pfwire): never grade an empty/stale SIEM. Runs ONCE, before
+    # any model calls are spent, scoped to this phase's prompt tier. Aborts the
+    # whole run on failure unless the operator explicitly opts out.
+    if not skip_preflight:
+        _preflight_gate(config_path, prompts_dir, prefix)
+
     profile = profile_override or load_profile(profiles_dir / f"{profile_name}.yaml")
     specs = _select(load_all(prompts_dir, prefix=prefix), tag=tag, limit=limit)
     if not specs:
@@ -186,6 +226,11 @@ def main() -> None:
     p.add_argument("--tag", default="", help="Filter prompts by tag or category")
     p.add_argument("--limit", type=int, default=None, help="Stop after N prompts")
     p.add_argument("--config", type=Path, default=REPO / "config.yaml", help="MCP server config.yaml")
+    p.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the SIEM-readiness gate (intentional dry runs only)",
+    )
     args = p.parse_args()
     asyncio.run(
         run_corpus(
@@ -194,6 +239,7 @@ def main() -> None:
             limit=args.limit,
             config_path=args.config,
             phase=args.phase,
+            skip_preflight=args.skip_preflight,
         )
     )
 

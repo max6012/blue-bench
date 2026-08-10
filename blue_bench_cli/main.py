@@ -40,6 +40,7 @@ def qualify(
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
     cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
     no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
+    skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip the SIEM-readiness gate that refuses to grade an empty/stale Elasticsearch (intentional dry runs only)"),
 ) -> None:
     """Run the prompt corpus under PROFILE and write traces.
 
@@ -57,10 +58,15 @@ def qualify(
         from blue_bench_client.cloud_models import generic_cloud_profile
         override = generic_cloud_profile(profile, coached=not no_coaching)
         profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
-    run_dir = asyncio.run(
-        run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
-                   profile_override=override)
-    )
+    from blue_bench_eval.qualify import PreflightError
+    try:
+        run_dir = asyncio.run(
+            run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
+                       profile_override=override, skip_preflight=skip_preflight)
+        )
+    except PreflightError as e:
+        typer.echo(f"\n{e}", err=True)
+        raise typer.Exit(1)
     typer.echo(f"\nRun dir: {run_dir}")
 
 

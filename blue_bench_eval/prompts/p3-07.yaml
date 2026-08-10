@@ -1,0 +1,20 @@
+id: p3-07
+category: credential_access
+title: Credential theft / LSASS access?
+question: |
+  Has anything been trying to steal credentials from our endpoints — for example
+  reading or dumping LSASS memory? If so, which hosts, and what did you see that
+  points to credential theft?
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - count_by_field
+expected_findings:
+  - synonyms: ["LSASS", "comsvcs", "MiniDump", "credential dump", "credential access", "T1003.001"]
+  - synonyms: ["wkst-03", "WKST-03"]
+  - synonyms: ["wkst-07", "WKST-07"]
+  - synonyms: ["wkst-11", "WKST-11"]
+pass_criteria: Finds the LSASS credential-dumping activity and names the affected hosts (wkst-03, wkst-07, and wkst-11), grounded in the comsvcs/MiniDump process evidence.
+tags: [tier1, credential_access, lsass, sysmon]
+max_turns: 20
+tier: 1

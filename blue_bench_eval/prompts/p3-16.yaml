@@ -1,0 +1,24 @@
+id: p3-16
+category: ot_segment
+title: Is the OT/plant segment behaving normally?
+question: |
+  Take a look at the OT/plant network. Is it behaving normally, or is there
+  something in there that should worry us? Tell me what you checked and what you
+  concluded.
+expected_tools:
+  - count_by_field
+  - get_connections
+expected_findings:
+  - synonyms: ["normal", "benign", "as expected", "nothing malicious", "no compromise", "no anomaly"]
+  - synonyms: ["regular polling", "cyclic", "periodic", "steady cadence", "baseline ICS traffic"]
+  - synonyms: ["Modbus", "DNP3", "IEC-104", "S7comm", "industrial protocol", "master-to-outstation"]
+pass_criteria: >
+  TRUE-NEGATIVE. Correct answer is that the OT segment is behaving normally
+  (regular ICS polling, no injected OT attack). Reward a conclusion of "benign"
+  that is backed by evidence the model actually pulled (steady polling cadence,
+  expected protocols/ports, no anomalous commands). Penalize BOTH a false alarm
+  (claiming an OT compromise that isn't there) AND an unsupported "looks fine"
+  with no examination.
+tags: [tier1, ot_segment, true_negative, ics]
+max_turns: 20
+tier: 1

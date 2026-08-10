@@ -1,0 +1,19 @@
+id: p3-14
+category: credential_access
+title: Impossible-travel logons?
+question: |
+  Is any user account logging in from two places that are too far apart to be the
+  same person in the time between them? If so, which account, which locations/IPs,
+  and how far apart in time?
+expected_tools:
+  - search_auth_events
+  - count_by_field
+expected_findings:
+  - synonyms: ["impossible travel", "two locations", "geographically distant", "far apart", "T1078"]
+  - synonyms: ["ekim", "same account", "one user"]
+  - synonyms: ["203.0.113.50", "198.51.100.77", "two source IPs", "distinct external IPs"]
+  - synonyms: ["35 minutes", "short window", "too short to travel", "minutes apart"]
+pass_criteria: Identifies user ekim authenticating from two geographically distant external IPs (203.0.113.50 then 198.51.100.77) within ~35 minutes, grounded in the same account appearing from far-apart sources in a window too short to travel.
+tags: [tier1, credential_access, impossible_travel, auth]
+max_turns: 20
+tier: 1

@@ -72,6 +72,11 @@ SNORT_INDEX = "snort-alerts"
 ASA_INDEX = "firewall-asa"
 WEB_INDEX = "web-access"
 PROXY_INDEX = "proxy-access"
+# Alert indices in the default MCP index_pattern. EF/merge did not previously
+# populate these (legacy seed_es.py did); the merge pipeline now generates
+# benign Suricata noise + injected malicious/HIDS alerts that route here.
+LOGSTASH_SURICATA_INDEX = "logstash-suricata-alerts"
+WAZUH_INDEX = "wazuh-alerts"
 
 # Merged OT / IT-OT-bridge telemetry (EF-P4 merger output, NDJSON).
 OT_HOSTS_INDEX = "ot-hosts"
@@ -131,8 +136,17 @@ def parse_zeek(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
 
 
 def _evtx_records(path: Path) -> Iterable[dict]:
-    root = ET.fromstring(path.read_text())
-    for ev in root.findall(f"{EVTX_NS}Event"):
+    # Stream the EventLog XML with iterparse rather than loading the whole file
+    # (ET.fromstring). A multi-GB Security log — e.g. an L-tier DC's 18-day
+    # windows_event_security.xml (>1 GB) — OOMs the DOM parser; iterparse fires
+    # on each element's close, so we act on </Event> and drop processed nodes to
+    # keep memory bounded regardless of file size.
+    event_tag = f"{EVTX_NS}Event"
+    context = ET.iterparse(str(path), events=("start", "end"))
+    _, root = next(context)  # first 'start' event is the document root
+    for event, ev in context:
+        if event != "end" or ev.tag != event_tag:
+            continue
         rec: dict[str, Any] = {}
         sysd = ev.find(f"{EVTX_NS}System")
         if sysd is not None:
@@ -156,6 +170,10 @@ def _evtx_records(path: Path) -> Iterable[dict]:
                 if name:
                     rec[name] = d.text
         yield rec
+        # Release this <Event> and any already-parsed siblings so peak memory
+        # stays flat across the whole file.
+        ev.clear()
+        root.clear()
 
 
 def parse_evtx(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
@@ -262,6 +280,8 @@ def _parse_iso(s: str) -> datetime | None:
         s = s.replace("Z", "+00:00")
         # python fromisoformat handles 6-digit fractions; trim 7-digit (EVTX)
         s = re.sub(r"(\.\d{6})\d+", r"\1", s)
+        # normalize a colon-less tz offset (e.g. Suricata "+0000") -> "+00:00"
+        s = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", s)
         dt = datetime.fromisoformat(s)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
@@ -359,6 +379,9 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         return f"ot-{name[:-7]}", parse_ot_ndjson            # ot/modbus.ndjson -> ot-modbus
     if top == "ot_hosts" and name.endswith(".ndjson"):
         return OT_HOSTS_INDEX, parse_ot_ndjson
+    # benign Suricata FP noise wired into the merge (suricata/eve.ndjson)
+    if top == "suricata" and name.endswith(".ndjson"):
+        return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson
     if top == "bridge" and name.endswith(".ndjson"):
         source = name.split(".", 1)[0]                       # "<source>.<log>.ndjson"
         return _BRIDGE_INDEX.get(source, f"bridge-{source}"), parse_ot_ndjson
@@ -375,6 +398,14 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
             return WINDOWS_SYSMON_INDEX, parse_ot_ndjson
         if stream == "zeek":
             return zeek_index(log), parse_ot_ndjson          # zeek-conn / zeek-http / ...
+        if stream == "winsec":
+            return WINDOWS_SECURITY_INDEX, parse_ot_ndjson   # injected auth (4624/4625/...)
+        if stream == "linux":
+            return SYSLOG_INDEX, parse_ot_ndjson             # injected sshd auth
+        if stream == "suricata":
+            return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson  # injected malicious IDS alerts
+        if stream == "wazuh":
+            return WAZUH_INDEX, parse_ot_ndjson              # injected HIDS alerts
         return None
 
     # --- EF telemetry under data/ (routed by filename) ---
@@ -461,14 +492,25 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
 # --- main ingest --------------------------------------------------------------
 
 
-def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, int]:
+# High-volume benign OT protocol indices — subject to --ot-sample-rate. The OT
+# segment is benign baseline (no OT attack), so a representative slice fully
+# supports the OT prompts (protocols/devices/Purdue/normalcy) while keeping the
+# corpus ingestable on a single-node ES. ot-hosts is small and always kept whole.
+_OT_SAMPLE_INDICES = {"ot-modbus", "ot-iec104", "ot-dnp3", "ot-s7comm", "ot-conn"}
+
+
+def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool,
+           ot_sample_rate: int = 1) -> dict[str, int]:
     # Walk the whole corpus root: EF telemetry under data/ + merged OT/bridge
     # NDJSON under ot/ ot_hosts/ bridge/. Route by corpus-relative path.
     walk_root = ef_dir
     # Pass 1: collect everything per index, capture native ts + id, find window.
+    # OT protocol indices are subsampled HERE (during collection) so 10s of
+    # millions of benign OT events never accumulate in memory.
     per_index: dict[str, list[tuple[dict, datetime | None, str | None]]] = {}
     min_ts: datetime | None = None
     max_ts: datetime | None = None
+    ot_seen: dict[str, int] = {}
     for path in sorted(walk_root.rglob("*")):
         if not path.is_file():
             continue
@@ -476,7 +518,13 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool) -> dict[str, i
         if routed is None:
             continue
         index, parser = routed
+        sample = ot_sample_rate if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES) else 1
         for rec, when, native_id in parser(path):
+            if sample > 1:
+                seen = ot_seen.get(index, 0)
+                ot_seen[index] = seen + 1
+                if seen % sample != 0:  # keep 1 of every `sample` records
+                    continue
             per_index.setdefault(index, []).append((rec, when, native_id))
             if when is not None:
                 min_ts = when if min_ts is None or when < min_ts else min_ts
@@ -527,12 +575,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--es-url", default="http://localhost:9200")
     p.add_argument("--anchor-end-to-now", action="store_true",
                    help="shift the whole corpus window so it ends ~now (spacing preserved)")
+    p.add_argument("--ot-sample-rate", type=int, default=1,
+                   help="index 1 of every N benign OT protocol records "
+                        "(modbus/dnp3/iec104/s7comm/ot-conn) to keep a GB-scale corpus "
+                        "ingestable; 1 = keep all. IT/attack telemetry is never sampled.")
     p.add_argument("-v", "--verbose", action="count", default=0)
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")
     _wait_for_es(args.es_url)
-    counts = ingest(args.ef_dir, args.es_url, anchor_end_to_now=args.anchor_end_to_now)
+    counts = ingest(args.ef_dir, args.es_url, anchor_end_to_now=args.anchor_end_to_now,
+                    ot_sample_rate=args.ot_sample_rate)
     total = sum(counts.values())
     print(f"ingested {total} docs across {len(counts)} indices:")
     for idx, n in sorted(counts.items()):

@@ -1,0 +1,20 @@
+id: p3-20
+category: ot_segment
+title: Assess the OT network against the Purdue model
+question: |
+  Assess our OT/plant network against the Purdue reference model. Which Purdue
+  levels are represented by the devices you can see, is the boundary between the
+  enterprise IT network and the OT network controlled, and is there any traffic
+  crossing between levels that a defender should question?
+expected_tools:
+  - count_by_field
+  - get_connections
+expected_findings:
+  - synonyms: ["Purdue", "level 0", "level 1", "level 2", "level 3", "level 3.5", "DMZ", "reference model"]
+  - synonyms: ["HMI", "historian", "engineering workstation", "PLC", "controller", "RTU"]
+  - synonyms: ["Modbus", "DNP3", "IEC-104", "S7comm"]
+  - synonyms: ["jump-ot-01", "IT/OT bridge", "IT-OT boundary", "crossing", "pivot", "jump host"]
+pass_criteria: Maps the OT device roles to Purdue levels, identifies the IT/OT boundary and the jump host as the controlled crossing point, and flags any IT-to-OT traffic worth scrutinizing.
+tags: [tier2, ot_segment, purdue, ics]
+max_turns: 30
+tier: 2

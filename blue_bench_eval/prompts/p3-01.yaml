@@ -24,3 +24,4 @@ expected_findings:
 pass_criteria: Identifies wkst-03 as the victim, reconstructs the multi-stage kill chain (execution -> persistence -> credential access -> C2 -> exfil), and notes the slow multi-day cadence.
 tags: [RQ2, apt, threat_hunting, kill_chain, sysmon]
 max_turns: 30
+tier: 3

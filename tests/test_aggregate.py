@@ -194,3 +194,42 @@ def test_verdict_reports_hallucination_count(tmp_path: Path):
     assert "| p2-01 | triage | FAIL |" in md
     # Hallucination count column shows 1.
     assert " 1 |" in md
+
+
+# ── F6: the "absent dimension = N/A, not 0" fix (regression guard) ────────────
+def _write_scored_dims(run_dir: Path, pid: str, dims: dict, verdict: str = "PARTIAL") -> None:
+    """Scored fixture that may OMIT a dimension (e.g. an RQ2 prompt with no
+    discrimination) — the case the N/A fix protects."""
+    (run_dir / "scored").mkdir(parents=True, exist_ok=True)
+    scored = {
+        "prompt_id": pid,
+        "dimensions": {k: {"score": v, "justification": "j"} for k, v in dims.items()},
+        "verdict": verdict,
+        "hallucinations": [],
+    }
+    (run_dir / "scored" / f"{pid}.json").write_text(json.dumps(scored))
+
+
+def test_verdict_absent_key_dimension_is_na_not_fail():
+    from blue_bench_eval.aggregate import _verdict_from_rubric
+    key = ["tool_usage", "findings", "attribution", "discrimination"]
+    # discrimination ABSENT (RQ2 prompt) must NOT force FAIL nor block PASS.
+    assert _verdict_from_rubric({"tool_usage": 3, "findings": 3, "attribution": 3}, key) == "PASS"
+    # a PRESENT key dimension scoring 0 still FAILs.
+    assert _verdict_from_rubric({"tool_usage": 0, "findings": 3, "attribution": 3}, key) == "FAIL"
+
+
+def test_aggregate_absent_dimension_excluded_not_zeroed(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)  # all four dims scored 3
+    # p2-02 OMITS 'reasoning' entirely (the N/A case).
+    _write_scored_dims(run, "p2-02", {"tool_usage": 3, "findings": 3, "response_quality": 3})
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    # 'reasoning' is present on 1 of 2 prompts at 3 → mean over PRESENT only = 100%,
+    # NOT 50% (which is what counting the absent one as 0 would give).
+    assert result.dim_pct["reasoning"] == 100.0
+    # and the omitting prompt is not FAILed for the absent dimension.
+    verdicts = {x["id"]: x["verdict"] for x in result.verdicts}
+    assert verdicts["p2-02"] != "FAIL"

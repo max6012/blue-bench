@@ -2,8 +2,10 @@
 
 The raw cloud catalogue is ~35 models, too many to surface as run options. This
 narrows it the way an operator picks a bake-off model: by recency (default: the
-last 6 months) and by scale. The API does not expose ``parameter_size``, so we
-use the model's download ``size`` (GB) as an honest scale proxy and label it as
+last 6 months) and by scale. The ``ModelDetails`` schema HAS a ``parameter_size``
+field, but the cloud catalogue entries don't populate it (unlike local
+``/api/tags``), so we use the model's download ``size`` (GB) as an honest scale
+proxy and label it as
 such.
 """
 
@@ -12,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-# Friendly size buckets (download GB as a scale proxy — the API does not expose
+# Friendly size buckets (download GB as a scale proxy — cloud entries don't populate
 # parameter counts). Rough param mapping in the labels is approximate.
 SIZE_BANDS: dict[str, tuple[float | None, float | None]] = {
     "small": (None, 100.0),    # <=100 GB  (~ up to ~150B params: gpt-oss, gemma4:31b)

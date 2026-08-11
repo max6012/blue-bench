@@ -1,11 +1,16 @@
 # Phase-3 (heavy-telemetry RQ corpus) MCP config. The demo's config.yaml is
 # left intact; pass this with `qualify --phase 3 --config config.phase3.yaml`.
 #
-# Scoped to ONLY the corpus under test: no old demo evidence fixtures, and no
-# pre-baked Suricata/Wazuh alerts. Phase 3 tests the model HUNTING the host +
-# network telemetry and then RECOMMENDING detections (Wazuh alerting logic,
-# Suricata/Sigma rules) from its findings — so there are no canned alerts to
-# consume; search_alerts is scoped to the corpus's own (benign) IDS noise.
+# NOTE: config.yaml is the canonical config (it is the qualify default and is
+# what the re-measurement runs use). This file is kept in sync with it for an
+# explicit `--config config.phase3.yaml` invocation.
+#
+# The corpus now carries generated alerts — benign false-positive IDS noise AND
+# malicious true positives (the wkst-11 commodity infection's ET MALWARE) — so
+# search_alerts has a real FP/TP mix to triage. Authentication substrates
+# (windows-security, linux-syslog) are reached by search_auth_events via its own
+# cfg.auth indices; OT connection traffic (ot-conn) by get_connections — both
+# outside this index_pattern, which only scopes the alert/zeek surface.
 limits:
   query_timeout: 30
   max_result_chars: 8000
@@ -15,7 +20,7 @@ evidence:
 
 elastic:
   url: ${BLUE_BENCH_ES_URL:-http://localhost:9200}
-  index_pattern: "snort-alerts"             # the corpus's own IDS; excludes the old demo alert indices
+  index_pattern: "logstash-suricata-alerts,wazuh-alerts,zeek-conn"  # matches config.yaml (the canonical config)
 
 zeek:
   index: zeek-conn                          # L corpus Zeek (get_connections)

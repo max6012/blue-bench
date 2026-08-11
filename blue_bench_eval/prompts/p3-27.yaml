@@ -1,0 +1,26 @@
+id: p3-27
+category: discrimination
+title: Tell APT from cybercrime by operational tempo (RQ3)
+question: |
+  You have two workstations with confirmed malicious activity that look
+  near-identical on the surface — same tooling, same credential-dump technique,
+  same web-protocol beaconing. Ignore the surface entirely and separate them on
+  TEMPO alone: reconstruct each host's activity timeline and compare how long the
+  operator dwelled and how the actions were spaced over time. Which host is the
+  patient, targeted actor and which is the fast commodity infection — and what
+  specifically in the timing tells you?
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+  - count_by_field
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "WKST-03"]
+  - synonyms: ["wkst-07", "wkst-07.corp.example.invalid", "WKST-07"]
+  - synonyms: ["low and slow", "low-and-slow", "multi-day", "days", "extended dwell", "patient"]
+  - synonyms: ["smash and grab", "smash-and-grab", "hours", "minutes", "fast", "burst", "short"]
+  - synonyms: ["dwell", "cadence", "tempo", "inter-event", "spacing", "timeline"]
+pass_criteria: Reconstructs both timelines and classifies wkst-03 as the low-and-slow (multi-day dwell) targeted APT and wkst-07 as the fast (hours) commodity infection, grounding the call in dwell/tempo rather than the matched surface indicators.
+tags: [RQ3, discrimination, apt, cybercrime, behavioral, tier2]
+max_turns: 30
+tier: 2

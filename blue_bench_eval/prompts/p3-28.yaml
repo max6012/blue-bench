@@ -1,0 +1,25 @@
+id: p3-28
+category: discrimination
+title: Tell APT from cybercrime by scope / lateral movement (RQ3)
+question: |
+  Two hosts show the same surface tradecraft (PowerShell cradle, LSASS credential
+  dump, web beacon). One actor tried to expand beyond its initial foothold; the
+  other grabbed what it could on the one host and stopped. For EACH host, determine
+  whether the actor attempted lateral movement / scope expansion, and use that to
+  decide which is a targeted intrusion and which is opportunistic commodity malware.
+  Show the evidence for the movement — or for its absence.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+  - search_auth_events
+expected_findings:
+  - synonyms: ["wkst-03", "wkst-03.corp.example.invalid", "WKST-03"]
+  - synonyms: ["wkst-07", "wkst-07.corp.example.invalid", "WKST-07"]
+  - synonyms: ["lateral movement", "T1021", "T1021.002", "net use", "admin share", "C$", "pivot", "SMB"]
+  - synonyms: ["no lateral movement", "single host", "did not pivot", "stayed local", "self-contained"]
+  - synonyms: ["targeted", "APT", "commodity", "cybercrime", "behavior not surface", "behavioral"]
+pass_criteria: Establishes that wkst-03 attempted lateral movement (net use / admin-share, T1021.002) while wkst-07 did not, and uses that behavioral difference to classify wkst-03 as the targeted APT and wkst-07 as commodity cybercrime.
+tags: [RQ3, discrimination, apt, cybercrime, lateral_movement, behavioral, tier2]
+max_turns: 30
+tier: 2

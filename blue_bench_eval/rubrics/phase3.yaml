@@ -29,6 +29,13 @@ threshold:
   overall_pct: 75
   tool_usage_pct: 85
   findings_pct: 90
+  # The two RQ-defining dimensions are gated for real (were previously ungated).
+  # Moderate bars — "right more often than not" on a hard, thinly-sampled skill —
+  # not the 85/90 of tool_usage/findings. Revisit as a % of the frontier ceiling
+  # once the frontier slate runs. discrimination rests on few RQ3 prompts, so its
+  # gate is provisional until the slate grows.
+  attribution_pct: 50
+  discrimination_pct: 50
 
 dimensions:
   tool_usage:

@@ -233,3 +233,16 @@ def test_aggregate_absent_dimension_excluded_not_zeroed(tmp_path: Path):
     # and the omitting prompt is not FAILed for the absent dimension.
     verdicts = {x["id"]: x["verdict"] for x in result.verdicts}
     assert verdicts["p2-02"] != "FAIL"
+
+
+def test_overall_is_observation_weighted_not_mean_of_means(tmp_path: Path):
+    # p2-01: 4 dims @ 3 (100%); p2-02: 3 dims @ 0 (0%), 'reasoning' omitted.
+    # mean-of-means would be mean(50,50,50,100)=62.5; observation-weighted is
+    # (4*100 + 3*0)/7 = 57.1. The headline must be the latter.
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    _write_scored_dims(run, "p2-02", {"tool_usage": 0, "findings": 0, "response_quality": 0})
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert round(result.overall_pct, 1) == 57.1

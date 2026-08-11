@@ -201,7 +201,13 @@ def aggregate(
         dim_pcts = [_score_to_pct(s.dimensions[dim].score) for s in scores if dim in s.dimensions]
         if dim_pcts:
             result.dim_pct[dim] = mean(dim_pcts)
-    result.overall_pct = mean(result.dim_pct.values()) if result.dim_pct else 0.0
+    # Overall is observation-weighted (mean over every scored (prompt, dimension)),
+    # NOT a mean of the per-dimension means — so a thinly-sampled dimension (e.g.
+    # discrimination on ~3 RQ3 prompts) can't sway the headline as much as one
+    # scored on all 26. Each graded score counts once.
+    all_obs = [_score_to_pct(s.dimensions[d].score)
+               for s in scores for d in dimensions if d in s.dimensions]
+    result.overall_pct = mean(all_obs) if all_obs else 0.0
 
     # Threshold check.
     result.passes_overall = result.overall_pct >= threshold.overall_pct
@@ -219,7 +225,9 @@ def aggregate(
             pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions]
             if pcts:
                 cat_dims[dim] = mean(pcts)
-        cat_dims["overall"] = mean(cat_dims.values()) if cat_dims else 0.0
+        cat_obs = [_score_to_pct(sc.dimensions[d].score)
+                   for sc in cat_scores for d in dimensions if d in sc.dimensions]
+        cat_dims["overall"] = mean(cat_obs) if cat_obs else 0.0
         result.per_category[cat] = cat_dims
 
     # Per-tier rollup (complexity axis). Tier defaults to 3 for any prompt
@@ -233,8 +241,10 @@ def aggregate(
             pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in tier_scores if dim in sc.dimensions]
             if pcts:
                 tier_dims[dim] = mean(pcts)
-        # Rollup over the dimension means present for this tier.
-        tier_dims["overall"] = mean([v for k, v in tier_dims.items()]) if tier_dims else 0.0
+        # Observation-weighted overall for the tier (consistent with the headline).
+        tier_obs = [_score_to_pct(sc.dimensions[d].score)
+                    for sc in tier_scores for d in dimensions if d in sc.dimensions]
+        tier_dims["overall"] = mean(tier_obs) if tier_obs else 0.0
         tier_dims["count"] = float(len(tier_scores))
         result.per_tier[tier] = tier_dims
 

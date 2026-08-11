@@ -16,12 +16,12 @@ import importlib
 import pkgutil
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from blue_bench_mcp.config import ServerConfig, load_config
 
 
-def register_all(server: FastMCP, cfg: ServerConfig) -> list[str]:
+def register_all(server: MCPServer, cfg: ServerConfig) -> list[str]:
     import blue_bench_mcp.tools as tools_pkg
     registered: list[str] = []
     for mod_info in pkgutil.iter_modules(tools_pkg.__path__):
@@ -34,9 +34,9 @@ def register_all(server: FastMCP, cfg: ServerConfig) -> list[str]:
     return registered
 
 
-def create_server(cfg: ServerConfig | None = None) -> FastMCP:
+def create_server(cfg: ServerConfig | None = None) -> MCPServer:
     cfg = cfg or ServerConfig()
-    server = FastMCP("blue-bench")
+    server = MCPServer("blue-bench")
     register_all(server, cfg)
     return server
 

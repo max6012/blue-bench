@@ -1,13 +1,13 @@
 """MCP register wrapper for AuthTool (authentication-log search)."""
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.tool_classes.auth import AuthTool
 
 
-def register(server: FastMCP, cfg: ServerConfig) -> None:
+def register(server: MCPServer, cfg: ServerConfig) -> None:
     tool = AuthTool(cfg)
 
     @server.tool()

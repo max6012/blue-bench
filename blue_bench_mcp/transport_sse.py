@@ -1,6 +1,6 @@
 """SSE transport for the Blue-Bench MCP server.
 
-Wraps FastMCP's Starlette SSE app with a configurable CORS middleware so
+Wraps MCPServer's Starlette SSE app with a configurable CORS middleware so
 browser-based MCP clients can connect directly (no gateway).
 
 CORS origin allowlist priority (first non-empty wins):
@@ -17,7 +17,7 @@ import os
 from typing import Iterable
 
 import uvicorn
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
@@ -78,10 +78,10 @@ async def _health(_: Request) -> JSONResponse:
     return JSONResponse({"ok": True, "service": "blue-bench-mcp"})
 
 
-def build_sse_app(server: FastMCP, origins: list[str]) -> Starlette:
-    """Wrap FastMCP.sse_app() with our CORS middleware.
+def build_sse_app(server: MCPServer, origins: list[str]) -> Starlette:
+    """Wrap MCPServer.sse_app() with our CORS middleware.
 
-    FastMCP.sse_app() returns a Starlette app; we wrap it so the CORS
+    MCPServer.sse_app() returns a Starlette app; we wrap it so the CORS
     middleware sits in front of every route (including /sse and /messages/).
     Adds a lightweight `/health` route for container healthchecks.
     """
@@ -97,7 +97,7 @@ def build_sse_app(server: FastMCP, origins: list[str]) -> Starlette:
 
 
 def run_sse(
-    server: FastMCP,
+    server: MCPServer,
     host: str,
     port: int,
     origins: list[str] | None = None,

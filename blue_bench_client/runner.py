@@ -10,10 +10,14 @@ All three paths write the same Trace schema, so Phase 2 scoring is protocol-agno
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -622,6 +626,144 @@ async def _run_anthropic(
     trace.error = f"max_turns ({max_turns}) exhausted without final answer"
 
 
+# ── anthropic-cli transport ──────────────────────────────────────────────────
+# Drives a Claude model via the `claude` CLI headless on the SUBSCRIPTION (OAuth),
+# not the metered API. Only OAuth tokens are available in this deployment, and the
+# SDK rejects them as x-api-key — the LLM-judge hit the same wall and solved it the
+# same way. The CLI runs the tool-use loop itself against our MCP server; we parse
+# its stream-json into the same Trace shape the SDK/native paths emit.
+_MCP_SERVER_NAME = "blue-bench"
+_MCP_TOOL_PREFIX = f"mcp__{_MCP_SERVER_NAME}__"
+
+
+def _strip_mcp_prefix(name: str) -> str:
+    return name[len(_MCP_TOOL_PREFIX):] if name.startswith(_MCP_TOOL_PREFIX) else name
+
+
+def _cli_oauth_env() -> dict[str, str]:
+    """Subprocess env for `claude` on the subscription: OAuth token in
+    CLAUDE_CODE_OAUTH_TOKEN, api-key vars stripped so it can't fall back to a
+    metered key (mirrors the judge's CLI auth)."""
+    env = dict(os.environ)
+    tok = env.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if not tok:
+        for v in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
+            if env.get(v, "").startswith("sk-ant-oat"):
+                tok = env[v]
+                break
+    if tok:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = tok
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    return env
+
+
+def _cli_tool_result_text(content: Any) -> str:
+    """Flatten a CLI tool_result block to the raw payload the judge expects."""
+    if isinstance(content, str):
+        s = content
+    elif isinstance(content, list):
+        s = "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+        s = s or json.dumps(content, default=str)
+    else:
+        s = json.dumps(content, default=str)
+    # MCPServer wraps a bare-string tool return as {"result": "..."} — unwrap it so
+    # the judge sees the same payload the SDK/native paths deliver.
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict) and list(obj.keys()) == ["result"] and isinstance(obj["result"], str):
+            return obj["result"]
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    return s
+
+
+async def _run_anthropic_cli(
+    profile: ModelProfile,
+    system: str,
+    question: str,
+    tools: list[ToolSpec],
+    server_cmd: list[str],
+    max_turns: int,
+    trace: Trace,
+) -> None:
+    claude = shutil.which("claude") or "claude"
+    mcp_cfg = {"mcpServers": {_MCP_SERVER_NAME: {"command": server_cmd[0], "args": list(server_cmd[1:])}}}
+    fd, cfg_path = tempfile.mkstemp(suffix=".json", prefix="bb-mcp-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(mcp_cfg, f)
+    args = [
+        claude, "-p", question,
+        "--model", profile.model_id,
+        "--system-prompt", system,
+        "--mcp-config", cfg_path, "--strict-mcp-config",
+        "--tools", "",  # disable all built-in tools; only the blue-bench MCP surface remains
+        "--permission-mode", "bypassPermissions",
+        "--output-format", "stream-json", "--verbose",
+    ]
+    allowed = [f"{_MCP_TOOL_PREFIX}{t.name}" for t in tools]
+    if allowed:
+        args += ["--allowed-tools", *allowed]
+    env = _cli_oauth_env()
+
+    def _run() -> subprocess.CompletedProcess:
+        return subprocess.run(args, input="", capture_output=True, text=True, env=env, timeout=1800)
+
+    try:
+        r = await asyncio.to_thread(_run)
+    finally:
+        try:
+            os.unlink(cfg_path)
+        except OSError:
+            pass
+
+    names_by_id: dict[str, str] = {}
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        etype = e.get("type")
+        if etype == "assistant":
+            blocks = (e.get("message") or {}).get("content") or []
+            text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text")
+            calls: list[ToolCall] = []
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    nm = _strip_mcp_prefix(str(b.get("name", "")))
+                    calls.append(ToolCall(name=nm, args=dict(b.get("input") or {})))
+                    names_by_id[str(b.get("id", ""))] = nm
+            if text or calls:
+                trace.turns.append(Turn(role="assistant", content=text, tool_calls=calls))
+                trace.turns_used += 1
+        elif etype == "user":
+            blocks = (e.get("message") or {}).get("content") or []
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    trace.turns.append(Turn(
+                        role="tool",
+                        content=_cli_tool_result_text(b.get("content")),
+                        tool_name=names_by_id.get(str(b.get("tool_use_id", ""))),
+                    ))
+        elif etype == "result":
+            res = e.get("result")
+            if isinstance(res, str) and res.strip():
+                trace.final_answer = res
+            if e.get("is_error"):
+                trace.error = f"claude CLI result: {e.get('subtype', 'error')}"
+
+    if not trace.final_answer:
+        for prior in reversed(trace.turns):
+            if prior.role == "assistant" and prior.content:
+                trace.final_answer = prior.content
+                break
+    if r.returncode != 0 and not trace.error:
+        trace.error = f"claude CLI exit {r.returncode}: {(r.stderr or '')[-200:]}"
+
+
 async def run(
     profile: ModelProfile,
     question: str,
@@ -658,6 +800,8 @@ async def run(
                 await _run_native(profile, system_prompt, question, tools, mcp, max_turns, trace)
             elif profile.tool_protocol == "anthropic-native":
                 await _run_anthropic(profile, system_prompt, question, tools, mcp, max_turns, trace)
+            elif profile.tool_protocol == "anthropic-cli":
+                await _run_anthropic_cli(profile, system_prompt, question, tools, cmd, max_turns, trace)
             else:
                 await _run_text_embedded(profile, system_prompt, question, tools, mcp, max_turns, trace)
         except Exception as e:

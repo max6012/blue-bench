@@ -1,0 +1,25 @@
+name: claude-opus-5
+model_id: claude-opus-5
+tool_protocol: anthropic-cli   # driven via the `claude` CLI on the subscription (OAuth), not metered API
+prompt_style: terse
+context_size: 200000
+generation: {}
+coaching_hints:
+  - Frontier model serving as the configuration oracle / rubric CEILING. Local and
+    open-weight results are read as a % of this. If you cannot score near the top on
+    a well-formed prompt, the wiring (tools, fixtures, coaching, prompt) is at fault,
+    not the model.
+  - Minimal coaching; Blue-Bench-specific context only.
+  - High reasoning budget; appropriate for correlation-heavy, low-and-slow hunts.
+recommended_workflows:
+  - triage
+  - forensics-lite
+  - detection-rules
+  - correlation
+prompt_parts:
+  role: blue_team_analyst.md
+  site: default.md
+  guidelines: threat_hunting_protocol.md
+  coaching: claude.md
+
+require_task_class: false

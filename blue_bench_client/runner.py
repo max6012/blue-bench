@@ -1,12 +1,26 @@
 """Runner — profile + question → model loop with tool dispatch → trace.
 
-Three paths keyed on profile.tool_protocol:
+Four paths keyed on profile.tool_protocol:
 - "native": Ollama chat() with tools= schema, parses message.tool_calls
 - "text-embedded": model emits <tool>name</tool><args>{...}</args> in content,
   parsed with regex, tool result injected as a user message
 - "anthropic-native": Anthropic Messages API with tool_use / tool_result blocks
+- "openai-native": OpenAI-compatible Chat Completions (vLLM/TGI/SGLang/Ollama
+  /v1, e.g. a Cray) with tools= schema, parses message.tool_calls
 
-All three paths write the same Trace schema, so Phase 2 scoring is protocol-agnostic.
+All paths write the same Trace schema, so Phase 2 scoring is protocol-agnostic.
+
+Operator note (Cray / OpenAI-compatible endpoint): set OPENAI_BASE_URL to the
+inference server's /v1 (e.g. http://localhost:11434/v1 for local Ollama, or the
+Cray's /v1) and OPENAI_API_KEY to a non-empty value, then run with
+`blue-bench qualify --openai --profile <model_id>`. Pointing at the Cray is a
+config change only. THEN verify per served-model that native tool-calling works
+through the Cray's inference server — vLLM/TGI/SGLang each parse tool calls
+differently (vLLM needs --enable-auto-tool-choice + a per-model
+--tool-call-parser; a mis-config silently returns empty tool_calls). Where a
+served model does not do native tool-calling, fall back to the text-embedded
+protocol. This per-model verification is the real variable cost and needs the
+live Cray.
 """
 from __future__ import annotations
 
@@ -287,6 +301,26 @@ def _tool_specs_to_anthropic(tools: list[ToolSpec]) -> list[dict[str, Any]]:
             "name": t.name,
             "description": t.description,
             "input_schema": t.input_schema or {"type": "object", "properties": {}},
+        }
+        for t in tools
+    ]
+
+
+def _tool_specs_to_openai(tools: list[ToolSpec]) -> list[dict[str, Any]]:
+    """Convert MCP tool specs to OpenAI function schema.
+
+    OpenAI format matches Ollama's: a ``type: function`` wrapper around a
+    ``function`` object with name/description/parameters. The parameters schema
+    is the MCP input_schema (already JSON Schema).
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema or {"type": "object", "properties": {}},
+            },
         }
         for t in tools
     ]
@@ -626,6 +660,133 @@ async def _run_anthropic(
     trace.error = f"max_turns ({max_turns}) exhausted without final answer"
 
 
+async def _run_openai(
+    profile: ModelProfile,
+    system_prompt: str,
+    question: str,
+    tools: list[ToolSpec],
+    mcp: MCPStdioClient,
+    max_turns: int,
+    trace: Trace,
+) -> None:
+    """OpenAI-compatible tool-use loop (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray).
+
+    Mirrors ``_run_anthropic`` but against the OpenAI Chat Completions wire
+    protocol: send messages + tools, parse ``choices[0].message.tool_calls``,
+    dispatch each via MCP, feed results back as ``{role: tool, tool_call_id,
+    content}`` messages, and loop until the model stops calling tools.
+    """
+    # Import here so tests that don't exercise the OpenAI path don't require
+    # the SDK to be installed.
+    from openai import AsyncOpenAI
+
+    from blue_bench_client._openai import make_async_client
+
+    client = make_async_client()
+    tool_specs = _tool_specs_to_openai(tools)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": question},
+    ]
+
+    g = profile.generation
+    kwargs: dict[str, Any] = {
+        "model": profile.model_id,
+        "messages": messages,
+        "tools": tool_specs,
+    }
+    if g.temperature is not None:
+        kwargs["temperature"] = g.temperature
+    if g.top_p is not None:
+        kwargs["top_p"] = g.top_p
+
+    for _ in range(max_turns):
+        t0 = time.monotonic()
+        resp = await client.chat.completions.create(**kwargs)
+        dur = int((time.monotonic() - t0) * 1000)
+
+        choice = resp.choices[0] if resp.choices else None
+        if choice is None:
+            trace.error = "openai-native: empty choices in response"
+            return
+        msg = choice.message
+        content = msg.content or ""
+        tool_calls_raw = list(msg.tool_calls or [])
+
+        tool_calls = [
+            ToolCall(
+                name=tc.function.name,
+                args=dict(tc.function.arguments or {}) if tc.function.arguments else {},
+            )
+            for tc in tool_calls_raw
+        ]
+        trace.turns.append(
+            Turn(role="assistant", content=content, tool_calls=tool_calls, duration_ms=dur)
+        )
+        # Append the assistant turn with its tool_calls so the next request
+        # carries the full context (OpenAI requires the tool_calls to be echoed
+        # back when the following message is a tool result).
+        messages.append(
+            {
+                "role": "assistant",
+                "content": content or None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments or "{}",
+                        },
+                    }
+                    for tc in tool_calls_raw
+                ],
+            }
+        )
+        trace.turns_used += 1
+
+        if not tool_calls:
+            # Normal exit: model stopped calling tools.
+            if content:
+                trace.final_answer = content
+                return
+            # Empty final turn — salvage from prior turns.
+            for prior in reversed(trace.turns[:-1]):
+                if prior.role == "assistant" and prior.content:
+                    trace.final_answer = prior.content
+                    break
+            return
+
+        # Dispatch each tool call via MCP and feed results back as tool messages.
+        for tc in tool_calls_raw:
+            name = tc.function.name
+            try:
+                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
+            except json.JSONDecodeError:
+                args = {}
+            t1 = time.monotonic()
+            result = await mcp.call_tool(name, args)
+            tdur = int((time.monotonic() - t1) * 1000)
+            trace.turns.append(
+                Turn(role="tool", content=result, tool_name=name, duration_ms=tdur)
+            )
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                }
+            )
+
+    # Max turns exhausted — salvage last non-empty assistant content.
+    for prior in reversed(trace.turns):
+        if prior.role == "assistant" and prior.content:
+            trace.final_answer = prior.content
+            break
+    trace.error = f"max_turns ({max_turns}) exhausted without final answer"
+
+
 # ── anthropic-cli transport ──────────────────────────────────────────────────
 # Drives a Claude model via the `claude` CLI headless on the SUBSCRIPTION (OAuth),
 # not the metered API. Only OAuth tokens are available in this deployment, and the
@@ -802,6 +963,8 @@ async def run(
                 await _run_anthropic(profile, system_prompt, question, tools, mcp, max_turns, trace)
             elif profile.tool_protocol == "anthropic-cli":
                 await _run_anthropic_cli(profile, system_prompt, question, tools, cmd, max_turns, trace)
+            elif profile.tool_protocol == "openai-native":
+                await _run_openai(profile, system_prompt, question, tools, mcp, max_turns, trace)
             else:
                 await _run_text_embedded(profile, system_prompt, question, tools, mcp, max_turns, trace)
         except Exception as e:

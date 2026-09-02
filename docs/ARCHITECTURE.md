@@ -158,10 +158,13 @@ only differences are transport and where the tool-call loop runs.
 
 **Reference client + runner** ([`blue_bench_client/runner.py`](../blue_bench_client/runner.py))
 launches the MCP server as a subprocess, loads a profile, composes the
-system prompt, calls Ollama or Anthropic, parses whichever tool-call
-protocol the profile declared, dispatches each call back through the MCP
-client, and captures a structured `Trace` ([`trace.py`](../blue_bench_client/trace.py))
-that downstream aggregation can consume.
+system prompt, calls Ollama, Anthropic, or an OpenAI-compatible endpoint,
+parses whichever tool-call protocol the profile declared, dispatches each call
+back through the MCP client, and captures a structured `Trace`
+([`trace.py`](../blue_bench_client/trace.py)) that downstream aggregation can
+consume. The `openai-native` protocol targets any OpenAI-compatible
+`/v1/chat/completions` (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) — see the
+runner docstring for the operator note on per-model tool-calling verification.
 
 **Operator CLI** ([`blue_bench_cli/main.py`](../blue_bench_cli/main.py)) is a
 thin `typer` wrapper: `blue-bench qualify --profile X` runs the eval corpus

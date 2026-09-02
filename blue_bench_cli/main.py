@@ -39,6 +39,7 @@ def qualify(
     limit: int = typer.Option(None, "--limit", "-n", help="Stop after N prompts"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
     cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
+    openai: bool = typer.Option(False, "--openai", help="Run --profile as a model id served behind an OpenAI-compatible endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) via a generic openai-native profile (needs OPENAI_BASE_URL + OPENAI_API_KEY in .env)"),
     no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
     skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip the SIEM-readiness gate that refuses to grade an empty/stale Elasticsearch (intentional dry runs only)"),
 ) -> None:
@@ -57,6 +58,14 @@ def qualify(
             raise typer.Exit(1)
         from blue_bench_client.cloud_models import generic_cloud_profile
         override = generic_cloud_profile(profile, coached=not no_coaching)
+        profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
+    elif openai:
+        import os
+        if not os.environ.get("OPENAI_BASE_URL"):
+            typer.echo("ERROR: --openai needs OPENAI_BASE_URL (e.g. http://localhost:11434/v1 or a Cray /v1). Put it in .env.", err=True)
+            raise typer.Exit(1)
+        from blue_bench_client.cloud_models import generic_openai_profile
+        override = generic_openai_profile(profile, coached=not no_coaching)
         profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
     from blue_bench_eval.qualify import PreflightError
     try:

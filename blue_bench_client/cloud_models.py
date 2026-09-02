@@ -117,3 +117,38 @@ def generic_cloud_profile(model_id: str, *, guidelines: str | None = None, coach
                          "guidelines": g},
         "require_task_class": False,
     })
+
+
+def generic_openai_profile(model_id: str, *, guidelines: str | None = None, coached: bool = True):
+    """An in-memory ModelProfile for any model served behind an OpenAI-compatible
+    endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray). Uses the openai-native
+    tool-call protocol. Lets the bench run any served model without a per-model
+    profile file.
+
+    ``coached`` (default True) selects the threat-hunting analyst-method coaching
+    (threat_hunting_protocol.md + coaching hints). ``coached=False`` is the
+    baseline arm: the plain investigation_protocol.md and NO coaching hints, so a
+    with/without-coaching A/B isolates the coaching's effect. ``guidelines``
+    overrides the guidelines file explicitly."""
+    from blue_bench_mcp.profiles import ModelProfile
+    g = guidelines or ("threat_hunting_protocol.md" if coached else "investigation_protocol.md")
+    hints = [
+        "Native tool-call protocol — emit structured tool_calls, no fenced JSON in the assistant text.",
+        "Prefer aggregation (count_by_field, top-N) over raw reads during triage.",
+        "Chain tools across host and network sources for correlation.",
+        "For low-and-slow hunts, widen the tool time windows (large timerange_minutes).",
+        "Flag data inconsistencies honestly rather than fabricating around them.",
+    ] if coached else []
+    return ModelProfile.model_validate({
+        "name": f"openai-{model_id.replace(':', '-').replace('/', '-')}{'' if coached else '-uncoached'}",
+        "model_id": model_id,
+        "tool_protocol": "openai-native",
+        "prompt_style": "terse",
+        "context_size": 32768,
+        "generation": {"temperature": 0.3, "top_p": 0.9},
+        "coaching_hints": hints,
+        "recommended_workflows": ["triage", "forensics-lite", "detection-rules", "correlation"],
+        "prompt_parts": {"role": "blue_team_analyst.md", "site": "default.md",
+                         "guidelines": g},
+        "require_task_class": False,
+    })

@@ -25,6 +25,17 @@ number therefore compares a capped local run against an uncapped ceiling; the
 gap is partly budget, not purely capability. State this caveat wherever the
 percentage is quoted.
 
+**Guidelines asymmetry (read before quoting "% of frontier"):** the two coaching
+guidelines files ship with *opposite* stopping rules —
+`investigation_protocol.md` ("stop after 4-6 calls") vs
+`threat_hunting_protocol.md` ("corroborate across two layers and rule out
+competing explanations"). The frontier ceiling profiles (`claude-opus-5`,
+`claude-opus-4-8`) use the hunting protocol; the committed local profiles use
+the investigation protocol. A "% of frontier" number is only a capability
+measurement when both arms run the same guidance. Each run's `run_meta.json`
+stamps its `guidelines` file so the arm is observable; do not compare across
+arms without accounting for it.
+
 ## Rubric design
 
 Four dimensions, each scored 0–3 by a Claude judge (not self-scoring). The judge writes per-dimension justifications in the scored JSON — every number has a cited reason, which prevents score inflation and makes regressions diagnosable.

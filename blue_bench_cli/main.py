@@ -151,7 +151,8 @@ def aggregate_cmd(
     # Summary line to stderr so --no-write stdout stays clean.
     all_pass = result.passes_overall and all(result.passes_key_dims.values())
     key_dim_parts = " ".join(
-        f"{kd}={result.dim_pct.get(kd, 0):.1f}%" for kd in result.key_dimensions
+        f"{kd}={result.dim_pct[kd]:.1f}%" if kd in result.dim_pct else f"{kd}=N/A"
+        for kd in result.key_dimensions
     )
     line = f"overall={result.overall_pct:.1f}% {key_dim_parts} pass={all_pass}"
     typer.echo(line, err=True)

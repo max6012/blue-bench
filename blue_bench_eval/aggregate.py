@@ -129,6 +129,11 @@ def _load_traces(run_dir: Path) -> dict[str, dict]:
     if not prompts_dir.exists():
         return out
     for f in sorted(prompts_dir.glob("*.json")):
+        # A crashed prompt is written as <id>.error.json (qualify.py) and carries
+        # no trace — it must not count as a trace, or a single crash would make
+        # the run permanently un-aggregatable (D-B).
+        if f.name.endswith(".error.json"):
+            continue
         with open(f) as fh:
             data = json.load(fh)
         out[data["prompt_id"]] = data
@@ -185,14 +190,25 @@ def aggregate(
     categories = _load_prompt_categories(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
     tiers = _load_prompt_tiers(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
 
-    # D3: a silent denominator — fewer scored files than traces — would let a
-    # partial run report a confident headline over the survivors. Refuse it.
-    if traces and len(scores) < len(traces):
-        missing = sorted(set(traces) - {s.prompt_id for s in scores})
-        raise IncompleteRunError(
-            f"scored {len(scores)}/{len(traces)} prompts; missing: {', '.join(missing)}. "
-            "Re-run the judge (or pass --allow-partial) before aggregating."
-        )
+    # D3/D-C: a silent denominator — scored files that don't match the traces —
+    # would let a partial or stale run report a confident headline. Compare the
+    # SET DIFFERENCE, not the counts: a stale scored/*.json makes the counts
+    # match while a genuinely unscored prompt passes unnoticed (and the stale
+    # prompt's scores enter the headline).
+    if traces:
+        scored_ids = {s.prompt_id for s in scores}
+        missing = sorted(set(traces) - scored_ids)
+        stale = sorted(scored_ids - set(traces))
+        if missing or stale:
+            parts = []
+            if missing:
+                parts.append(f"missing scored: {', '.join(missing)}")
+            if stale:
+                parts.append(f"stale scored (no trace): {', '.join(stale)}")
+            raise IncompleteRunError(
+                f"scored {len(scores)}/{len(traces)} prompts; {'; '.join(parts)}. "
+                "Re-run the judge before aggregating."
+            )
 
     result = AggregateResult(
         run_dir=run_dir,
@@ -424,8 +440,18 @@ def diff_runs(result_a: AggregateResult, result_b: AggregateResult) -> str:
     lines.append("| Dimension | A | B | Δ |")
     lines.append("|-----------|---|---|---|")
     for dim in ("overall", *all_dims):
-        a = result_a.overall_pct if dim == "overall" else result_a.dim_pct.get(dim, 0.0)
-        b = result_b.overall_pct if dim == "overall" else result_b.dim_pct.get(dim, 0.0)
+        if dim == "overall":
+            a, b = result_a.overall_pct, result_b.overall_pct
+        else:
+            a = result_a.dim_pct.get(dim)
+            b = result_b.dim_pct.get(dim)
+        # D-L: an N/A dimension (absent from dim_pct) must render as N/A, not a
+        # fabricated 0.0% delta.
+        if a is None or b is None:
+            a_s = f"{a:.1f}%" if a is not None else "N/A"
+            b_s = f"{b:.1f}%" if b is not None else "N/A"
+            lines.append(f"| {dim} | {a_s} | {b_s} | N/A |")
+            continue
         delta = b - a
         arrow = "↑" if delta > 0 else "↓" if delta < 0 else "="
         lines.append(f"| {dim} | {a:.1f}% | {b:.1f}% | {arrow} {delta:+.1f} |")

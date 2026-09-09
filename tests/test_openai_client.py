@@ -28,7 +28,9 @@ def test_api_key_sets_bearer(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "k-123")
     kw = _openai._client_kwargs()
     assert kw["api_key"] == "k-123"
-    assert _openai.is_configured() is True
+    # D-K: an API key alone is NOT "configured" — without OPENAI_BASE_URL the SDK
+    # would silently target api.openai.com.
+    assert _openai.is_configured() is False
 
 
 def test_cray_full_config(monkeypatch):

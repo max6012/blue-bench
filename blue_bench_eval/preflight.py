@@ -335,7 +335,12 @@ def run_preflight(
 def _check_indices_populated(
     cfg: ServerConfig, client: ESClient, report: PreflightReport
 ) -> None:
-    indices = _split_pattern(cfg.elastic.index_pattern)
+    # Enumerate EVERY index the tool surface reads, not just index_pattern —
+    # otherwise an empty auth/Sysmon/OT index slips through while the alert
+    # indices are healthy (the exact void-grade failure this gate exists to
+    # catch). _all_read_indices is the union of index_pattern + sysmon + wazuh
+    # fallback + zeek + ot-conn + both auth substrates.
+    indices = _all_read_indices(cfg)
     counts: dict[str, int | None] = {}
     try:
         for idx in indices:
@@ -367,37 +372,43 @@ def _check_window_covers_now(
     now_tolerance_hours: int,
 ) -> None:
     indices = _all_read_indices(cfg)
+    # Check each index's max @timestamp INDIVIDUALLY. A single max agg over the
+    # union would let one fresh index mask six stale ones — the same OR flaw the
+    # per-prompt probe had. Every index the tools read must cover now.
+    now = datetime.now(timezone.utc)
+    stale: list[str] = []
+    no_ts: list[str] = []
+    details: list[str] = []
     try:
-        max_ts = client.max_timestamp(indices)
+        for idx in indices:
+            max_ts = client.max_timestamp([idx])
+            if max_ts is None:
+                no_ts.append(idx)
+                continue
+            gap_hours = (now - max_ts).total_seconds() / 3600.0
+            if gap_hours < 0:
+                gap_desc = f"{abs(gap_hours):.1f}h in the future"
+            else:
+                gap_desc = f"{gap_hours:.1f}h ago"
+            details.append(f"{idx}: {max_ts.isoformat()} ({gap_desc})")
+            if gap_hours > now_tolerance_hours:
+                stale.append(idx)
     except ESError as e:
         report.add("window_covers_now", False, str(e))
         return
-    if max_ts is None:
-        # ES up + pattern matched something but no usable @timestamp: cannot
-        # confirm the window covers now → fail closed, don't silently pass.
+    if no_ts:
         report.add(
             "window_covers_now",
             False,
-            f"no @timestamp found across {','.join(indices)} — cannot confirm "
-            "window covers now (empty corpus or missing/mismatched @timestamp field)",
+            f"no @timestamp in: {', '.join(no_ts)} — cannot confirm the window "
+            "covers now (empty corpus or missing/mismatched @timestamp field)",
         )
         return
-    now = datetime.now(timezone.utc)
-    gap_hours = (now - max_ts).total_seconds() / 3600.0
-    # gap_hours < 0 means max_ts is in the future (anchor-to-now / clock skew) —
-    # that still "covers now", so test the one-sided condition, not abs().
-    passed = gap_hours <= now_tolerance_hours
-    if gap_hours < 0:
-        gap_desc = f"{abs(gap_hours):.1f}h in the future"
-    else:
-        gap_desc = f"{gap_hours:.1f}h ago"
-    detail = (
-        f"max @timestamp = {max_ts.isoformat()} ({gap_desc}); "
-        f"tolerance = {now_tolerance_hours}h"
-    )
-    if not passed:
+    passed = not stale
+    detail = "; ".join(details) + f"; tolerance = {now_tolerance_hours}h"
+    if stale:
         detail += (
-            " — STALE: corpus window ends before now, so lookback-from-now "
+            f" — STALE: {', '.join(stale)} end before now, so lookback-from-now "
             "queries will miss data (un-anchored ingest? re-run ingest with "
             "--anchor-end-to-now)"
         )
@@ -446,18 +457,30 @@ def _check_prompt_probes(
                 critical=False,
             )
             continue
+        # Probe each index INDIVIDUALLY and require EVERY one to have data. A
+        # single union search would pass if ANY index has data — so an auth-only
+        # prompt whose auth indices are empty would be masked by the alert
+        # indices (the exact void-grade failure this gate exists to catch).
+        empty_indices: list[str] = []
+        per_index: list[str] = []
         try:
-            hits = client.probe_hits(indices, probe_window_hours)
+            for idx in indices:
+                hits = client.probe_hits([idx], probe_window_hours)
+                per_index.append(f"{idx}={hits}")
+                if hits < 1:
+                    empty_indices.append(idx)
         except ESError as e:
             report.add(name, False, str(e))
             continue
-        passed = hits >= 1
+        passed = not empty_indices
         detail = (
-            f"{hits} doc(s) in last {probe_window_hours}h across "
-            f"{','.join(indices)}"
+            f"docs in last {probe_window_hours}h: " + ", ".join(per_index)
         )
         if not passed:
-            detail += " — SIEM empty for this prompt within the lookback window"
+            detail += (
+                f" — SIEM empty for {', '.join(empty_indices)} within the "
+                "lookback window"
+            )
         report.add(name, passed, detail)
 
 

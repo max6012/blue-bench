@@ -156,9 +156,12 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             'rule.description'; Zeek uses top-level 'src_ip', 'dest_ip',
             'dest_port'. Pass the field path exactly as it appears in tool
             output, not a shortened form.
-          index: optional ES index pattern override (e.g., to scope an
-            aggregation to a single data source). Leave empty to search the
-            default multi-index pattern.
+          index: optional ES index pattern override. Leave empty to search the
+            default alert/Zeek pattern (logstash-suricata-alerts,wazuh-alerts,
+            zeek-conn). To aggregate over a source OUTSIDE that default, pass
+            its index explicitly: 'windows-sysmon' (Sysmon host telemetry),
+            'windows-security,linux-syslog' (authentication logs), or 'ot-conn'
+            (OT/plant connection logs).
           timerange_minutes: lookback window, default 240.
           top_n: max number of top values to return, default 20.
         Returns a human-readable ranked list of (value, count) pairs.

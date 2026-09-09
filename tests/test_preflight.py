@@ -27,6 +27,8 @@ from blue_bench_mcp.config import ServerConfig
 INDEX_PATTERN = "logstash-suricata-alerts,wazuh-alerts,zeek-conn"
 PATTERN_INDICES = INDEX_PATTERN.split(",")
 SYSMON_INDEX = "windows-sysmon"
+# Every index the tool surface reads (the union _all_read_indices returns).
+ALL_INDICES = PATTERN_INDICES + ["ot-conn", SYSMON_INDEX, "windows-security", "linux-syslog"]
 
 
 @pytest.fixture
@@ -72,12 +74,14 @@ class FakeES:
         reachable: bool = True,
         counts: dict[str, int | None] | None = None,
         max_ts: datetime | None = None,
+        max_ts_map: dict[str, datetime | None] | None = None,
         probe_map: dict[str, int] | None = None,
         raise_on: str | None = None,
     ) -> None:
         self._reachable = reachable
         self._counts = counts or {}
         self._max_ts = max_ts
+        self._max_ts_map = max_ts_map
         self._probe_map = probe_map or {}
         self._raise_on = raise_on  # method name that should raise ESError
 
@@ -94,14 +98,18 @@ class FakeES:
     def max_timestamp(self, indices: list[str]) -> datetime | None:
         if self._raise_on == "max_timestamp":
             raise ESError("max_ts boom")
+        # The real client is now called per-index; support both a single global
+        # max_ts and a per-index map.
+        if self._max_ts_map is not None:
+            return self._max_ts_map.get(indices[0], self._max_ts)
         return self._max_ts
 
     def probe_hits(self, indices: list[str], window_hours: int) -> int:
         if self._raise_on == "probe_hits":
             raise ESError("probe boom")
-        # Real client does one union search returning the summed hit count
-        # (">=1 hit somewhere"); mirror that here.
-        return sum(self._probe_map.get(i, 0) for i in indices)
+        # The real client is now called per-index; return the hit count for the
+        # single index passed.
+        return self._probe_map.get(indices[0], 0)
 
 
 def _check(report: PreflightReport, name: str):
@@ -186,9 +194,9 @@ def test_every_prompt_tool_resolves_to_index_or_allowlist():
 def test_all_green(config_path: Path, prompts_dir: Path):
     now = datetime.now(timezone.utc)
     fake = FakeES(
-        counts={i: 100 for i in PATTERN_INDICES},
+        counts={i: 100 for i in ALL_INDICES},
         max_ts=now - timedelta(hours=2),
-        probe_map={i: 10 for i in PATTERN_INDICES + [SYSMON_INDEX]},
+        probe_map={i: 10 for i in ALL_INDICES},
     )
     report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
     assert report.ok is True
@@ -206,7 +214,7 @@ def test_future_max_ts_still_covers_now(config_path: Path):
     # anchor-to-now / clock skew: max_ts slightly in the future must pass.
     now = datetime.now(timezone.utc)
     fake = FakeES(
-        counts={i: 5 for i in PATTERN_INDICES},
+        counts={i: 5 for i in ALL_INDICES},
         max_ts=now + timedelta(minutes=30),
     )
     report = run_preflight(config_path, client=fake)
@@ -234,7 +242,7 @@ def test_es_unreachable(config_path: Path, prompts_dir: Path):
 
 def test_empty_index_fails(config_path: Path):
     now = datetime.now(timezone.utc)
-    counts = {i: 100 for i in PATTERN_INDICES}
+    counts = {i: 100 for i in ALL_INDICES}
     counts["wazuh-alerts"] = 0  # one empty index
     fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
     report = run_preflight(config_path, client=fake)
@@ -246,13 +254,28 @@ def test_empty_index_fails(config_path: Path):
 
 def test_missing_index_fails(config_path: Path):
     now = datetime.now(timezone.utc)
-    counts: dict[str, int | None] = {i: 100 for i in PATTERN_INDICES}
+    counts: dict[str, int | None] = {i: 100 for i in ALL_INDICES}
     counts["zeek-conn"] = None  # 404 / missing
     fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
     report = run_preflight(config_path, client=fake)
     assert report.ok is False
     chk = _check(report, "indices_populated")
     assert "MISSING" in chk.detail and "zeek-conn" in chk.detail
+
+
+def test_empty_auth_index_fails(config_path: Path):
+    # D-A: an empty auth index must fail the populated check even though the
+    # alert/zeek/sysmon indices are healthy — the exact void-grade failure the
+    # gate exists to catch.
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in ALL_INDICES}
+    counts["windows-security"] = 0
+    fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
+    report = run_preflight(config_path, client=fake)
+    assert report.ok is False
+    chk = _check(report, "indices_populated")
+    assert chk.passed is False
+    assert "windows-security" in chk.detail and "empty" in chk.detail
 
 
 # --- scenario: stale window --------------------------------------------------
@@ -262,7 +285,7 @@ def test_stale_window_fails(config_path: Path):
     # The core bug: indices populated, but max @timestamp is months in the past
     # (un-anchored ingest). Lookback-from-now queries would return [].
     stale = datetime(2026, 3, 1, tzinfo=timezone.utc)
-    fake = FakeES(counts={i: 100 for i in PATTERN_INDICES}, max_ts=stale)
+    fake = FakeES(counts={i: 100 for i in ALL_INDICES}, max_ts=stale)
     report = run_preflight(config_path, now_tolerance_hours=48, client=fake)
     assert report.ok is False
     # Indices are populated — so THIS check is what catches the bug.
@@ -273,9 +296,26 @@ def test_stale_window_fails(config_path: Path):
     assert "2026-03-01" in win.detail
 
 
+def test_one_stale_index_fails_window(config_path: Path):
+    # D-A: one stale index must fail the window check even though the others are
+    # fresh — a single max agg over the union would mask it.
+    now = datetime.now(timezone.utc)
+    stale = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    fake = FakeES(
+        counts={i: 100 for i in ALL_INDICES},
+        max_ts_map={i: (now - timedelta(hours=1)) for i in ALL_INDICES},
+    )
+    fake._max_ts_map["windows-security"] = stale
+    report = run_preflight(config_path, now_tolerance_hours=48, client=fake)
+    assert report.ok is False
+    win = _check(report, "window_covers_now")
+    assert win.passed is False
+    assert "windows-security" in win.detail
+
+
 def test_null_max_ts_fails_closed(config_path: Path):
     # ES up, pattern matched, but no usable @timestamp → fail closed.
-    fake = FakeES(counts={i: 100 for i in PATTERN_INDICES}, max_ts=None)
+    fake = FakeES(counts={i: 100 for i in ALL_INDICES}, max_ts=None)
     report = run_preflight(config_path, client=fake)
     assert report.ok is False
     win = _check(report, "window_covers_now")
@@ -291,9 +331,9 @@ def test_prompt_probe_empty_for_prompt(config_path: Path, prompts_dir: Path):
     # Everything populated + fresh, but sysmon has 0 docs in-window → the
     # sysmon-backed prompt probe fails while the pattern-backed one passes.
     fake = FakeES(
-        counts={i: 100 for i in PATTERN_INDICES},
+        counts={i: 100 for i in ALL_INDICES},
         max_ts=now - timedelta(hours=1),
-        probe_map={i: 10 for i in PATTERN_INDICES},  # SYSMON_INDEX -> 0
+        probe_map={i: 10 for i in ALL_INDICES if i != SYSMON_INDEX},  # SYSMON_INDEX -> 0
     )
     report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
     assert _check(report, "probe:p2-01").passed is True
@@ -306,7 +346,7 @@ def test_prompt_probe_empty_for_prompt(config_path: Path, prompts_dir: Path):
 def test_transport_error_midrun_is_clean_failure(config_path: Path):
     now = datetime.now(timezone.utc)
     fake = FakeES(
-        counts={i: 1 for i in PATTERN_INDICES},
+        counts={i: 1 for i in ALL_INDICES},
         max_ts=now,
         raise_on="max_timestamp",
     )
@@ -332,7 +372,7 @@ def test_cli_exit_nonzero_when_not_ok(config_path: Path, monkeypatch):
 def test_cli_exit_zero_when_ok(config_path: Path, monkeypatch):
     now = datetime.now(timezone.utc)
     fake = FakeES(
-        counts={i: 100 for i in PATTERN_INDICES},
+        counts={i: 100 for i in ALL_INDICES},
         max_ts=now - timedelta(hours=1),
     )
     monkeypatch.setattr(

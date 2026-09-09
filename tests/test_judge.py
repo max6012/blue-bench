@@ -170,3 +170,19 @@ def test_judge_run_allow_partial_grades_survivors(tmp_path, monkeypatch):
 
     out = judge_run(run, RUBRIC, prompts_dir=None, call=_flaky, allow_partial=True)
     assert len(out) == 1
+
+
+# ── D-D: the judge must never be the model under test ────────────────────────
+
+def test_judge_run_refuses_self_scoring(tmp_path):
+    from blue_bench_eval.judge import SelfScoringError
+
+    run = tmp_path / "run"
+    (run / "prompts").mkdir(parents=True)
+    # The trace's model_id matches the rubric's judge model (claude-opus-4-8).
+    t = _trace("p3-01")
+    t["model_id"] = "claude-opus-4-8"
+    (run / "prompts" / "p3-01.json").write_text(json.dumps(t))
+
+    with pytest.raises(SelfScoringError):
+        judge_run(run, RUBRIC, prompts_dir=None, call=_mock_call({"tool_usage": 2, "findings": 2, "attribution": 2}))

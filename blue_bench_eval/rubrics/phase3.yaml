@@ -34,6 +34,11 @@ threshold:
   # not the 85/90 of tool_usage/findings. Revisit as a % of the frontier ceiling
   # once the frontier slate runs. discrimination rests on few RQ3 prompts, so its
   # gate is provisional until the slate grows.
+  # NOTE (D-G): overall_pct is observation-weighted (mean over every scored
+  # prompt×dimension), which re-weights the headline from an equal 25/25/25/25
+  # per-dimension split to ~34/34/27/5 (tool_usage/findings/attribution/
+  # discrimination). The 75 bar was set under the OLD mean-of-means weighting and
+  # has NOT been re-derived for the new weighting — recalibrate before publishing.
   attribution_pct: 50
   discrimination_pct: 50
 

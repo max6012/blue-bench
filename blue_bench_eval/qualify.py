@@ -45,6 +45,11 @@ class RunMeta:
     started_at: str = ""
     finished_at: str = ""
     prompt_ids: list[str] = field(default_factory=list)
+    guidelines: str = ""
+    """The guidelines file the profile composed (e.g. threat_hunting_protocol.md
+    vs investigation_protocol.md). Stamped so a run's coaching arm is observable
+    — the two files carry opposite stopping rules, and a "% of frontier" number
+    is only comparable when the arms are known."""
 
 
 class PreflightError(RuntimeError):
@@ -171,6 +176,7 @@ async def run_corpus(
         git_head=_git_head(),
         started_at=datetime.now().isoformat(),
         prompt_ids=[s.id for s in specs],
+        guidelines=getattr(profile, "prompt_parts", {}).get("guidelines", ""),
     )
 
     print(

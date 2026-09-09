@@ -51,7 +51,11 @@ def make_client() -> "OpenAI":
 
 
 def is_configured() -> bool:
-    """True when an OpenAI-compatible endpoint is explicitly configured."""
-    return bool(os.environ.get("OPENAI_BASE_URL")) or bool(
-        os.environ.get("OPENAI_API_KEY")
-    )
+    """True when an OpenAI-compatible endpoint is explicitly configured.
+
+    Requires OPENAI_BASE_URL specifically: with only OPENAI_API_KEY set, the SDK
+    resolves base_url to https://api.openai.com/v1/ — silently targeting the
+    metered OpenAI API instead of the intended local/Cray endpoint. An API key
+    alone is not "configured" for our purposes.
+    """
+    return bool(os.environ.get("OPENAI_BASE_URL"))

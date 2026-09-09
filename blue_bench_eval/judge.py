@@ -382,6 +382,15 @@ class PartialRunError(RuntimeError):
     """
 
 
+class SelfScoringError(RuntimeError):
+    """The judge model matches the model under test — self-scoring.
+
+    The rubric pins ``judge.model``; the traces carry the run's ``model_id``.
+    Grading a model with itself would make the "never the model under test
+    self-scoring" guarantee a lie, so refuse the run outright.
+    """
+
+
 def _result_is_empty(content: str) -> bool:
     """True if a tool-result payload carries no data (empty string / list / obj).
 
@@ -460,6 +469,24 @@ def _guard_not_void(traces: list[dict], run_dir: Path) -> None:
         )
 
 
+def _guard_not_self_scoring(traces: list[dict], judge_model: str, run_dir: Path) -> None:
+    """Refuse to grade a run whose model_id matches the judge model.
+
+    The rubric pins ``judge.model``; the traces carry the run's ``model_id``.
+    Grading a model with itself would make the "never the model under test
+    self-scoring" guarantee a lie, so refuse the run outright.
+    """
+    if not traces:
+        return
+    model_ids = {t.get("model_id") for t in traces if t.get("model_id")}
+    if judge_model in model_ids:
+        raise SelfScoringError(
+            f"refusing to score {run_dir}: judge model {judge_model!r} matches the "
+            "run's model_id — the judge must never be the model under test. "
+            "Override the judge with --model <different-model>."
+        )
+
+
 def judge_run(
     run_dir: Path,
     rubric_path: Path,
@@ -494,7 +521,14 @@ def judge_run(
     trace_files = [
         tf for tf in sorted(prompts.glob("*.json")) if not tf.name.endswith(".error.json")
     ]
-    _guard_not_void([json.loads(tf.read_text()) for tf in trace_files], run_dir)
+    traces = [json.loads(tf.read_text()) for tf in trace_files]
+    _guard_not_void(traces, run_dir)
+
+    # D-D: the judge must never be the model under test (self-scoring). The
+    # rubric pins judge.model; the traces carry the run's model_id. Refuse the
+    # run when they collide — a "never self-scoring" guarantee that is only a
+    # comment is not a guarantee.
+    _guard_not_self_scoring(traces, rubric.judge.model, run_dir)
 
     # The judge shares its OAuth token's rate window with any concurrent Claude
     # Code session; pace calls so a batch doesn't trip the shared per-window

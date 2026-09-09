@@ -23,8 +23,25 @@ conclusion from tool output.
   `resp_bytes`, `duration`, `conn_state`.
 - **Windows Sysmon host telemetry** — `get_process_events`, `get_process_tree`
   (`Computer`, `Image`, `CommandLine`, `ParentImage`, `EventID`, `ProcessGuid`, …).
+- **Authentication logs** — `search_auth_events` (Windows Security EventLog +
+  Linux sshd/auth syslog). Credential-abuse tradecraft (brute force, spraying,
+  dormant-credential use, pass-the-hash, impossible travel) lives here and is
+  reachable ONLY through this tool.
 
-All sources share the default index pattern — you do not normally pass an `index`.
+### Index names (for `count_by_field`'s `index` argument)
+
+`count_by_field` defaults to the alert/Zeek pattern
+`logstash-suricata-alerts,wazuh-alerts,zeek-conn`. The other sources live in
+their own indices and are NOT in that default — pass `index` explicitly to
+aggregate over them:
+
+- `windows-sysmon` — Sysmon host telemetry (process/network events)
+- `windows-security,linux-syslog` — authentication logs
+- `ot-conn` — OT/plant connection logs (Modbus/DNP3/IEC-104/S7)
+
+`search_alerts`, `get_connections`, `get_process_events`, `get_process_tree`,
+`search_auth_events`, and `get_agent_alerts` already target the right indices
+internally — do not pass `index` to them.
 
 ### Other tools
 - **Endpoint (OpenEDR mock)** — `get_detections`, `list_endpoints`; filter by

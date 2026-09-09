@@ -294,3 +294,37 @@ def test_aggregate_refuses_missing_scored(tmp_path: Path):
 
     with pytest.raises(IncompleteRunError):
         aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+
+
+def test_aggregate_refuses_stale_scored_id(tmp_path: Path):
+    # D-C: a stale scored/*.json (from a prior slate) makes the counts match
+    # while a genuinely unscored prompt passes unnoticed. The set difference
+    # must catch both the missing prompt AND the stale id.
+    from blue_bench_eval.aggregate import IncompleteRunError
+
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    # p2-02 is unscored, but a stale p2-99 makes len(scored) == len(traces).
+    _write_scored(run, "p2-99", 3, 3, 3, 3)
+
+    with pytest.raises(IncompleteRunError) as exc:
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert "p2-02" in str(exc.value)  # the missing prompt is named
+    assert "p2-99" in str(exc.value)  # the stale id is named
+
+
+def test_aggregate_ignores_error_json_traces(tmp_path: Path):
+    # D-B: a crashed prompt is written as <id>.error.json and must not count as
+    # a trace, or a single crash would make the run permanently un-aggregatable.
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    # A crashed prompt's error file (no trace body).
+    (run / "prompts" / "p2-02.error.json").write_text(
+        json.dumps({"prompt_id": "p2-02", "error": "boom"})
+    )
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert result.prompt_count == 1
+    assert result.overall_pct == 100.0

@@ -16,10 +16,11 @@ Cray's /v1) and OPENAI_API_KEY to a non-empty value, then run with
 `blue-bench qualify --openai --profile <model_id>`. Pointing at the Cray is a
 config change only. THEN verify per served-model that native tool-calling works
 through the Cray's inference server — vLLM/TGI/SGLang each parse tool calls
-differently (vLLM needs --enable-auto-tool-choice, a per-model
---tool-call-parser, and a per-model --chat-template for tool-role messages; a
-mis-config silently returns empty tool_calls). Where a served model does not do
-native tool-calling, fall back to the text-embedded protocol. This per-model
+differently (vLLM needs --enable-auto-tool-choice and a per-model
+--tool-call-parser; for models whose tokenizer template does not handle
+`tool`-role messages, a per-model --chat-template is also needed; a mis-config
+silently returns empty tool_calls). Where a served model does not do native
+tool-calling, fall back to the text-embedded protocol. This per-model
 verification is the real variable cost and needs the live Cray.
 """
 from __future__ import annotations

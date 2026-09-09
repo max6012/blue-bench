@@ -130,14 +130,24 @@ def _load_traces(run_dir: Path) -> dict[str, dict]:
         return out
     for f in sorted(prompts_dir.glob("*.json")):
         # A crashed prompt is written as <id>.error.json (qualify.py) and carries
-        # no trace — it must not count as a trace, or a single crash would make
-        # the run permanently un-aggregatable (D-B).
+        # no trace body — it is not a trace, so it must not enter the trace map.
+        # (The authoritative denominator is run_meta.json["prompt_ids"], not this
+        # map — see aggregate().)
         if f.name.endswith(".error.json"):
             continue
         with open(f) as fh:
             data = json.load(fh)
         out[data["prompt_id"]] = data
     return out
+
+
+def _load_run_meta(run_dir: Path) -> dict | None:
+    """Load run_meta.json (written by qualify) — the authoritative prompt slate."""
+    meta_path = run_dir / "run_meta.json"
+    if not meta_path.exists():
+        return None
+    with open(meta_path) as fh:
+        return json.load(fh)
 
 
 def _load_rubric(rubric_path: Path) -> tuple[RubricThreshold, list[str], list[str], str]:
@@ -183,31 +193,41 @@ def aggregate(
     run_dir: Path,
     rubric_path: Path,
     prompts_dir: Path | None = None,
+    *,
+    allow_partial: bool = False,
 ) -> AggregateResult:
     scores = _load_scored(run_dir)
     traces = _load_traces(run_dir)
+    meta = _load_run_meta(run_dir)
     threshold, dimensions, key_dimensions, prompt_prefix = _load_rubric(rubric_path)
     categories = _load_prompt_categories(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
     tiers = _load_prompt_tiers(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
 
-    # D3/D-C: a silent denominator — scored files that don't match the traces —
-    # would let a partial or stale run report a confident headline. Compare the
-    # SET DIFFERENCE, not the counts: a stale scored/*.json makes the counts
-    # match while a genuinely unscored prompt passes unnoticed (and the stale
-    # prompt's scores enter the headline).
-    if traces:
+    # D3/D-C/round-7 Defect 1: a silent denominator — scored files that don't
+    # match the run's actual prompt slate — would let a partial or stale run
+    # report a confident headline. The authoritative slate is
+    # run_meta.json["prompt_ids"] (written by qualify, includes crashed prompts);
+    # fall back to the trace map when run_meta is absent (e.g. hand-built runs).
+    # ``allow_partial`` is the deliberate escape hatch for survivors-only.
+    expected_ids: set[str] | None = None
+    if meta and meta.get("prompt_ids"):
+        expected_ids = set(meta["prompt_ids"])
+    elif traces:
+        expected_ids = set(traces)
+
+    if expected_ids is not None and not allow_partial:
         scored_ids = {s.prompt_id for s in scores}
-        missing = sorted(set(traces) - scored_ids)
-        stale = sorted(scored_ids - set(traces))
+        missing = sorted(expected_ids - scored_ids)
+        stale = sorted(scored_ids - expected_ids)
         if missing or stale:
             parts = []
             if missing:
                 parts.append(f"missing scored: {', '.join(missing)}")
             if stale:
-                parts.append(f"stale scored (no trace): {', '.join(stale)}")
+                parts.append(f"stale scored (not in run): {', '.join(stale)}")
             raise IncompleteRunError(
-                f"scored {len(scores)}/{len(traces)} prompts; {'; '.join(parts)}. "
-                "Re-run the judge before aggregating."
+                f"scored {len(scores)}/{len(expected_ids)} prompts; {'; '.join(parts)}. "
+                "Re-run the judge, or pass --allow-partial to aggregate the survivors."
             )
 
     result = AggregateResult(

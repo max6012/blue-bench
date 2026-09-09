@@ -48,9 +48,6 @@ def compose(
         text = _PLACEHOLDER_RE.sub(_sub, text)
         parts.append(text.rstrip())
 
-    if missing:
-        raise ValueError(f"missing prompt placeholders: {sorted(missing)}")
-
     # Coaching hints are profile-level (not a prompt_parts file). They are the
     # coached arm's actual intervention — append them so the coached/uncoached
     # A/B measures the hints, not just a guidelines-file swap. Run them through
@@ -63,5 +60,10 @@ def compose(
             h = _PLACEHOLDER_RE.sub(_sub, h)
             hint_lines.append(f"- {h}")
         parts.append("## Coaching hints\n\n" + "\n".join(hint_lines))
+
+    # Raise on missing placeholders AFTER the hints block, so a {bogus_key} in a
+    # hint raises the same way it does in a prompt-part file (not leak silently).
+    if missing:
+        raise ValueError(f"missing prompt placeholders: {sorted(missing)}")
 
     return "\n\n".join(parts)

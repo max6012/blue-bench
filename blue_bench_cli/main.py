@@ -136,11 +136,12 @@ def aggregate_cmd(
     rubric: Path = typer.Option(None, "--rubric", "-r", help="Rubric YAML (overrides --phase default)"),
     prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
     write_bluf: bool = typer.Option(True, "--write/--no-write", help="Write BLUF.md to run dir"),
+    allow_partial: bool = typer.Option(False, "--allow-partial", help="Aggregate the survivors when some prompts are unscored (default: refuse)"),
 ) -> None:
     """Aggregate a scored run into BLUF.md (expects scored/ + prompts/ inside RUN_DIR)."""
     if rubric is None:
         rubric = REPO / "blue_bench_eval" / "rubrics" / f"phase{phase}.yaml"
-    result = aggregate(run_dir, rubric, prompts_dir=prompts)
+    result = aggregate(run_dir, rubric, prompts_dir=prompts, allow_partial=allow_partial)
     md = render_bluf(result)
     if write_bluf:
         bluf_path = run_dir / "BLUF.md"

@@ -65,6 +65,23 @@ def prompts_dir(tmp_path: Path) -> Path:
     return d
 
 
+@pytest.fixture
+def prompts_dir_phase3(tmp_path: Path) -> Path:
+    """A slate whose prompts read the auth + OT indices (phase-3 style), so the
+    scoped populated/window checks actually demand those indices."""
+    d = tmp_path / "prompts"
+    d.mkdir()
+    (d / "p3-11.yaml").write_text(yaml.safe_dump({
+        "id": "p3-11", "category": "credential_access", "title": "t", "question": "q",
+        "expected_tools": ["search_auth_events", "count_by_field"],
+    }))
+    (d / "p3-16.yaml").write_text(yaml.safe_dump({
+        "id": "p3-16", "category": "ot_segment", "title": "t", "question": "q",
+        "expected_tools": ["get_connections"],
+    }))
+    return d
+
+
 class FakeES:
     """Stub ESClient. Configure per-scenario behavior via constructor args."""
 
@@ -263,19 +280,33 @@ def test_missing_index_fails(config_path: Path):
     assert "MISSING" in chk.detail and "zeek-conn" in chk.detail
 
 
-def test_empty_auth_index_fails(config_path: Path):
+def test_empty_auth_index_fails(config_path: Path, prompts_dir_phase3: Path):
     # D-A: an empty auth index must fail the populated check even though the
     # alert/zeek/sysmon indices are healthy — the exact void-grade failure the
-    # gate exists to catch.
+    # gate exists to catch. Scoped to a phase-3 slate that reads auth + OT.
     now = datetime.now(timezone.utc)
     counts = {i: 100 for i in ALL_INDICES}
     counts["windows-security"] = 0
     fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
-    report = run_preflight(config_path, client=fake)
+    report = run_preflight(config_path, prompts_dir=prompts_dir_phase3, client=fake)
     assert report.ok is False
     chk = _check(report, "indices_populated")
     assert chk.passed is False
     assert "windows-security" in chk.detail and "empty" in chk.detail
+
+
+def test_phase2_slate_does_not_demand_auth_or_ot(config_path: Path, prompts_dir: Path):
+    # Defect 2 (round 7): a phase-2 slate must NOT demand auth/OT/Sysmon indices
+    # it never touches. The p2 slate reads only index_pattern + sysmon.
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in PATTERN_INDICES + [SYSMON_INDEX]}
+    fake = FakeES(
+        counts=counts,
+        max_ts=now - timedelta(hours=1),
+        probe_map={i: 10 for i in PATTERN_INDICES + [SYSMON_INDEX]},
+    )
+    report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
+    assert report.ok is True
 
 
 # --- scenario: stale window --------------------------------------------------
@@ -296,7 +327,7 @@ def test_stale_window_fails(config_path: Path):
     assert "2026-03-01" in win.detail
 
 
-def test_one_stale_index_fails_window(config_path: Path):
+def test_one_stale_index_fails_window(config_path: Path, prompts_dir_phase3: Path):
     # D-A: one stale index must fail the window check even though the others are
     # fresh — a single max agg over the union would mask it.
     now = datetime.now(timezone.utc)
@@ -306,7 +337,7 @@ def test_one_stale_index_fails_window(config_path: Path):
         max_ts_map={i: (now - timedelta(hours=1)) for i in ALL_INDICES},
     )
     fake._max_ts_map["windows-security"] = stale
-    report = run_preflight(config_path, now_tolerance_hours=48, client=fake)
+    report = run_preflight(config_path, prompts_dir=prompts_dir_phase3, now_tolerance_hours=48, client=fake)
     assert report.ok is False
     win = _check(report, "window_covers_now")
     assert win.passed is False
@@ -320,7 +351,7 @@ def test_null_max_ts_fails_closed(config_path: Path):
     assert report.ok is False
     win = _check(report, "window_covers_now")
     assert win.passed is False
-    assert "cannot confirm" in win.detail.lower()
+    assert "no @timestamp" in win.detail.lower()
 
 
 # --- per-prompt probe edge cases ---------------------------------------------

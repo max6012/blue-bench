@@ -282,9 +282,26 @@ async def _summarize_excerpt(profile: ModelProfile, excerpt: str) -> str:
         choice = resp_oai.choices[0] if resp_oai.choices else None
         return (choice.message.content or "").strip() if choice else ""
 
-    # native / text-embedded / anthropic-cli — Ollama under the hood (the
-    # anthropic-cli path is not exercised here; it has no non-tool summarization
-    # surface, so it degrades to the local Ollama client).
+    if profile.tool_protocol == "anthropic-cli":
+        # The anthropic-cli transport drives `claude -p` on the subscription
+        # (OAuth), not the metered SDK — and it has no non-tool summarization
+        # surface. Route the summarization through the same CLI rather than
+        # silently sending a Claude model id to the local Ollama client.
+        import shutil
+        import subprocess
+
+        from blue_bench_client.runner import _cli_oauth_env
+
+        claude = shutil.which("claude") or "claude"
+        r = await asyncio.to_thread(
+            subprocess.run,
+            [claude, "-p", user_msg, "--model", profile.model_id,
+             "--output-format", "text"],
+            input="", capture_output=True, text=True, env=_cli_oauth_env(), timeout=300,
+        )
+        return (r.stdout or "").strip()
+
+    # native / text-embedded — Ollama under the hood.
     import ollama
 
     client_o = ollama.AsyncClient()

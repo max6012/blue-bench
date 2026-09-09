@@ -10,12 +10,14 @@ This module makes that impossible to ship again. `run_preflight` checks, in
 order of how early they bite:
 
   1. ES reachable at the configured URL.
-  2. Every index in ``ElasticConfig.index_pattern`` exists and has docs.
-  3. Corpus window covers "now": the MAX ``@timestamp`` across the indices the
-     tools actually read (index_pattern ∪ sysmon ∪ wazuh fallback ∪ zeek) is
-     within ``now_tolerance_hours`` of now. THIS is the check that catches the
-     un-anchored-ingest bug — a stale max ``@timestamp`` means lookback-from-now
-     queries miss everything.
+  2. Every index the SELECTED prompt slate reads exists and has docs. Scoped to
+     the union of ``_indices_for_tools`` over the selected prompts (respecting
+     ``prompts_prefix``), NOT the config-total union — a phase-2 run must not
+     demand auth/OT/Sysmon indices it never touches.
+  3. Corpus window covers "now": the MAX ``@timestamp`` of each index the
+     selected slate reads is within ``now_tolerance_hours`` of now, checked
+     per-index. THIS is the check that catches the un-anchored-ingest bug — a
+     stale max ``@timestamp`` means lookback-from-now queries miss everything.
   4. (optional) Per-prompt probe: for each prompt, a cheap now-relative
      match-over-time-window count on the indices that prompt's expected_tools
      read, confirming the SIEM is not empty for something the prompt could
@@ -112,6 +114,24 @@ def _all_read_indices(cfg: ServerConfig) -> list[str]:
         if idx not in seen:
             seen.add(idx)
             uniq.append(idx)
+    return uniq
+
+
+def _indices_for_specs(specs: list, cfg: ServerConfig) -> list[str]:
+    """Union of the ES indices a selected prompt slate reads.
+
+    Scoped to the prompts actually being run (respecting ``prompts_prefix``), so
+    a phase-2 run does not demand auth/OT/Sysmon indices it never touches. This
+    is the correct denominator for checks 2 and 3 — the config-total union
+    (``_all_read_indices``) would over-demand and break phase-scoped runs.
+    """
+    seen: set[str] = set()
+    uniq: list[str] = []
+    for spec in specs:
+        for idx in _indices_for_tools(spec.expected_tools, cfg):
+            if idx not in seen:
+                seen.add(idx)
+                uniq.append(idx)
     return uniq
 
 
@@ -305,6 +325,27 @@ def run_preflight(
         # Generous: cover the whole corpus span, not just the tolerance window.
         probe_window_hours = max(now_tolerance_hours, 30 * 24)
 
+    # Load the selected prompt slate once (if a prompts dir was given) so checks
+    # 2 and 3 can scope to the indices the run actually reads — not the
+    # config-total union, which would over-demand and break phase-scoped runs.
+    specs: list = []
+    if prompts_dir is not None:
+        from blue_bench_eval.prompts._schema import load_all
+
+        specs = load_all(Path(prompts_dir), prefix=prompts_prefix)
+        seen_ids: set[str] = set()
+        ordered = []
+        for s in specs:
+            if s.id not in seen_ids:
+                seen_ids.add(s.id)
+                ordered.append(s)
+        specs = ordered
+
+    # The indices this run's prompts read. When no prompts dir is given (a bare
+    # `preflight --config` invocation), fall back to index_pattern — the only
+    # thing we can know without a slate.
+    scoped_indices = _indices_for_specs(specs, cfg) if specs else _split_pattern(cfg.elastic.index_pattern)
+
     # --- check 1: ES reachable ---
     reachable, ping_detail = client.ping()
     report.add("es_reachable", reachable, ping_detail)
@@ -317,30 +358,29 @@ def run_preflight(
             report.add("prompt_probes", False, "skipped: ES unreachable")
         return report
 
-    # --- check 2: every index in index_pattern exists and has docs ---
-    _check_indices_populated(cfg, client, report)
+    # --- check 2: every index the selected slate reads exists and has docs ---
+    _check_indices_populated(cfg, client, report, scoped_indices)
 
-    # --- check 3: corpus window covers now ---
-    _check_window_covers_now(cfg, client, report, now_tolerance_hours)
+    # --- check 3: corpus window covers now (per-index, scoped) ---
+    _check_window_covers_now(cfg, client, report, now_tolerance_hours, scoped_indices)
 
     # --- check 4: per-prompt probes ---
     if prompts_dir is not None:
         _check_prompt_probes(
-            cfg, client, report, Path(prompts_dir), probe_window_hours, prompts_prefix
+            cfg, client, report, specs, probe_window_hours
         )
 
     return report
 
 
 def _check_indices_populated(
-    cfg: ServerConfig, client: ESClient, report: PreflightReport
+    cfg: ServerConfig, client: ESClient, report: PreflightReport, indices: list[str]
 ) -> None:
-    # Enumerate EVERY index the tool surface reads, not just index_pattern —
-    # otherwise an empty auth/Sysmon/OT index slips through while the alert
-    # indices are healthy (the exact void-grade failure this gate exists to
-    # catch). _all_read_indices is the union of index_pattern + sysmon + wazuh
-    # fallback + zeek + ot-conn + both auth substrates.
-    indices = _all_read_indices(cfg)
+    # Enumerate every index the SELECTED slate reads (scoped by the caller), not
+    # just index_pattern — otherwise an empty auth/Sysmon/OT index slips through
+    # while the alert indices are healthy (the exact void-grade failure this gate
+    # exists to catch). Scoping to the slate (not the config-total union) is what
+    # keeps a phase-2 run from demanding indices it never touches.
     counts: dict[str, int | None] = {}
     try:
         for idx in indices:
@@ -370,11 +410,11 @@ def _check_window_covers_now(
     client: ESClient,
     report: PreflightReport,
     now_tolerance_hours: int,
+    indices: list[str],
 ) -> None:
-    indices = _all_read_indices(cfg)
     # Check each index's max @timestamp INDIVIDUALLY. A single max agg over the
     # union would let one fresh index mask six stale ones — the same OR flaw the
-    # per-prompt probe had. Every index the tools read must cover now.
+    # per-prompt probe had. Every index the selected slate reads must cover now.
     now = datetime.now(timezone.utc)
     stale: list[str] = []
     no_ts: list[str] = []
@@ -396,16 +436,15 @@ def _check_window_covers_now(
     except ESError as e:
         report.add("window_covers_now", False, str(e))
         return
-    if no_ts:
-        report.add(
-            "window_covers_now",
-            False,
-            f"no @timestamp in: {', '.join(no_ts)} — cannot confirm the window "
-            "covers now (empty corpus or missing/mismatched @timestamp field)",
-        )
-        return
-    passed = not stale
+    # Report BOTH failure classes together — an early return on no_ts would hide
+    # a concurrent stale index (and vice versa).
+    passed = not stale and not no_ts
     detail = "; ".join(details) + f"; tolerance = {now_tolerance_hours}h"
+    if no_ts:
+        detail += (
+            f" — no @timestamp in: {', '.join(no_ts)} (empty corpus or "
+            "missing/mismatched @timestamp field)"
+        )
     if stale:
         detail += (
             f" — STALE: {', '.join(stale)} end before now, so lookback-from-now "
@@ -419,33 +458,18 @@ def _check_prompt_probes(
     cfg: ServerConfig,
     client: ESClient,
     report: PreflightReport,
-    prompts_dir: Path,
+    specs: list,
     probe_window_hours: int,
-    prompts_prefix: str = "p",
 ) -> None:
-    # Import here so the module has no hard dependency on the prompt package
-    # when the probe is not requested.
-    from blue_bench_eval.prompts._schema import load_all
-
-    # load_all globs "<prefix>*.yaml"; "p" matches p1-/p2-/p3-, "p2-" scopes to
-    # phase 2. Dedup by id.
-    specs = load_all(prompts_dir, prefix=prompts_prefix)
-    seen_ids: set[str] = set()
-    ordered = []
-    for s in specs:
-        if s.id not in seen_ids:
-            seen_ids.add(s.id)
-            ordered.append(s)
-
-    if not ordered:
+    if not specs:
         report.add(
             "prompt_probes",
             False,
-            f"no prompts found in {prompts_dir}",
+            "no prompts found",
         )
         return
 
-    for spec in ordered:
+    for spec in specs:
         indices = _indices_for_tools(spec.expected_tools, cfg)
         name = f"probe:{spec.id}"
         if not indices:

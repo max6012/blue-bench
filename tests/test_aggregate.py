@@ -315,16 +315,41 @@ def test_aggregate_refuses_stale_scored_id(tmp_path: Path):
     assert "p2-99" in str(exc.value)  # the stale id is named
 
 
-def test_aggregate_ignores_error_json_traces(tmp_path: Path):
-    # D-B: a crashed prompt is written as <id>.error.json and must not count as
-    # a trace, or a single crash would make the run permanently un-aggregatable.
+def test_aggregate_refuses_crashed_prompt_via_run_meta(tmp_path: Path):
+    # Round-7 Defect 1: a crashed prompt (written as <id>.error.json) must still
+    # be in the denominator via run_meta.json["prompt_ids"], so a partial run
+    # fails closed instead of silently reporting 100% over the survivors.
+    from blue_bench_eval.aggregate import IncompleteRunError
+
     run = tmp_path / "run"
     _write_trace(run, "p2-01")
     _write_scored(run, "p2-01", 3, 3, 3, 3)
-    # A crashed prompt's error file (no trace body).
+    # p2-02 crashed — no trace body, only an error file.
     (run / "prompts" / "p2-02.error.json").write_text(
         json.dumps({"prompt_id": "p2-02", "error": "boom"})
     )
-    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    # run_meta records the full slate (both prompts), including the crashed one.
+    (run / "run_meta.json").write_text(
+        json.dumps({"prompt_ids": ["p2-01", "p2-02"]})
+    )
+
+    with pytest.raises(IncompleteRunError) as exc:
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert "p2-02" in str(exc.value)
+
+
+def test_aggregate_allow_partial_grades_survivors(tmp_path: Path):
+    # The deliberate escape hatch: --allow-partial aggregates the survivors.
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    (run / "prompts" / "p2-02.error.json").write_text(
+        json.dumps({"prompt_id": "p2-02", "error": "boom"})
+    )
+    (run / "run_meta.json").write_text(
+        json.dumps({"prompt_ids": ["p2-01", "p2-02"]})
+    )
+
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS, allow_partial=True)
     assert result.prompt_count == 1
     assert result.overall_pct == 100.0

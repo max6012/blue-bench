@@ -4,11 +4,11 @@ tool_protocol: anthropic-native
 prompt_style: terse
 context_size: 200000
 generation: {}   # opus-4-8 rejects an explicit temperature; use the model default
+# Operator note (NOT model coaching — do not put in coaching_hints): this profile
+# is the configuration oracle / rubric ceiling. If it cannot score near the top
+# on a well-formed prompt, the wiring (tools, fixtures, coaching, prompt) is at
+# fault, not the model.
 coaching_hints:
-  - Frontier cloud model serving as the configuration oracle — establishes the
-    rubric ceiling. If you cannot score near the top on a well-formed prompt,
-    the wiring (tools, fixtures, coaching, prompt) is at fault, not the model.
-  - Minimal coaching; Blue-Bench-specific context only.
   - High reasoning budget; appropriate for correlation-heavy, low-and-slow hunts.
 recommended_workflows:
   - triage

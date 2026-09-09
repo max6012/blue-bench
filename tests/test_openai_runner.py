@@ -156,6 +156,8 @@ def test_openai_args_parses_json_string():
     assert _openai_args("not json") == {}
     # A non-object JSON value is not a valid tool-arg mapping.
     assert _openai_args("[1,2]") == {}
+    # A non-string input (dict) must not raise TypeError.
+    assert _openai_args({"src_ip": "10.0.0.5"}) == {"src_ip": "10.0.0.5"}
 
 
 def test_run_openai_dispatches_tool_call_and_returns_answer(monkeypatch):

@@ -17,6 +17,14 @@ Runs fall into two classes:
 
 The ceiling is a moving target as frontier models improve. Fix the corpus and rubric version before comparing runs.
 
+**Budget asymmetry (read before quoting "% of frontier"):** the frontier ceiling
+is measured with an *unbounded* tool-call budget — the `anthropic-cli` transport
+drives `claude -p`, which runs its own loop and exposes no `--max-turns` flag —
+while local open-weight models are capped at `max_turns: 30`. A "% of frontier"
+number therefore compares a capped local run against an uncapped ceiling; the
+gap is partly budget, not purely capability. State this caveat wherever the
+percentage is quoted.
+
 ## Rubric design
 
 Four dimensions, each scored 0–3 by a Claude judge (not self-scoring). The judge writes per-dimension justifications in the scored JSON — every number has a cited reason, which prevents score inflation and makes regressions diagnosable.

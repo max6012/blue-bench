@@ -704,7 +704,16 @@ class InteractiveSession:
     # ── openai-native (OpenAI-compatible tool_calls) ─────────────────────────
 
     async def _iter_openai(self, question: str) -> AsyncIterator[Event]:
-        from blue_bench_client._openai import make_async_client as make_openai_client
+        from blue_bench_client._openai import is_configured, make_async_client as make_openai_client
+
+        if not is_configured():
+            yield Error(
+                message="OPENAI_BASE_URL not set. Add it to .env or export it "
+                "(e.g. http://localhost:11434/v1 or a Cray /v1) before running "
+                "an openai-native session."
+            )
+            yield TurnComplete(turns_used=0, tool_calls=0, duration_ms=0)
+            return
 
         if not self._openai_seeded:
             self._messages = [

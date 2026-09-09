@@ -18,6 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field
 Verdict = Literal["PASS", "PARTIAL", "FAIL"]
 
 
+class IncompleteRunError(RuntimeError):
+    """A run whose scored/ has fewer files than prompts/ — the silent-denominator
+    failure. Aggregating it would report a confident headline over the survivors
+    of a partial judge run."""
+
+
 class DimensionScore(BaseModel):
     score: int = Field(..., ge=0, le=3)
     justification: str
@@ -178,6 +184,15 @@ def aggregate(
     threshold, dimensions, key_dimensions, prompt_prefix = _load_rubric(rubric_path)
     categories = _load_prompt_categories(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
     tiers = _load_prompt_tiers(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
+
+    # D3: a silent denominator — fewer scored files than traces — would let a
+    # partial run report a confident headline over the survivors. Refuse it.
+    if traces and len(scores) < len(traces):
+        missing = sorted(set(traces) - {s.prompt_id for s in scores})
+        raise IncompleteRunError(
+            f"scored {len(scores)}/{len(traces)} prompts; missing: {', '.join(missing)}. "
+            "Re-run the judge (or pass --allow-partial) before aggregating."
+        )
 
     result = AggregateResult(
         run_dir=run_dir,

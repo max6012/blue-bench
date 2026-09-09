@@ -52,4 +52,11 @@ def compose(
     if missing:
         raise ValueError(f"missing prompt placeholders: {sorted(missing)}")
 
+    # Coaching hints are profile-level (not a prompt_parts file). They are the
+    # coached arm's actual intervention — append them so the coached/uncoached
+    # A/B measures the hints, not just a guidelines-file swap.
+    if profile.coaching_hints:
+        hint_lines = "\n".join(f"- {h}" for h in profile.coaching_hints)
+        parts.append(f"## Coaching hints\n\n{hint_lines}")
+
     return "\n\n".join(parts)

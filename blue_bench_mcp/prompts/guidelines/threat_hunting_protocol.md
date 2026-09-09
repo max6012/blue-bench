@@ -89,9 +89,8 @@ others are ruled out. Never run a fixed sequence of calls and stop.
 
 13. **Name the adversary archetype, and justify it on behavior.** State whether
     the activity fits a patient, targeted actor or a fast, opportunistic one —
-    and base that call on *behavior*: cadence, dwell time, breadth and
-    selectivity of targeting, operational tempo. Do not infer it from which
-    tools or ports appeared; the same surface can serve either. If the data
-    shows more than one distinct actor, classify each separately.
+    and base that call on how the activity *behaves over time* rather than on
+    which tools or ports happened to appear. If the data shows more than one
+    distinct actor, classify each separately.
 
 Recommended workflows for your role: {workflows}

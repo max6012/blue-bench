@@ -372,6 +372,16 @@ class VoidRunError(RuntimeError):
     """
 
 
+class PartialRunError(RuntimeError):
+    """A run where some traces failed to score — the silent-denominator failure.
+
+    ``judge_run`` isolates per-prompt failures (a judge reply that stays malformed
+    after the retry) by skipping them. Without a guard, a rate-limit storm that
+    kills most prompts would still produce a confident-looking BLUF over the
+    survivors. This error makes that impossible to ship silently.
+    """
+
+
 def _result_is_empty(content: str) -> bool:
     """True if a tool-result payload carries no data (empty string / list / obj).
 
@@ -434,6 +444,20 @@ def _guard_not_void(traces: list[dict], run_dir: Path) -> None:
             "'all models fail' BLUF. Fix the corpus (see blue_bench_eval.preflight) "
             "and re-run — do not judge this run."
         )
+    # D4: a partial transport death — most traces carry an error and no
+    # final_answer — is the same "harness failure read as capability" class.
+    # The all-or-nothing checks above miss it (total > 0, low empty ratio).
+    errored = sum(
+        1 for t in traces
+        if t.get("error") and not (t.get("final_answer") or "").strip()
+    )
+    if traces and errored / len(traces) >= 0.5:
+        raise VoidRunError(
+            f"VOID RUN — refusing to score {run_dir}: {errored}/{len(traces)} traces "
+            "carry an error and no final_answer. This is the signature of a "
+            "transport that died partway through the run, not model failure. "
+            "Fix the transport and re-run — do not judge this run."
+        )
 
 
 def judge_run(
@@ -443,9 +467,16 @@ def judge_run(
     prompts_dir: Path | None = None,
     overwrite: bool = False,
     model_override: str | None = None,
+    allow_partial: bool = False,
     call=_call_judge,
 ) -> list[PromptScore]:
-    """Judge every trace in ``run_dir/prompts/`` and write ``run_dir/scored/``."""
+    """Judge every trace in ``run_dir/prompts/`` and write ``run_dir/scored/``.
+
+    Raises :class:`PartialRunError` when any trace fails to score (e.g. a judge
+    reply that stays malformed after the retry) unless ``allow_partial`` is set —
+    a silent denominator (fewer scored files than traces) would otherwise let a
+    rate-limit storm produce a confident-looking BLUF over the survivors.
+    """
     rubric = load_rubric(rubric_path)
     if model_override:
         rubric = Rubric(**{**rubric.__dict__, "judge": JudgeConfig(model_override, rubric.judge.reasoning_effort)})
@@ -473,6 +504,7 @@ def judge_run(
 
     out: list[PromptScore] = []
     graded = 0
+    skipped: list[str] = []
     for tf in sorted(prompts.glob("*.json")):
         if tf.name.endswith(".error.json"):
             continue
@@ -493,8 +525,15 @@ def judge_run(
             # this one instead of losing the whole batch.
             log.warning("judge failed on %s: %s: %s — skipping (re-run to retry)",
                         pid, type(e).__name__, e)
+            skipped.append(pid)
             continue
         dest.write_text(score.model_dump_json(indent=2))
         out.append(score)
         graded += 1
+    if skipped and not allow_partial:
+        raise PartialRunError(
+            f"judge scored {len(out)}/{len(out) + len(skipped)} prompts; skipped: "
+            f"{', '.join(sorted(skipped))}. Re-run to retry, or pass "
+            "--allow-partial to grade the survivors."
+        )
     return out

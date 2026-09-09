@@ -279,3 +279,18 @@ def test_absent_key_dimension_does_not_fail_gate(tmp_path: Path):
     md = render_bluf(result)
     assert "CLEARS THRESHOLD" in md
     assert "BELOW THRESHOLD" not in md
+
+
+# ── D3: a partial judge run must not aggregate into a confident headline ─────
+
+def test_aggregate_refuses_missing_scored(tmp_path: Path):
+    from blue_bench_eval.aggregate import IncompleteRunError
+
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    # Only p2-01 is scored — p2-02 is missing (a judge run that skipped it).
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+
+    with pytest.raises(IncompleteRunError):
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)

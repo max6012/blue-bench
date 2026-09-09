@@ -110,6 +110,7 @@ def judge_cmd(
     prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
     overwrite: bool = typer.Option(False, "--overwrite", help="Re-judge traces already in scored/"),
     model: str = typer.Option(None, "--model", help="Override the rubric's judge model"),
+    allow_partial: bool = typer.Option(False, "--allow-partial", help="Grade the survivors when some traces fail to score (default: refuse)"),
 ) -> None:
     """Score a run's traces with the LLM-as-judge → writes scored/*.json.
 
@@ -121,7 +122,7 @@ def judge_cmd(
     if rubric is None:
         rubric = REPO / "blue_bench_eval" / "rubrics" / f"phase{phase}.yaml"
     from blue_bench_eval.judge import judge_run
-    scores = judge_run(run_dir, rubric, prompts_dir=prompts, overwrite=overwrite, model_override=model)
+    scores = judge_run(run_dir, rubric, prompts_dir=prompts, overwrite=overwrite, model_override=model, allow_partial=allow_partial)
     for s in scores:
         dims = " ".join(f"{k}={v.score}" for k, v in s.dimensions.items())
         typer.echo(f"  {s.prompt_id}: {s.verdict}  [{dims}]", err=True)

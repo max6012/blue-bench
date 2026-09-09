@@ -71,11 +71,16 @@ def _indices_for_tools(tools: list[str], cfg: ServerConfig) -> list[str]:
         if tool in ("search_alerts", "count_by_field"):
             out.extend(_split_pattern(cfg.elastic.index_pattern))
         elif tool in ("get_connections", "detect_beaconing"):
+            # get_connections spans zeek-conn AND ot-conn (OT reachability).
             out.append(_zeek_index(cfg))
+            out.append(cfg.zeek.ot_conn_index)
         elif tool in ("get_agent_alerts", "wazuh_list_agents"):
             out.append(cfg.wazuh.es_fallback_index)
         elif tool in ("get_process_events", "get_process_tree"):
             out.append(cfg.sysmon.index)
+        elif tool == "search_auth_events":
+            out.append(cfg.auth.windows_security_index)
+            out.append(cfg.auth.linux_syslog_index)
     # De-dup preserving order.
     seen: set[str] = set()
     uniq: list[str] = []
@@ -96,8 +101,11 @@ def _all_read_indices(cfg: ServerConfig) -> list[str]:
     """
     idxs = _split_pattern(cfg.elastic.index_pattern)
     idxs.append(_zeek_index(cfg))
+    idxs.append(cfg.zeek.ot_conn_index)
     idxs.append(cfg.sysmon.index)
     idxs.append(cfg.wazuh.es_fallback_index)
+    idxs.append(cfg.auth.windows_security_index)
+    idxs.append(cfg.auth.linux_syslog_index)
     seen: set[str] = set()
     uniq: list[str] = []
     for idx in idxs:

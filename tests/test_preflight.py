@@ -121,10 +121,63 @@ def test_indices_for_tools_maps_backends():
     })
     assert _indices_for_tools(["search_alerts"], cfg) == PATTERN_INDICES
     assert _indices_for_tools(["get_process_events"], cfg) == [SYSMON_INDEX]
-    assert _indices_for_tools(["get_connections"], cfg) == ["zeek-conn"]
+    # get_connections spans zeek-conn AND ot-conn (OT reachability).
+    assert _indices_for_tools(["get_connections"], cfg) == ["zeek-conn", "ot-conn"]
     assert _indices_for_tools(["get_agent_alerts"], cfg) == ["wazuh-alerts"]
+    # search_auth_events reads both auth substrates.
+    assert _indices_for_tools(["search_auth_events"], cfg) == ["windows-security", "linux-syslog"]
     # Non-ES tool contributes nothing.
     assert _indices_for_tools(["nmap_scan"], cfg) == []
+
+
+def test_all_read_indices_includes_auth_and_ot():
+    from blue_bench_eval.preflight import _all_read_indices
+    cfg = ServerConfig.model_validate({
+        "elastic": {"index_pattern": INDEX_PATTERN},
+        "sysmon": {"index": SYSMON_INDEX},
+    })
+    idxs = _all_read_indices(cfg)
+    # The stale-window check must cover the auth + OT substrates too, not just
+    # index_pattern + sysmon + wazuh fallback.
+    assert "windows-security" in idxs
+    assert "linux-syslog" in idxs
+    assert "ot-conn" in idxs
+
+
+# Tools with no ES backing — a new ES-backed tool that is NOT mapped here and
+# NOT in _indices_for_tools would silently evade the preflight probe.
+_NO_ES_TOOLS = {
+    "file_hash", "file_metadata", "list_evidence", "strings_extract",  # evidence files
+    "nmap_scan", "nmap_quick_scan",                                    # nmap
+    "validate_sigma_rule",                                             # sigma
+    "list_endpoints", "get_detections",                                # OpenEDR API
+}
+
+
+def test_every_prompt_tool_resolves_to_index_or_allowlist():
+    """Every distinct expected_tools name across the prompt corpus must either
+    resolve to >=1 ES index or sit on the explicit no-ES allowlist — otherwise
+    a new ES-backed tool would evade the preflight probe (D2)."""
+    from pathlib import Path as _Path
+    import yaml as _yaml
+
+    cfg = ServerConfig.model_validate({
+        "elastic": {"index_pattern": INDEX_PATTERN},
+        "sysmon": {"index": SYSMON_INDEX},
+    })
+    prompts = _Path(__file__).parent.parent / "blue_bench_eval" / "prompts"
+    all_tools: set[str] = set()
+    for f in prompts.glob("p*.yaml"):
+        d = _yaml.safe_load(f.read_text())
+        all_tools.update(d.get("expected_tools", []))
+
+    for tool in sorted(all_tools):
+        if tool in _NO_ES_TOOLS:
+            continue
+        assert _indices_for_tools([tool], cfg), (
+            f"tool {tool!r} resolves to no ES index and is not on the no-ES "
+            "allowlist — add it to _indices_for_tools or _NO_ES_TOOLS"
+        )
 
 
 # --- scenario: all green -----------------------------------------------------

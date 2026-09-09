@@ -219,16 +219,23 @@ class ElasticTool:
         used = field
         buckets: list[dict] = []
         last_err: Exception | None = None
+        succeeded = False
         for cand in (field, f"{field}.keyword"):
             try:
                 buckets = await _agg_on(cand)
             except httpx.HTTPError as e:
                 last_err = e
                 continue
+            succeeded = True
             used = cand
             if buckets:
                 break
-        if not buckets and last_err is not None and used == field:
+        # Only report an error when BOTH candidates errored. A successful query
+        # that returned zero buckets is a genuine "no results", not a failure —
+        # inverting that distinction would tell the model "aggregation failed"
+        # when the truth is "nothing here", which is exactly what the benchmark
+        # measures.
+        if not succeeded:
             return f"Error: ES aggregation failed for '{field}' (also tried '{field}.keyword'): {last_err}"
         field = used
         lines = [f"Top {top_n} values for '{field}' (last {timerange_minutes}m):"]

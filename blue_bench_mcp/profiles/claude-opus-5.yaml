@@ -4,16 +4,15 @@ tool_protocol: anthropic-cli   # driven via the `claude` CLI on the subscription
 prompt_style: terse
 context_size: 200000
 generation: {}
+# Operator note (NOT model coaching — do not put in coaching_hints): this profile
+# is the configuration oracle / rubric CEILING. Local and open-weight results are
+# read as a % of this. If it cannot score near the top on a well-formed prompt,
+# the wiring (tools, fixtures, coaching, prompt) is at fault, not the model.
+# Also: the anthropic-cli transport does not enforce max_turns (the `claude` CLI
+# runs its own loop with no --max-turns flag), so this ceiling is measured with
+# an unbounded tool-call budget while local models are capped at max_turns: 30.
 coaching_hints:
-  - Frontier model serving as the configuration oracle / rubric CEILING. Local and
-    open-weight results are read as a % of this. If you cannot score near the top on
-    a well-formed prompt, the wiring (tools, fixtures, coaching, prompt) is at fault,
-    not the model.
-  - Minimal coaching; Blue-Bench-specific context only.
   - High reasoning budget; appropriate for correlation-heavy, low-and-slow hunts.
-  - NOTE: the anthropic-cli transport does not enforce max_turns (the `claude` CLI
-    runs its own loop with no --max-turns flag), so this ceiling is measured with
-    an unbounded tool-call budget while local models are capped at max_turns: 30.
 recommended_workflows:
   - triage
   - forensics-lite

@@ -416,7 +416,19 @@ def inject_bundle(
     # pointer, so we repoint only that prefix and allow the extra suffix.
     gt_out = dict(gt)
     gt_events = gt.get("events", [])
-    if len(remapped) < len(gt_events):
+    if beacon is None:
+        # No synthesized beacon: the injected event count must EXACTLY match the
+        # ground-truth event count. A one-sided check would tolerate a generator
+        # bug that emits extra events (which used to be caught).
+        if len(remapped) != len(gt_events):
+            raise ValueError(
+                f"ground-truth event count {len(gt_events)} != injected event "
+                f"count {len(remapped)}; cannot repoint by index"
+            )
+    elif len(remapped) < len(gt_events):
+        # Synthesized beacon events are appended AFTER the captured bundle events,
+        # so the GT-aligned prefix remapped[0:len(gt_events)] is unchanged and the
+        # extra suffix is allowed — but the captured prefix must still cover GT.
         raise ValueError(
             f"ground-truth event count {len(gt_events)} > injected event count "
             f"{len(remapped)}; cannot repoint by index"

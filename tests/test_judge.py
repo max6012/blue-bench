@@ -108,3 +108,65 @@ def test_guard_not_void_allows_real_tool_results(tmp_path):
     ]
     # A run with a non-empty tool result must pass the guard.
     _guard_not_void(traces, tmp_path)
+
+
+def test_guard_not_void_refuses_partial_transport_death(tmp_path):
+    from blue_bench_eval.judge import VoidRunError, _guard_not_void
+
+    # A transport that died partway: most traces carry an error and no
+    # final_answer, but a few have real tool results (so total > 0 and the
+    # empty-ratio check misses it). The guard must still refuse.
+    traces = [
+        {
+            "prompt_id": "p3-01",
+            "turns": [{"role": "tool", "content": "[{...}]"}],
+            "final_answer": "found it",
+        },
+        {"prompt_id": "p3-02", "turns": [], "final_answer": "", "error": "boom"},
+        {"prompt_id": "p3-03", "turns": [], "final_answer": "", "error": "boom"},
+    ]
+    with pytest.raises(VoidRunError):
+        _guard_not_void(traces, tmp_path)
+
+
+# ── D3: a partial judge run must not silently grade the survivors ────────────
+
+def test_judge_run_refuses_partial_without_allow_partial(tmp_path, monkeypatch):
+    from blue_bench_eval.judge import PartialRunError
+
+    monkeypatch.setenv("JUDGE_PACE_SECONDS", "0")
+    run = tmp_path / "run"
+    (run / "prompts").mkdir(parents=True)
+    (run / "prompts" / "p3-01.json").write_text(json.dumps(_trace("p3-01")))
+    (run / "prompts" / "p3-02.json").write_text(json.dumps(_trace("p3-02")))
+
+    def _flaky(cfg, system, user):
+        # First prompt scores fine; second raises (malformed judge reply).
+        if "p3-02" in user:
+            raise RuntimeError("malformed judge reply")
+        return json.dumps({"dimensions": {"tool_usage": {"score": 2, "justification": "x"},
+                                          "findings": {"score": 2, "justification": "x"},
+                                          "attribution": {"score": 2, "justification": "x"}},
+                           "hallucinations": [], "tuning_recommendations": []})
+
+    with pytest.raises(PartialRunError):
+        judge_run(run, RUBRIC, prompts_dir=None, call=_flaky)
+
+
+def test_judge_run_allow_partial_grades_survivors(tmp_path, monkeypatch):
+    monkeypatch.setenv("JUDGE_PACE_SECONDS", "0")
+    run = tmp_path / "run"
+    (run / "prompts").mkdir(parents=True)
+    (run / "prompts" / "p3-01.json").write_text(json.dumps(_trace("p3-01")))
+    (run / "prompts" / "p3-02.json").write_text(json.dumps(_trace("p3-02")))
+
+    def _flaky(cfg, system, user):
+        if "p3-02" in user:
+            raise RuntimeError("malformed judge reply")
+        return json.dumps({"dimensions": {"tool_usage": {"score": 2, "justification": "x"},
+                                          "findings": {"score": 2, "justification": "x"},
+                                          "attribution": {"score": 2, "justification": "x"}},
+                           "hallucinations": [], "tuning_recommendations": []})
+
+    out = judge_run(run, RUBRIC, prompts_dir=None, call=_flaky, allow_partial=True)
+    assert len(out) == 1

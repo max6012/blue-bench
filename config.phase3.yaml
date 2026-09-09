@@ -30,7 +30,7 @@ sysmon:
 
 wazuh:
   api_url: ${BLUE_BENCH_WAZUH_URL:-https://localhost:55000}
-  es_fallback_index: "snort-alerts"         # no old wazuh-alerts contamination on fallback
+  es_fallback_index: "wazuh-alerts"          # injected HIDS alerts route here (ingest_ef.py)
 
 openedr:
   url: ${BLUE_BENCH_OPENEDR_URL:-http://localhost:9443}

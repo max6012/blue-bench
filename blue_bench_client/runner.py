@@ -331,13 +331,16 @@ def _openai_args(arguments: str | None) -> dict[str, Any]:
 
     In the OpenAI wire protocol ``function.arguments`` is a JSON *string* (unlike
     Ollama's native protocol, where it is already a mapping). Tolerate a decode
-    error by returning an empty dict rather than crashing the loop.
+    error (or a non-string input) by returning an empty dict rather than crashing
+    the loop.
     """
     if not arguments:
         return {}
+    if isinstance(arguments, dict):
+        return arguments
     try:
         parsed = json.loads(arguments)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, TypeError):
         return {}
     return parsed if isinstance(parsed, dict) else {}
 

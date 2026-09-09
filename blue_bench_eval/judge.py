@@ -36,10 +36,20 @@ log = logging.getLogger(__name__)
 from blue_bench_eval.aggregate import DimensionScore, PromptScore, _verdict_from_rubric
 from blue_bench_eval.prompts._schema import PromptSpec, load_all
 
-# reasoning_effort -> extended-thinking token budget. "none"/0 disables thinking
-# (and lets us use temperature 0 for max determinism); any positive budget
-# requires temperature 1 per the Anthropic API.
-_EFFORT_BUDGET = {"high": 10000, "medium": 4000, "low": 1024, "none": 0, "off": 0}
+# reasoning_effort -> extended-thinking token budget. "none"/"off" disables
+# thinking (and lets us use temperature 0 for max determinism). "xhigh"/"max"
+# are valid effort levels on opus-4.8+ and must NOT silently disable thinking.
+# (Note: opus-4.8+ rejects an explicit `temperature` and the old `budget_tokens`
+# form; thinking is now driven by `output_config.effort` — see _call_judge_sdk.)
+_EFFORT_BUDGET = {
+    "max": 20000,
+    "xhigh": 16000,
+    "high": 10000,
+    "medium": 4000,
+    "low": 1024,
+    "none": 0,
+    "off": 0,
+}
 _MAX_TOKENS = 4096
 
 
@@ -280,7 +290,7 @@ def _call_judge_sdk(cfg: JudgeConfig, system: str, user: str) -> str:
 
     client = anthropic.Anthropic(max_retries=8)
     effort = (os.environ.get("JUDGE_EFFORT") or cfg.reasoning_effort or "high").lower()
-    use_thinking = effort in ("high", "medium", "low")
+    use_thinking = effort not in ("none", "off")
     kwargs: dict = {
         "model": cfg.model,
         "max_tokens": (_MAX_TOKENS + cfg.thinking_budget) if use_thinking else _MAX_TOKENS,
@@ -404,7 +414,19 @@ def _void_run_signature(traces: list[dict]) -> tuple[int, int]:
 def _guard_not_void(traces: list[dict], run_dir: Path) -> None:
     """Refuse to score a run whose tool results are ~100% empty. Fail-closed."""
     total, empty = _void_run_signature(traces)
-    if total >= 1 and empty / total >= 0.99:
+    if total == 0:
+        # No tool-result turns anywhere in the run. This is the signature of a
+        # transport that crashed before its first dispatch (e.g. an openai-native
+        # loop that errored on the first tool_calls) — every trace carries an
+        # error and no final_answer. Grading it would emit a meaningless
+        # "all models fail" BLUF, so refuse it the same way as the empty-SIEM void.
+        raise VoidRunError(
+            f"VOID RUN — refusing to score {run_dir}: no tool results in any trace. "
+            "This is the signature of a transport that failed before its first "
+            "tool dispatch (every trace carries an error and no final_answer). "
+            "Fix the transport and re-run — do not judge this run."
+        )
+    if empty / total >= 0.99:
         raise VoidRunError(
             f"VOID RUN — refusing to score {run_dir}: {empty}/{total} tool results "
             "across the run are empty ([]/\"\"). This is the empty-SIEM signature "

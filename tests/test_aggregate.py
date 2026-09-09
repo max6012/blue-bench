@@ -246,3 +246,36 @@ def test_overall_is_observation_weighted_not_mean_of_means(tmp_path: Path):
     _write_scored_dims(run, "p2-02", {"tool_usage": 0, "findings": 0, "response_quality": 0})
     result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
     assert round(result.overall_pct, 1) == 57.1
+
+
+# ── B4: an all-N/A key dimension must not fail the run-level gate ─────────────
+
+def test_absent_key_dimension_does_not_fail_gate(tmp_path: Path):
+    # A 100%-perfect run where a key dimension (discrimination) is N/A for every
+    # prompt must CLEAR the threshold, not report BELOW THRESHOLD. This guards
+    # the F7 gate re-introducing the F6 "N/A = 0" bug at the run level.
+    from blue_bench_eval.aggregate import _load_rubric
+
+    run = tmp_path / "run"
+    for pid in ("p3-01", "p3-02", "p3-03"):
+        _write_trace(run, pid)
+        # All three dimensions scored 3; discrimination omitted (N/A).
+        _write_scored_dims(
+            run, pid,
+            {"tool_usage": 3, "findings": 3, "attribution": 3},
+            verdict="PASS",
+        )
+
+    phase3 = REPO / "blue_bench_eval" / "rubrics" / "phase3.yaml"
+    result = aggregate(run, phase3, prompts_dir=PROMPTS)
+
+    # discrimination is absent from dim_pct (N/A), so it must not be gated.
+    assert "discrimination" not in result.dim_pct
+    assert "discrimination" not in result.passes_key_dims
+    # The run is 100% on every scored dimension and must clear.
+    assert result.overall_pct == 100.0
+    assert result.passes_overall
+    assert all(result.passes_key_dims.values())
+    md = render_bluf(result)
+    assert "CLEARS THRESHOLD" in md
+    assert "BELOW THRESHOLD" not in md

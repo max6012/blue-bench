@@ -34,12 +34,12 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="Blue-Bench o
 @app.command()
 def qualify(
     profile: str = typer.Option(..., "--profile", "-p", help="Profile stem (local), OR with --cloud the Ollama Cloud model id, e.g. gpt-oss:120b"),
-    phase: str = typer.Option("2", "--phase", help="Eval phase: 1 or 2 (default: 2)"),
+    phase: str = typer.Option("2", "--phase", help="Eval phase: 1, 2, or 3 (default: 2)"),
     tag: str = typer.Option("", "--tag", "-t", help="Filter prompts by tag or category"),
     limit: int = typer.Option(None, "--limit", "-n", help="Stop after N prompts"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
     cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
-    openai: bool = typer.Option(False, "--openai", help="Run --profile as a model id served behind an OpenAI-compatible endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) via a generic openai-native profile (needs OPENAI_BASE_URL + OPENAI_API_KEY in .env)"),
+    openai: bool = typer.Option(False, "--openai", help="Run --profile as a model id served behind an OpenAI-compatible endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) via a generic openai-native profile (needs OPENAI_BASE_URL; OPENAI_API_KEY only where the endpoint authenticates)"),
     no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
     skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip the SIEM-readiness gate that refuses to grade an empty/stale Elasticsearch (intentional dry runs only)"),
 ) -> None:
@@ -131,7 +131,7 @@ def judge_cmd(
 @app.command("aggregate")
 def aggregate_cmd(
     run_dir: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
-    phase: str = typer.Option("2", "--phase", help="Eval phase: 1 or 2 (selects default rubric)"),
+    phase: str = typer.Option("2", "--phase", help="Eval phase: 1, 2, or 3 (selects default rubric)"),
     rubric: Path = typer.Option(None, "--rubric", "-r", help="Rubric YAML (overrides --phase default)"),
     prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
     write_bluf: bool = typer.Option(True, "--write/--no-write", help="Write BLUF.md to run dir"),

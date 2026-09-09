@@ -8,6 +8,8 @@ import json
 
 from pathlib import Path
 
+import pytest
+
 from blue_bench_eval.judge import judge_run, score_trace, load_rubric
 
 RUBRIC = Path("blue_bench_eval/rubrics/phase3.yaml")
@@ -70,3 +72,39 @@ def test_judge_run_writes_scored_and_overwrite(tmp_path):
     judge_run(run, RUBRIC, prompts_dir=None, overwrite=True,
               call=counting({"tool_usage": 2, "findings": 2, "attribution": 2}))
     assert calls["n"] == 2
+
+
+# ── B5: the void-run guard must refuse a run with NO tool results at all ──────
+
+def test_guard_not_void_refuses_no_tool_results(tmp_path):
+    from blue_bench_eval.judge import VoidRunError, _guard_not_void
+
+    # A transport that crashed before its first dispatch yields traces with no
+    # tool-result turns at all — the guard must refuse to grade them.
+    traces = [
+        {
+            "prompt_id": "p3-01",
+            "turns": [{"role": "assistant", "content": "", "tool_calls": []}],
+            "final_answer": "",
+            "error": "ValueError: dictionary update sequence element #0 has length 1",
+        }
+    ]
+    with pytest.raises(VoidRunError):
+        _guard_not_void(traces, tmp_path)
+
+
+def test_guard_not_void_allows_real_tool_results(tmp_path):
+    from blue_bench_eval.judge import _guard_not_void
+
+    traces = [
+        {
+            "prompt_id": "p3-01",
+            "turns": [
+                {"role": "assistant", "content": "", "tool_calls": []},
+                {"role": "tool", "content": "[{...}]"},
+            ],
+            "final_answer": "found it",
+        }
+    ]
+    # A run with a non-empty tool result must pass the guard.
+    _guard_not_void(traces, tmp_path)

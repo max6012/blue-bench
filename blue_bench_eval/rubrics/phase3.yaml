@@ -22,7 +22,7 @@ description: |
 # Judge: an independent grader reads each trace and applies this rubric. It is
 # never the model under test self-scoring.
 judge:
-  model: claude-opus-4-8        # latest Opus family
+  model: claude-opus-4-8        # independent grader (see claude-opus-5.yaml for the frontier ceiling)
   reasoning_effort: high
 
 threshold:

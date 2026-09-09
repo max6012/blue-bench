@@ -213,7 +213,11 @@ def aggregate(
     result.passes_overall = result.overall_pct >= threshold.overall_pct
     dim_thresholds = threshold.dim_thresholds()
     for kd in key_dimensions:
-        result.passes_key_dims[kd] = result.dim_pct.get(kd, 0.0) >= dim_thresholds.get(kd, 0.0)
+        # A dimension absent from dim_pct was N/A for every prompt (e.g.
+        # discrimination on an RQ1/RQ2-only run) — it is not a failure, so it
+        # must not be gated. Only dimensions that were actually scored count.
+        if kd in result.dim_pct:
+            result.passes_key_dims[kd] = result.dim_pct[kd] >= dim_thresholds.get(kd, 0.0)
 
     # Per-category rollup.
     by_cat: dict[str, list[PromptScore]] = defaultdict(list)

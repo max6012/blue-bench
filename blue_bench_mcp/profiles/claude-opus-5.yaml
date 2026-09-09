@@ -11,6 +11,9 @@ coaching_hints:
     not the model.
   - Minimal coaching; Blue-Bench-specific context only.
   - High reasoning budget; appropriate for correlation-heavy, low-and-slow hunts.
+  - NOTE: the anthropic-cli transport does not enforce max_turns (the `claude` CLI
+    runs its own loop with no --max-turns flag), so this ceiling is measured with
+    an unbounded tool-call budget while local models are capped at max_turns: 30.
 recommended_workflows:
   - triage
   - forensics-lite

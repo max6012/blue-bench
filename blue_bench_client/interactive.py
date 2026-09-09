@@ -25,6 +25,7 @@ swap re-validates the bound task class against the new profile.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import time
@@ -43,8 +44,10 @@ from blue_bench_client.runner import (
     _coerce_native_history_for_anthropic,
     _extract_json_tool_calls,
     _ollama_options,
+    _openai_args,
     _tool_specs_to_anthropic,
     _tool_specs_to_ollama,
+    _tool_specs_to_openai,
     TOOL_CALL_RE,
 )
 from blue_bench_mcp.profiles import ModelProfile, load_profile
@@ -176,6 +179,7 @@ class InteractiveSession:
         self._messages: list[dict[str, Any]] = []  # mutable conversation history
         self._native_seeded = False
         self._anthropic_seeded = False
+        self._openai_seeded = False
 
     # ── lifecycle ────────────────────────────────────────────────────────────
 
@@ -289,6 +293,7 @@ class InteractiveSession:
         self._enforce_scope()
         self._native_seeded = False
         self._anthropic_seeded = False
+        self._openai_seeded = False
         if not keep_history:
             self._messages = []
 
@@ -365,6 +370,12 @@ class InteractiveSession:
                     yield ev
             elif protocol == "anthropic-native":
                 async for ev in self._iter_anthropic(question):
+                    yield ev
+            elif protocol == "openai-native":
+                async for ev in self._iter_openai(question):
+                    yield ev
+            elif protocol == "anthropic-cli":
+                async for ev in self._iter_anthropic_cli(question):
                     yield ev
             else:
                 async for ev in self._iter_text_embedded(question):
@@ -689,6 +700,219 @@ class InteractiveSession:
                         if text:
                             return str(text)
         return ""
+
+    # ── openai-native (OpenAI-compatible tool_calls) ─────────────────────────
+
+    async def _iter_openai(self, question: str) -> AsyncIterator[Event]:
+        from blue_bench_client._openai import make_async_client as make_openai_client
+
+        if not self._openai_seeded:
+            self._messages = [
+                {"role": "system", "content": self._compose_system_prompt()},
+            ] + [m for m in self._messages if m.get("role") != "system"]
+            self._openai_seeded = True
+        self._messages.append({"role": "user", "content": question})
+
+        client = make_openai_client()
+        tool_specs = _tool_specs_to_openai(self.tools_available)
+        g = self.profile.generation
+        kwargs: dict[str, Any] = {
+            "model": self.profile.model_id,
+            "messages": self._messages,
+            "tools": tool_specs,
+        }
+        if g.temperature is not None:
+            kwargs["temperature"] = g.temperature
+        if g.top_p is not None:
+            kwargs["top_p"] = g.top_p
+
+        turn_start = time.monotonic()
+        turns_used = 0
+        tool_calls_total = 0
+        final_emitted = False
+
+        for turn_idx in range(self.max_turns):
+            yield TurnStart(turn_index=turn_idx)
+            t0 = time.monotonic()
+            resp = await client.chat.completions.create(**kwargs)
+            dur = int((time.monotonic() - t0) * 1000)
+
+            choice = resp.choices[0] if resp.choices else None
+            if choice is None:
+                yield Error(message="openai-native: empty choices in response")
+                break
+            msg = choice.message
+            content = msg.content or ""
+            tool_calls_raw = list(msg.tool_calls or [])
+            yield AssistantText(text=content, duration_ms=dur)
+            turns_used += 1
+
+            self._messages.append(
+                {
+                    "role": "assistant",
+                    "content": content or None,
+                    "tool_calls": [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments or "{}",
+                            },
+                        }
+                        for tc in tool_calls_raw
+                    ],
+                }
+            )
+
+            if not tool_calls_raw:
+                if content:
+                    yield FinalAnswer(text=content)
+                    final_emitted = True
+                else:
+                    yield Error(message="model produced empty content with no tools")
+                break
+
+            for tc in tool_calls_raw:
+                call_id = tc.id or f"call_{turn_idx}_{tool_calls_total}"
+                name = tc.function.name
+                args = _openai_args(tc.function.arguments)
+                yield ToolCall(call_id=call_id, name=name, args=args)
+                tool_calls_total += 1
+
+                if self.tool_gate is not None and name not in self.tool_gate:
+                    err = (
+                        f'Tool "{name}" is outside the active tool gate '
+                        f"({sorted(self.tool_gate)})"
+                    )
+                    yield ToolResult(
+                        call_id=call_id, name=name, result=err, elapsed_ms=0, error=err
+                    )
+                    self._messages.append(
+                        {"role": "tool", "tool_call_id": call_id, "content": err}
+                    )
+                    continue
+
+                t1 = time.monotonic()
+                try:
+                    result = await self._mcp.call_tool(name, args)
+                    err = self._detect_error(result)
+                except Exception as e:
+                    result = f"{type(e).__name__}: {e}"
+                    err = result
+                tdur = int((time.monotonic() - t1) * 1000)
+                yield ToolResult(
+                    call_id=call_id, name=name, result=result, elapsed_ms=tdur, error=err
+                )
+                self._messages.append(
+                    {"role": "tool", "tool_call_id": call_id, "content": result}
+                )
+        else:
+            yield Error(message=f"max_turns ({self.max_turns}) exhausted without final answer")
+
+        if not final_emitted:
+            yield FinalAnswer(text="")
+
+        yield TurnComplete(
+            turns_used=turns_used,
+            tool_calls=tool_calls_total,
+            duration_ms=int((time.monotonic() - turn_start) * 1000),
+        )
+
+    # ── anthropic-cli (subscription `claude` CLI) ─────────────────────────────
+
+    async def _iter_anthropic_cli(self, question: str) -> AsyncIterator[Event]:
+        # The `claude` CLI runs its own tool-use loop against the MCP server; we
+        # cannot stream per-turn events from it. Run it headless and surface the
+        # final result as a single turn. max_turns is not enforced (no CLI flag).
+        import shutil
+        import subprocess
+        import tempfile
+
+        from blue_bench_client.runner import (
+            _MCP_SERVER_NAME,
+            _MCP_TOOL_PREFIX,
+            _cli_oauth_env,
+            _cli_tool_result_text,
+        )
+
+        claude = shutil.which("claude") or "claude"
+        server_cmd = self.server_cmd or [sys.executable, "-m", "blue_bench_mcp.server"]
+        if self.config_path is not None:
+            server_cmd = [*server_cmd, "--config", str(self.config_path)]
+        mcp_cfg = {
+            "mcpServers": {
+                _MCP_SERVER_NAME: {"command": server_cmd[0], "args": list(server_cmd[1:])}
+            }
+        }
+        fd, cfg_path = tempfile.mkstemp(suffix=".json", prefix="bb-mcp-")
+        with os.fdopen(fd, "w") as f:
+            json.dump(mcp_cfg, f)
+        args = [
+            claude, "-p", question,
+            "--model", self.profile.model_id,
+            "--system-prompt", self._compose_system_prompt(),
+            "--mcp-config", cfg_path, "--strict-mcp-config",
+            "--tools", "",
+            "--permission-mode", "bypassPermissions",
+            "--output-format", "stream-json", "--verbose",
+        ]
+        allowed = [f"{_MCP_TOOL_PREFIX}{t.name}" for t in self.tools_available]
+        if allowed:
+            args += ["--allowed-tools", *allowed]
+        env = _cli_oauth_env()
+
+        yield TurnStart(turn_index=0)
+        t0 = time.monotonic()
+        try:
+            r = await asyncio.to_thread(
+                subprocess.run, args, input="", capture_output=True, text=True, env=env, timeout=1800
+            )
+        finally:
+            try:
+                os.unlink(cfg_path)
+            except OSError:
+                pass
+        dur = int((time.monotonic() - t0) * 1000)
+
+        final_answer = ""
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                e = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if e.get("type") == "result":
+                res = e.get("result")
+                if isinstance(res, str) and res.strip():
+                    final_answer = res
+        if not final_answer:
+            for line in r.stdout.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    e = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if e.get("type") == "assistant":
+                    blocks = (e.get("message") or {}).get("content") or []
+                    text = "".join(
+                        b.get("text", "")
+                        for b in blocks
+                        if isinstance(b, dict) and b.get("type") == "text"
+                    )
+                    if text:
+                        final_answer = text
+                        break
+        if r.returncode != 0 and not final_answer:
+            yield Error(message=f"claude CLI exit {r.returncode}: {(r.stderr or '')[-200:]}")
+        else:
+            yield AssistantText(text=final_answer, duration_ms=dur)
+            yield FinalAnswer(text=final_answer)
+        yield TurnComplete(turns_used=1, tool_calls=0, duration_ms=dur)
 
     # ── text-embedded (Gemma 3 Tools, etc.) ──────────────────────────────────
 

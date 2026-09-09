@@ -195,17 +195,19 @@ _SYSLOG_RE = re.compile(r"^<\d+>\d?\s*(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\s+(\S+)\s+(\
 
 def parse_syslog(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
     """RFC5424 syslog lines carry a full ISO timestamp."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip():
-            continue
-        m = _SYSLOG_RE.match(raw)
-        if m:
-            when = _parse_iso(m.group(1))
-            rec = {"timestamp": m.group(1), "host": m.group(2), "process": m.group(3),
-                   "pid": m.group(4), "message": m.group(5), "raw": raw}
-        else:
-            when, rec = None, {"raw": raw}
-        yield rec, when, None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip():
+                continue
+            m = _SYSLOG_RE.match(raw)
+            if m:
+                when = _parse_iso(m.group(1))
+                rec = {"timestamp": m.group(1), "host": m.group(2), "process": m.group(3),
+                       "pid": m.group(4), "message": m.group(5), "raw": raw}
+            else:
+                when, rec = None, {"raw": raw}
+            yield rec, when, None
 
 
 _WEB_RE = re.compile(r"^(\S+).*\[([^\]]+)\]\s+\"([^\"]*)\"\s+(\d{3})\s+(\S+)\s+\"([^\"]*)\"\s+\"([^\"]*)\"")
@@ -213,26 +215,30 @@ _WEB_RE = re.compile(r"^(\S+).*\[([^\]]+)\]\s+\"([^\"]*)\"\s+(\d{3})\s+(\S+)\s+\
 
 def parse_web(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
     """Apache combined log: [14/May/2024:12:01:55 +0000]."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip() or raw.startswith("#"):
-            continue
-        m = _WEB_RE.match(raw)
-        if m:
-            when = _parse_apache(m.group(2))
-            rec = {"client_ip": m.group(1), "time": m.group(2), "request": m.group(3),
-                   "status": int(m.group(4)), "bytes": m.group(5), "referrer": m.group(6),
-                   "user_agent": m.group(7), "raw": raw}
-        else:
-            when, rec = None, {"raw": raw}
-        yield rec, when, None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            m = _WEB_RE.match(raw)
+            if m:
+                when = _parse_apache(m.group(2))
+                rec = {"client_ip": m.group(1), "time": m.group(2), "request": m.group(3),
+                       "status": int(m.group(4)), "bytes": m.group(5), "referrer": m.group(6),
+                       "user_agent": m.group(7), "raw": raw}
+            else:
+                when, rec = None, {"raw": raw}
+            yield rec, when, None
 
 
 def parse_lines_passthrough(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:
     """ASA / snort / proxy: keep the raw line; timestamp parsed best-effort."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip() or raw.startswith("#"):
-            continue
-        yield {"raw": raw}, _line_time_best_effort(raw), None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            yield {"raw": raw}, _line_time_best_effort(raw), None
 
 
 def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:

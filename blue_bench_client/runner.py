@@ -16,11 +16,11 @@ Cray's /v1) and OPENAI_API_KEY to a non-empty value, then run with
 `blue-bench qualify --openai --profile <model_id>`. Pointing at the Cray is a
 config change only. THEN verify per served-model that native tool-calling works
 through the Cray's inference server — vLLM/TGI/SGLang each parse tool calls
-differently (vLLM needs --enable-auto-tool-choice + a per-model
---tool-call-parser; a mis-config silently returns empty tool_calls). Where a
-served model does not do native tool-calling, fall back to the text-embedded
-protocol. This per-model verification is the real variable cost and needs the
-live Cray.
+differently (vLLM needs --enable-auto-tool-choice, a per-model
+--tool-call-parser, and a per-model --chat-template for tool-role messages; a
+mis-config silently returns empty tool_calls). Where a served model does not do
+native tool-calling, fall back to the text-embedded protocol. This per-model
+verification is the real variable cost and needs the live Cray.
 """
 from __future__ import annotations
 
@@ -324,6 +324,22 @@ def _tool_specs_to_openai(tools: list[ToolSpec]) -> list[dict[str, Any]]:
         }
         for t in tools
     ]
+
+
+def _openai_args(arguments: str | None) -> dict[str, Any]:
+    """Parse an OpenAI tool-call ``arguments`` field into a dict.
+
+    In the OpenAI wire protocol ``function.arguments`` is a JSON *string* (unlike
+    Ollama's native protocol, where it is already a mapping). Tolerate a decode
+    error by returning an empty dict rather than crashing the loop.
+    """
+    if not arguments:
+        return {}
+    try:
+        parsed = json.loads(arguments)
+    except json.JSONDecodeError:
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
 
 
 async def _run_native(
@@ -678,8 +694,6 @@ async def _run_openai(
     """
     # Import here so tests that don't exercise the OpenAI path don't require
     # the SDK to be installed.
-    from openai import AsyncOpenAI
-
     from blue_bench_client._openai import make_async_client
 
     client = make_async_client()
@@ -715,10 +729,7 @@ async def _run_openai(
         tool_calls_raw = list(msg.tool_calls or [])
 
         tool_calls = [
-            ToolCall(
-                name=tc.function.name,
-                args=dict(tc.function.arguments or {}) if tc.function.arguments else {},
-            )
+            ToolCall(name=tc.function.name, args=_openai_args(tc.function.arguments))
             for tc in tool_calls_raw
         ]
         trace.turns.append(
@@ -761,10 +772,7 @@ async def _run_openai(
         # Dispatch each tool call via MCP and feed results back as tool messages.
         for tc in tool_calls_raw:
             name = tc.function.name
-            try:
-                args = json.loads(tc.function.arguments) if tc.function.arguments else {}
-            except json.JSONDecodeError:
-                args = {}
+            args = _openai_args(tc.function.arguments)
             t1 = time.monotonic()
             result = await mcp.call_tool(name, args)
             tdur = int((time.monotonic() - t1) * 1000)
@@ -848,6 +856,11 @@ async def _run_anthropic_cli(
     max_turns: int,
     trace: Trace,
 ) -> None:
+    # NOTE: ``max_turns`` is NOT enforced here. The `claude` CLI runs its own
+    # tool-use loop and exposes no --max-turns flag, so the frontier ceiling is
+    # measured with an unbounded tool-call budget while local models are capped
+    # at max_turns. Accepted asymmetry (see claude-opus-5.yaml); the parameter is
+    # kept for signature parity with the other _run_* loops.
     claude = shutil.which("claude") or "claude"
     mcp_cfg = {"mcpServers": {_MCP_SERVER_NAME: {"command": server_cmd[0], "args": list(server_cmd[1:])}}}
     fd, cfg_path = tempfile.mkstemp(suffix=".json", prefix="bb-mcp-")

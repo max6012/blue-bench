@@ -19,8 +19,10 @@ every telemetry file (EF + OT + bridge), excluding the EF metadata files whose
 from __future__ import annotations
 
 import hashlib
+import heapq
 import json
 import logging
+import shutil
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -72,23 +74,85 @@ def _ndjson_sort_key(ev: dict) -> tuple:
             str(ev.get("bridge_session_uid", "")))
 
 
-def _write_ndjson_by_log(events: list[dict], out_dir: Path, *, prefix: str = "") -> int:
+# Events buffered per log before a sorted run is spilled to disk. ~500 B/event,
+# so 250k events is roughly 125 MB per log in flight.
+_SPILL_CHUNK = 250_000
+
+
+def _write_ndjson_by_log(
+    events: Iterable[dict], out_dir: Path, *, prefix: str = "",
+    chunk_size: int = _SPILL_CHUNK,
+) -> int:
     """Group events by ``_log``, strip internal ``_``-fields, write one NDJSON
-    per log type. Returns the number of events written."""
-    by_log: dict[str, list[dict]] = {}
-    for ev in events:
-        by_log.setdefault(str(ev.get("_log", "events")), []).append(ev)
+    per log type, sorted by :func:`_ndjson_sort_key`. Returns events written.
+
+    Consumes ``events`` as a STREAM in bounded memory. The callers used to pass
+    ``list(generator)``, which at L scale means ~87M OT events (142 links x 18
+    days at the 1 Hz Modbus / ~0.3 Hz IEC-104 baseline cadence) -- roughly 43 GB
+    of dicts. That OOMed the machine and killed a 2-hour build.
+
+    Sort order is preserved rather than traded away for memory: each log
+    accumulates at most ``chunk_size`` events, which are sorted and spilled to a
+    temp run file, and the runs are then k-way merged with ``heapq.merge``. A
+    log small enough never to spill takes the in-memory fast path, so small
+    builds behave exactly as before.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
-    written = 0
-    for logname, evs in sorted(by_log.items()):
-        evs = sorted(evs, key=_ndjson_sort_key)
-        name = f"{prefix}{logname}.ndjson" if prefix else f"{logname}.ndjson"
-        path = out_dir / name
+    tmp_dir = out_dir / ".spill"
+    buffers: dict[str, list[dict]] = {}
+    runs: dict[str, list[Path]] = {}
+
+    def _spill(logname: str) -> None:
+        buf = buffers[logname]
+        if not buf:
+            return
+        buf.sort(key=_ndjson_sort_key)
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        path = tmp_dir / f"{prefix}{logname}.{len(runs.get(logname, ())):05d}.run"
         with path.open("w", encoding="utf-8", newline="") as f:
-            for ev in evs:
-                doc = {k: v for k, v in ev.items() if not k.startswith("_")}
+            for doc in buf:
                 f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
-        written += len(evs)
+        runs.setdefault(logname, []).append(path)
+        buffers[logname] = []
+
+    for ev in events:
+        logname = str(ev.get("_log", "events"))
+        # Strip here, not at write time: the sort key reads only public fields
+        # (ts / timestamp / uid / bridge_session_uid), so stripping early keeps
+        # the buffers and spill files smaller without changing the ordering.
+        doc = {k: v for k, v in ev.items() if not k.startswith("_")}
+        buf = buffers.setdefault(logname, [])
+        buf.append(doc)
+        if len(buf) >= chunk_size:
+            _spill(logname)
+
+    written = 0
+    try:
+        for logname in sorted(set(buffers) | set(runs)):
+            name = f"{prefix}{logname}.ndjson" if prefix else f"{logname}.ndjson"
+            path = out_dir / name
+            if not runs.get(logname):
+                # Fast path: everything fit in memory.
+                buf = sorted(buffers.get(logname, []), key=_ndjson_sort_key)
+                with path.open("w", encoding="utf-8", newline="") as f:
+                    for doc in buf:
+                        f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
+                written += len(buf)
+                continue
+            _spill(logname)          # flush the tail as a final run
+            handles = [rp.open(encoding="utf-8") for rp in runs[logname]]
+            try:
+                streams = [(json.loads(line) for line in h if line.strip()) for h in handles]
+                with path.open("w", encoding="utf-8", newline="") as f:
+                    for doc in heapq.merge(*streams, key=_ndjson_sort_key):
+                        f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
+                        written += 1
+            finally:
+                for h in handles:
+                    h.close()
+    finally:
+        if tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     return written
 
 
@@ -142,28 +206,34 @@ def merge_corpus(
     log.info("merge: tier=%s seed=%d window=%s..%s hosts=%d",
              tier, seed, start, end, len(shim.hosts))
 
-    ot_events = list(ot_protocols.generate(shim, None, start, end, seed=seed))
-    oth_events = list(ot_hosts.generate(shim, None, start, end, seed=seed))
-    bridge_events = list(it_ot_bridge.generate(shim, None, start, end, seed=seed))
-
-    n_ot = _write_ndjson_by_log(ot_events, ef_dir / "ot")
-    n_oth = _write_ndjson_by_log(oth_events, ef_dir / "ot_hosts")
+    # Stream the generators straight into the writers. These were `list(...)`
+    # until 2026-09-10, which at L scale tries to materialize ~87M OT events
+    # (~43 GB of dicts) and OOMed the machine mid-build. The generators are lazy;
+    # only the writer needs bounded buffering, and it spills+merges to keep sort
+    # order. Same defect class as the ingest OOM fixed in #28.
+    n_ot = _write_ndjson_by_log(
+        ot_protocols.generate(shim, None, start, end, seed=seed), ef_dir / "ot")
+    n_oth = _write_ndjson_by_log(
+        ot_hosts.generate(shim, None, start, end, seed=seed), ef_dir / "ot_hosts")
 
     # Bridge events fan across routed sources; write one NDJSON per (source, log).
-    by_source: dict[str, list[dict]] = {}
-    for ev in bridge_events:
-        by_source.setdefault(str(ev.get("_source", "other")), []).append(ev)
+    # Routed by _source into per-source writers, so this stays streaming too --
+    # the bridge legs are the RQ1 IT<->OT crossing and must not be dropped.
     n_bridge = 0
-    for source, evs in sorted(by_source.items()):
+    bridge_by_source: dict[str, list[dict]] = {}
+    for ev in it_ot_bridge.generate(shim, None, start, end, seed=seed):
+        bridge_by_source.setdefault(str(ev.get("_source", "other")), []).append(ev)
+    for source, evs in sorted(bridge_by_source.items()):
         n_bridge += _write_ndjson_by_log(evs, ef_dir / "bridge", prefix=f"{source}.")
 
     # Benign Suricata FP noise: low-severity ET INFO/POLICY alerts on the real
     # corpus hosts. Only the alert-type eve records go to the alerts index (flow/
     # dns/tls/http eve records are dropped — this index is the alert queue). The
     # malicious TP alerts come from a separately-injected commodity bundle.
-    sur_alerts = [e for e in suricata_noise.generate(shim, _FPRates(), start, end, seed=seed)
-                  if e.get("event_type") == "alert"]
-    n_sur = _write_ndjson_by_log(sur_alerts, ef_dir / "suricata")
+    n_sur = _write_ndjson_by_log(
+        (e for e in suricata_noise.generate(shim, _FPRates(), start, end, seed=seed)
+         if e.get("event_type") == "alert"),
+        ef_dir / "suricata")
 
     build_hash, files = _content_hash(ef_dir)
     manifest = {

@@ -291,3 +291,130 @@ def test_rebase_shifts_campaign_preserving_dwell():
     # relative spacing intact: middle zeek event still ~5 days after start
     mid = _event_time(shifted[2])
     assert 4 <= (mid - new_start).days <= 6
+
+
+# --- issue #35: adversary dwell must be reachable with the documented defaults --
+
+# The registered MCP surface (blue_bench_mcp/tools/) documents and passes a
+# 240-minute default lookback. detect_beaconing passes 0 and falls back to
+# config.default_window_minutes = 10080 (7d). If the campaign's last event is
+# older than the shortest of those, a player using nothing but defaults sees an
+# empty tail.
+MCP_DEFAULT_LOOKBACK_MINUTES = 240
+
+
+def _make_l_window_corpus(tmp: Path, days: int = 18) -> tuple[Path, datetime, datetime]:
+    """A corpus dir whose declared collection window is L-tier sized."""
+    from datetime import datetime, timedelta, timezone
+    corpus = tmp / "corpus"
+    corpus.mkdir()
+    end = datetime(2026, 9, 9, 18, 0, tzinfo=timezone.utc)
+    start = end - timedelta(days=days)
+    (corpus / "GROUND_TRUTH.json").write_text(json.dumps({
+        "collection_window": {"start": start.isoformat(), "end": end.isoformat()}
+    }))
+    return corpus, start, end
+
+
+def _long_dwell_bundle(tmp: Path, incident_id: str, dwell_days: int = 11) -> Path:
+    """A low-and-slow bundle: first and last event `dwell_days` apart."""
+    from datetime import datetime, timedelta, timezone
+    bd = tmp / f"bundle-{incident_id}"
+    bd.mkdir()
+    t0 = datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)
+    stamps = [t0, t0 + timedelta(days=dwell_days // 2), t0 + timedelta(days=dwell_days)]
+    events = [
+        {"_stream": "sysmon", "Computer": "ws-fin-014.corp.example",
+         "Image": f"stage{i}.exe",
+         "UtcTime": t.strftime("%Y-%m-%d %H:%M:%S.000")}
+        for i, t in enumerate(stamps)
+    ]
+    (bd / f"{incident_id}.events.ndjson").write_text(
+        "\n".join(json.dumps(e) for e in events) + "\n")
+    gt = {
+        "schema_version": "1.0", "incident_id": incident_id, "source_class": "apt",
+        "segment_class": "IT", "ttps": ["T1059.001"],
+        "time_window": {"injection_start": "", "injection_end": "", "duration_seconds": 0},
+        "events": [
+            {"id": f"evt-{incident_id}-{i:04d}",
+             "where": {"fixture_line": {"path": f"{incident_id}.events.ndjson", "line": i + 1}},
+             "role": "execution", "ttp_links": ["T1059.001"]}
+            for i in range(len(events))
+        ],
+    }
+    (bd / f"{incident_id}.ground-truth.yaml").write_text(yaml.safe_dump(gt))
+    return bd
+
+
+def _injection_end(corpus: Path, incident_id: str) -> "datetime":
+    from datetime import datetime, timezone
+    gt = yaml.safe_load(
+        (corpus / "ground-truth" / f"{incident_id}.ground-truth.yaml").read_text())
+    raw = gt["time_window"]["injection_end"]
+    return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=timezone.utc)
+
+
+def test_injected_campaign_is_reachable_with_the_default_lookback(tmp_path: Path):
+    """Issue #35. Start-anchoring left days ~12.5-18 of an 18-day L window empty
+    of adversary activity, so the documented default lookbacks searched a tail
+    that contained nothing.
+    """
+    corpus, _cstart, cend = _make_l_window_corpus(tmp_path)
+    bd = _long_dwell_bundle(tmp_path, "apt")
+    inject_bundle(corpus, bd, "apt", REMAP)
+
+    end = _injection_end(corpus, "apt")
+    age_minutes = (cend - end).total_seconds() / 60
+    assert 0 < age_minutes <= MCP_DEFAULT_LOOKBACK_MINUTES, (
+        f"the campaign's last event is {age_minutes:.0f} min before the corpus "
+        f"end; a player using the documented {MCP_DEFAULT_LOOKBACK_MINUTES}-minute "
+        f"default sees no adversary activity at all"
+    )
+
+
+def test_rebase_preserves_full_dwell_while_end_anchoring(tmp_path: Path):
+    """End-anchoring must not compress the campaign — the dwell IS the RQ2 signal."""
+    corpus, cstart, _cend = _make_l_window_corpus(tmp_path)
+    bd = _long_dwell_bundle(tmp_path, "apt", dwell_days=11)
+    inject_bundle(corpus, bd, "apt", REMAP)
+
+    gt = yaml.safe_load((corpus / "ground-truth" / "apt.ground-truth.yaml").read_text())
+    assert gt["time_window"]["duration_seconds"] == 11 * 24 * 3600
+    # ...and it still fits inside the corpus window (no events before the haystack)
+    from datetime import datetime, timezone
+    start = datetime.fromisoformat(
+        gt["time_window"]["injection_start"].replace("Z", "+00:00")
+    ).replace(tzinfo=timezone.utc)
+    assert start >= cstart
+
+
+def test_campaigns_do_not_all_end_at_the_same_instant(tmp_path: Path):
+    """A single constant cooldown would make every campaign co-terminal.
+
+    Identical end times across the APT and the cybercrime foil are a separable
+    signal with nothing to do with tradecraft, and they sit directly in RQ3's
+    path (APT vs cybercrime discrimination).
+    """
+    corpus, _cstart, cend = _make_l_window_corpus(tmp_path)
+    ends = {}
+    for incident_id in ("apt", "cybercrime", "commodity"):
+        bd = _long_dwell_bundle(tmp_path, incident_id, dwell_days=6)
+        inject_bundle(corpus, bd, incident_id, REMAP)
+        ends[incident_id] = _injection_end(corpus, incident_id)
+
+    assert len(set(ends.values())) == len(ends), (
+        f"campaigns are co-terminal: {ends}"
+    )
+    # ...but every one is still inside the default lookback
+    for incident_id, end in ends.items():
+        age = (cend - end).total_seconds() / 60
+        assert 0 < age <= MCP_DEFAULT_LOOKBACK_MINUTES, (incident_id, age)
+
+
+def test_cooldown_is_deterministic_across_rebuilds():
+    from blue_bench_generators.merge.inject import cooldown_for
+    assert cooldown_for("apt-2026-03") == cooldown_for("apt-2026-03")
+    assert cooldown_for("apt") != cooldown_for("cybercrime")
+    for incident_id in ("apt", "cybercrime", "commodity", "ot-intrusion", "x"):
+        mins = cooldown_for(incident_id).total_seconds() / 60
+        assert 0 < mins <= MCP_DEFAULT_LOOKBACK_MINUTES, (incident_id, mins)

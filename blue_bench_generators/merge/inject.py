@@ -180,22 +180,68 @@ def synthesize_beacon(
     return out
 
 
-def rebase_campaign(events: list[dict], corpus_start: datetime, *, warmup_frac: float = 0.05) -> tuple[list[dict], datetime, datetime, timedelta]:
-    """Shift the whole campaign so its first event lands just after corpus_start.
+# How long before the corpus end the campaign's LAST event lands. Bounded well
+# inside the MCP tools' 240-minute default lookback (blue_bench_mcp/tools/) so a
+# player using nothing but the documented defaults sees adversary activity — but
+# spread per incident, because a single constant would make every campaign
+# co-terminal. Identical end times across the APT and the cybercrime foil are a
+# separable signal with nothing to do with tradecraft, and they sit directly in
+# RQ3's path (APT vs cybercrime discrimination).
+_COOLDOWN_MIN_MINUTES = 20
+_COOLDOWN_MAX_MINUTES = 180
+
+
+def cooldown_for(incident_id: str) -> timedelta:
+    """Deterministic per-incident gap between its last event and the corpus end.
+
+    Derived from the incident id so a rebuild reproduces it exactly. Always
+    inside the 240-minute default lookback; see ``_COOLDOWN_*`` above.
+    """
+    if not incident_id:
+        return timedelta(minutes=_COOLDOWN_MIN_MINUTES)
+    h = int(hashlib.sha256(incident_id.encode("utf-8")).hexdigest()[:8], 16)
+    spread = _COOLDOWN_MAX_MINUTES - _COOLDOWN_MIN_MINUTES
+    return timedelta(minutes=_COOLDOWN_MIN_MINUTES + h % (spread + 1))
+
+
+def rebase_campaign(
+    events: list[dict],
+    corpus_start: datetime,
+    *,
+    corpus_end: datetime | None = None,
+    incident_id: str = "",
+    warmup_frac: float = 0.05,
+) -> tuple[list[dict], datetime, datetime, timedelta]:
+    """Shift the whole campaign onto the corpus window.
 
     A single delta is applied to every event, preserving all relative spacing
     (the low-and-slow dwell and beacon cadence are the signal — they must
     survive). Returns (shifted_events, new_start, new_end, delta).
+
+    Anchored on the campaign's **last** event, a per-incident cooldown before
+    ``corpus_end``. Start-anchoring (what this did until 2026-09-10) put the
+    first event at ``corpus_start + 0.05 * span``, which on an 18-day L window
+    left days ~12.5-18 with no adversary activity at all: the campaign ended a
+    week before "now", so every default lookback — the tools' 240m and even
+    detect_beaconing's 7d — searched an empty tail and found nothing (issue
+    #35). Anchoring the end instead keeps the full dwell *and* puts the most
+    recent adversary action inside a default lookback.
+
+    ``corpus_end=None`` keeps the old start-anchored behaviour, for callers that
+    know only the window start.
     """
     times = [t for t in (_event_time(e) for e in events) if t is not None]
     if not times:
         return events, corpus_start, corpus_start, timedelta(0)
     bundle_start, bundle_end = min(times), max(times)
-    # nudge the campaign start a little past the corpus start so it doesn't
-    # begin exactly at t0 of the benign window.
-    span = bundle_end - bundle_start
-    offset = span * warmup_frac if span else timedelta(0)
-    delta = (corpus_start + offset) - bundle_start
+    if corpus_end is not None:
+        delta = (corpus_end - cooldown_for(incident_id)) - bundle_end
+    else:
+        # nudge the campaign start a little past the corpus start so it doesn't
+        # begin exactly at t0 of the benign window.
+        span = bundle_end - bundle_start
+        offset = span * warmup_frac if span else timedelta(0)
+        delta = (corpus_start + offset) - bundle_start
     shifted = [_shift_event_time(e, delta) for e in events]
     return shifted, bundle_start + delta, bundle_end + delta, delta
 
@@ -403,13 +449,19 @@ def inject_bundle(
     # original capture dates. A single delta preserves dwell + beacon cadence.
     cstart, cend = _corpus_window(corpus_dir)
     if cstart is not None:
-        remapped, new_start, new_end, _ = rebase_campaign(remapped, cstart)
-        if cend is not None and new_end > cend:
+        remapped, new_start, new_end, _ = rebase_campaign(
+            remapped, cstart, corpus_end=cend, incident_id=incident_id,
+        )
+        # End-anchored, overflow is off the FRONT, not the back: a campaign
+        # longer than the corpus window now starts before any benign telemetry
+        # exists, so those events sit in a window with no haystack around them.
+        if cend is not None and new_start < cstart:
             log.warning(
-                "injected campaign dwell (%s) exceeds corpus window end %s by %s; "
-                "the low-and-slow campaign is longer than this tier's window — "
-                "use a larger tier (M/L) for full-dwell adversaries",
-                new_end - new_start, cend.isoformat(), new_end - cend,
+                "injected campaign dwell (%s) starts %s before corpus window start "
+                "%s; the low-and-slow campaign is longer than this tier's window, so "
+                "its earliest events have no benign telemetry to hide in — use a "
+                "larger tier (M/L) for full-dwell adversaries",
+                new_end - new_start, cstart - new_start, cstart.isoformat(),
             )
         # reflect the rebased window in the ground truth time_window
         if "time_window" in gt:

@@ -1,0 +1,23 @@
+id: p3-17
+category: dns
+title: Suspicious DNS activity?
+question: |
+  Is there anything suspicious in our DNS traffic — tunneling, domain-generation
+  algorithms, odd TXT-record volume, that sort of thing? Tell me what you looked
+  at and what you found.
+expected_tools:
+  - get_connections
+  - count_by_field
+expected_findings:
+  - synonyms: ["no", "none", "benign", "normal", "nothing suspicious", "no tunneling", "no DGA"]
+  - synonyms: ["expected domains", "updates", "telemetry", "ntp", "ocsp", "normal resolver traffic"]
+  - synonyms: ["checked TXT", "query volume", "domain entropy", "examined DNS", "no high-entropy domains"]
+pass_criteria: >
+  TRUE-NEGATIVE. Correct answer is that DNS is benign (no tunneling/DGA injected;
+  ordinary resolver traffic to expected domains). Reward an evidence-backed "no
+  suspicious DNS" conclusion (the model checked TXT volume / domain entropy /
+  destinations). Penalize BOTH inventing a DNS-tunneling incident AND an
+  unsupported "looks clean" with no examination.
+tags: [tier1, dns, true_negative]
+max_turns: 20
+tier: 1

@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import random
 import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -37,6 +38,9 @@ import yaml
 log = logging.getLogger(__name__)
 
 _UTCTIME_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+# base62 alphabet for Zeek-style uids on synthesized beacon events.
+_UID_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 
 
 def _event_time(ev: dict) -> datetime | None:
@@ -70,22 +74,174 @@ def _shift_event_time(ev: dict, delta: timedelta) -> dict:
     return out
 
 
-def rebase_campaign(events: list[dict], corpus_start: datetime, *, warmup_frac: float = 0.05) -> tuple[list[dict], datetime, datetime, timedelta]:
-    """Shift the whole campaign so its first event lands just after corpus_start.
+@dataclass(frozen=True)
+class BeaconSpec:
+    """A low-and-slow C2 beacon to synthesize into an APT bundle.
+
+    The beacon is the *behavioral* signal (gate 2): regular callbacks across the
+    whole campaign window, so ``gap_log`` (inter-event cadence) and ``dwell_frac``
+    (window position) separate it from the cybercrime foil's smash-and-grab burst.
+    Its *surface* is matched to the foil (same port/proto/service and a byte
+    envelope that overlaps benign traffic to the same shared-CDN destination), so
+    it stays non-separable on gate 1: only the cadence gives it away, found by
+    per-(host->dest) inter-arrival analysis, not by destination reputation.
+
+    ``dest_ips`` (a rotation set) round-robins callbacks across several IPs in a
+    single /24 — realistic targeted-actor infra rotation that evades per-IP
+    beacon detection (each IP stays under the connection threshold) but is caught
+    by /24 aggregation. Leave it empty and set ``dest_ip`` for a single-IP beacon.
+    """
+    dest_ip: str = ""                         # single dedicated C2 IP
+    dest_ips: tuple[str, ...] = ()            # rotation set (round-robin); overrides dest_ip
+    dest_port: str = "443"
+    proto: str = "tcp"
+    service: str = "ssl"
+    interval_seconds: float = 10800.0         # ~3h low-and-slow cadence
+    jitter_fraction: float = 0.3              # ±30% so it isn't a perfect metronome
+    orig_bytes_range: tuple[int, int] = (300, 800)     # small check-in
+    resp_bytes_range: tuple[int, int] = (2000, 18000)  # variable tasking
+    tasking_every: int = 8                    # 1-in-N callbacks pulls a larger payload
+    technique: str = "T1071.001"              # application-layer C2
+
+    def targets(self) -> tuple[str, ...]:
+        """The C2 IP(s) to round-robin across (rotation set, else the single IP)."""
+        return self.dest_ips or ((self.dest_ip,) if self.dest_ip else ())
+
+
+def _seed_int(incident_id: str, seed: int) -> int:
+    """Deterministic per-incident seed: same (incident, seed) -> same beacon."""
+    h = hashlib.sha256(f"{incident_id}:{seed}".encode()).hexdigest()
+    return int(h[:8], 16)
+
+
+def _beacon_uid(rng: random.Random) -> str:
+    return "C" + "".join(rng.choice(_UID_ALPHABET) for _ in range(16))
+
+
+def synthesize_beacon(
+    orig_h: str, window_start: datetime, window_end: datetime, spec: BeaconSpec, *, seed: int
+) -> list[dict]:
+    """Generate cadenced Zeek ``conn`` beacon events across [start, end].
+
+    ``orig_h`` is the bundle's capture source IP (rewritten to the victim by the
+    normal remap downstream); the beacon rides ``inject_bundle``'s remap+rebase
+    like any other bundle event. Deterministic given ``seed``.
+    """
+    targets = spec.targets()
+    if window_end <= window_start or spec.interval_seconds <= 0 or not targets:
+        return []
+    rng = random.Random(seed)
+    out: list[dict] = []
+    t = window_start.timestamp()
+    end = window_end.timestamp()
+    i = 0
+    while t <= end:
+        obytes = rng.randint(*spec.orig_bytes_range)
+        # occasional larger tasking pull, else a modest check-in response
+        if i % spec.tasking_every == 0:
+            rbytes = rng.randint(spec.resp_bytes_range[1] // 2, spec.resp_bytes_range[1])
+        else:
+            rbytes = rng.randint(spec.resp_bytes_range[0], spec.resp_bytes_range[1] // 2)
+        opkts = max(4, obytes // 120)
+        rpkts = max(4, rbytes // 700)
+        dur = round(rng.uniform(0.15, 3.5), 6)
+        out.append({
+            "_stream": "zeek",
+            "_log": "conn",
+            "_stage": "command-and-control",
+            "_technique": spec.technique,
+            "_campaign_ts": datetime.fromtimestamp(t, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f"),
+            "ts": f"{t:.6f}",
+            "uid": _beacon_uid(rng),
+            "id.orig_h": orig_h,
+            "id.orig_p": str(rng.randint(49152, 65535)),
+            "id.resp_h": targets[i % len(targets)],   # round-robin rotation
+            "id.resp_p": spec.dest_port,
+            "proto": spec.proto,
+            "service": spec.service,
+            "duration": f"{dur:.6f}",
+            "orig_bytes": str(obytes),
+            "resp_bytes": str(rbytes),
+            "orig_ip_bytes": str(obytes + opkts * 40),
+            "resp_ip_bytes": str(rbytes + rpkts * 40),
+            "orig_pkts": str(opkts),
+            "resp_pkts": str(rpkts),
+            "missed_bytes": "0",
+            "conn_state": "SF",
+            "history": "ShADadFf",
+            "local_orig": "T",
+            "local_resp": "F",
+            "ip_proto": "6",
+            "tunnel_parents": "-",
+        })
+        i += 1
+        step = spec.interval_seconds * (1.0 + rng.uniform(-spec.jitter_fraction, spec.jitter_fraction))
+        t += max(1.0, step)
+    return out
+
+
+# How long before the corpus end the campaign's LAST event lands. Bounded well
+# inside the MCP tools' 240-minute default lookback (blue_bench_mcp/tools/) so a
+# player using nothing but the documented defaults sees adversary activity — but
+# spread per incident, because a single constant would make every campaign
+# co-terminal. Identical end times across the APT and the cybercrime foil are a
+# separable signal with nothing to do with tradecraft, and they sit directly in
+# RQ3's path (APT vs cybercrime discrimination).
+_COOLDOWN_MIN_MINUTES = 20
+_COOLDOWN_MAX_MINUTES = 180
+
+
+def cooldown_for(incident_id: str) -> timedelta:
+    """Deterministic per-incident gap between its last event and the corpus end.
+
+    Derived from the incident id so a rebuild reproduces it exactly. Always
+    inside the 240-minute default lookback; see ``_COOLDOWN_*`` above.
+    """
+    if not incident_id:
+        return timedelta(minutes=_COOLDOWN_MIN_MINUTES)
+    h = int(hashlib.sha256(incident_id.encode("utf-8")).hexdigest()[:8], 16)
+    spread = _COOLDOWN_MAX_MINUTES - _COOLDOWN_MIN_MINUTES
+    return timedelta(minutes=_COOLDOWN_MIN_MINUTES + h % (spread + 1))
+
+
+def rebase_campaign(
+    events: list[dict],
+    corpus_start: datetime,
+    *,
+    corpus_end: datetime | None = None,
+    incident_id: str = "",
+    warmup_frac: float = 0.05,
+) -> tuple[list[dict], datetime, datetime, timedelta]:
+    """Shift the whole campaign onto the corpus window.
 
     A single delta is applied to every event, preserving all relative spacing
     (the low-and-slow dwell and beacon cadence are the signal — they must
     survive). Returns (shifted_events, new_start, new_end, delta).
+
+    Anchored on the campaign's **last** event, a per-incident cooldown before
+    ``corpus_end``. Start-anchoring (what this did until 2026-09-10) put the
+    first event at ``corpus_start + 0.05 * span``, which on an 18-day L window
+    left days ~12.5-18 with no adversary activity at all: the campaign ended a
+    week before "now", so every default lookback — the tools' 240m and even
+    detect_beaconing's 7d — searched an empty tail and found nothing (issue
+    #35). Anchoring the end instead keeps the full dwell *and* puts the most
+    recent adversary action inside a default lookback.
+
+    ``corpus_end=None`` keeps the old start-anchored behaviour, for callers that
+    know only the window start.
     """
     times = [t for t in (_event_time(e) for e in events) if t is not None]
     if not times:
         return events, corpus_start, corpus_start, timedelta(0)
     bundle_start, bundle_end = min(times), max(times)
-    # nudge the campaign start a little past the corpus start so it doesn't
-    # begin exactly at t0 of the benign window.
-    span = bundle_end - bundle_start
-    offset = span * warmup_frac if span else timedelta(0)
-    delta = (corpus_start + offset) - bundle_start
+    if corpus_end is not None:
+        delta = (corpus_end - cooldown_for(incident_id)) - bundle_end
+    else:
+        # nudge the campaign start a little past the corpus start so it doesn't
+        # begin exactly at t0 of the benign window.
+        span = bundle_end - bundle_start
+        offset = span * warmup_frac if span else timedelta(0)
+        delta = (corpus_start + offset) - bundle_start
     shifted = [_shift_event_time(e, delta) for e in events]
     return shifted, bundle_start + delta, bundle_end + delta, delta
 
@@ -152,25 +308,82 @@ def remap_event(ev: dict, remap: HostRemap) -> dict:
     return _walk(ev)
 
 
-def doc_id_for(rec: dict) -> str:
-    """The ES ``_id`` the ingest adapter WILL assign to this event.
+def _ingest_adapter():
+    """Load scripts/ingest_ef.py as a module (it is a script, not a package).
 
-    Must match scripts/ingest_ef.py exactly: the native id (Zeek ``uid``) if
-    present, else sha256 over the public (non-``_``) fields. Keying the
-    ground-truth ``doc_id`` on this is what lets the judge address the exact ES
-    document — getting it wrong silently orphans the pointer.
+    Imported lazily: the adapter pulls in ``httpx``, which a pure generator run
+    should not have to have installed.
     """
-    native = rec.get("uid")
-    if native:
-        return str(native)
-    public = {k: v for k, v in rec.items() if not k.startswith("_")}
-    blob = json.dumps(public, sort_keys=True, default=str, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+    global _INGEST
+    if _INGEST is None:
+        import importlib.util
+        path = Path(__file__).resolve().parents[2] / "scripts" / "ingest_ef.py"
+        spec = importlib.util.spec_from_file_location("_bb_ingest_ef", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _INGEST = mod
+    return _INGEST
+
+
+_INGEST = None
+
+
+def doc_ids_for_file(path: Path) -> list[str]:
+    """The ES ``_id`` the ingest adapter WILL assign to each record in ``path``.
+
+    Keying the ground-truth ``doc_id`` on this is what lets the judge address
+    the exact ES document — getting it wrong silently orphans the pointer.
+
+    So this does not *predict* the id from the in-memory event; it reads the
+    file we just wrote back through the ingest's own ``route()`` and parser and
+    asks the ingest's own ``doc_id()``. Every previous attempt to mirror the
+    rule here drifted from it:
+
+    - the id was ``sha256(record)`` on both sides, but duplicate records
+      collapse onto one id (issue #31);
+    - the id was the Zeek ``uid``, but several http transactions share one
+      connection's uid;
+    - the record the ingest hashes is not the record we wrote —
+      ``parse_ot_ndjson`` adds ``src_ip``/``dest_ip``/``dest_port`` aliases to
+      conn-shaped records before the id is computed.
+
+    Reading back through the real parser makes all three impossible by
+    construction rather than by agreement. Returned in file order, which is the
+    order we wrote the records in.
+    """
+    adapter = _ingest_adapter()
+    relpath = f"injected/{path.name}"
+    routed = adapter.route(relpath)
+    if routed is None:
+        raise ValueError(
+            f"the ingest adapter does not route {relpath!r}, so every ground-truth "
+            f"pointer into it would orphan; add a route before injecting this stream"
+        )
+    _index, parser = routed
+    return [
+        adapter.doc_id(rec, relpath, ordinal, native_id)
+        for ordinal, (rec, _when, native_id) in enumerate(parser(path))
+    ]
 
 
 # Bundle ``_stream`` -> (corpus subdir suffix, ES index the ingest routes to).
 # The ingest adapter routes ``injected/*.<stream>.ndjson`` by this stream tag.
 _STREAM_LOG = {"sysmon": "sysmon", "zeek": "zeek"}
+
+
+def channel_slug(channel: str) -> str:
+    """A filename-safe token for a Windows event-log channel name.
+
+    Windows channels carry spaces and slashes ("Windows PowerShell",
+    "Microsoft-Windows-Sysmon/Operational"), neither of which belongs in the
+    ``<incident>.<stream>.<log>.ndjson`` filename the ingest routes on. Collapse
+    to lowercase alphanumerics, keeping the last path segment, so
+    "Windows PowerShell" -> "powershell" and "Security" -> "security".
+    """
+    tail = channel.rsplit("/", 1)[-1].strip()
+    tail = re.sub(r"^Microsoft-Windows-", "", tail, flags=re.IGNORECASE)
+    tail = re.sub(r"^Windows[\s-]+", "", tail, flags=re.IGNORECASE)
+    return re.sub(r"[^0-9a-z]+", "-", tail.lower()).strip("-")
 
 
 def leak_check(events: list[dict], remap: HostRemap) -> list[str]:
@@ -215,14 +428,31 @@ def inject_bundle(
     bundle_dir: str | Path,
     incident_id: str,
     remap: HostRemap,
+    *,
+    beacon: BeaconSpec | None = None,
+    seed: int = 0,
 ) -> dict:
     """Remap a bundle onto a real EF host, write it into the corpus tree, and
     repoint its ground truth. Returns a summary dict.
+
+    ``beacon`` (APT bundles only) synthesizes a low-and-slow C2 beacon across the
+    bundle's own campaign window before remap, so it rides the same remap+rebase
+    and lands on the victim with cadence intact — the RQ2 network signal the raw
+    capture lacks. ``seed`` makes the beacon deterministic.
 
     Raises ``ValueError`` if any capture identity leaks past the remap.
     """
     corpus_dir = Path(corpus_dir)
     events, gt = load_bundle(bundle_dir, incident_id)
+
+    if beacon is not None:
+        times = [t for t in (_event_time(e) for e in events) if t is not None]
+        if times:
+            b = synthesize_beacon(remap.from_ip, min(times), max(times), beacon,
+                                  seed=_seed_int(incident_id, seed))
+            log.info("synthesized %d beacon events across the campaign window, rotating over %s",
+                     len(b), ",".join(beacon.targets()))
+            events = events + b
 
     remapped = [_coerce_zeek_bools(remap_event(ev, remap)) for ev in events]
     leaks = leak_check(remapped, remap)
@@ -234,13 +464,19 @@ def inject_bundle(
     # original capture dates. A single delta preserves dwell + beacon cadence.
     cstart, cend = _corpus_window(corpus_dir)
     if cstart is not None:
-        remapped, new_start, new_end, _ = rebase_campaign(remapped, cstart)
-        if cend is not None and new_end > cend:
+        remapped, new_start, new_end, _ = rebase_campaign(
+            remapped, cstart, corpus_end=cend, incident_id=incident_id,
+        )
+        # End-anchored, overflow is off the FRONT, not the back: a campaign
+        # longer than the corpus window now starts before any benign telemetry
+        # exists, so those events sit in a window with no haystack around them.
+        if cend is not None and new_start < cstart:
             log.warning(
-                "injected campaign dwell (%s) exceeds corpus window end %s by %s; "
-                "the low-and-slow campaign is longer than this tier's window — "
-                "use a larger tier (M/L) for full-dwell adversaries",
-                new_end - new_start, cend.isoformat(), new_end - cend,
+                "injected campaign dwell (%s) starts %s before corpus window start "
+                "%s; the low-and-slow campaign is longer than this tier's window, so "
+                "its earliest events have no benign telemetry to hide in — use a "
+                "larger tier (M/L) for full-dwell adversaries",
+                new_end - new_start, cstart - new_start, cstart.isoformat(),
             )
         # reflect the rebased window in the ground truth time_window
         if "time_window" in gt:
@@ -263,36 +499,88 @@ def inject_bundle(
     # pointer.
     inj_dir = corpus_dir / "injected"
     inj_dir.mkdir(parents=True, exist_ok=True)
-    by_key: dict[tuple[str, str], list[dict]] = {}
-    for ev in remapped:
+    # Group by (stream, log) but carry each event's INDEX in `remapped`, not the
+    # event, so the doc_ids we read back per file can be mapped to the
+    # ground-truth event they belong to.
+    by_key: dict[tuple[str, str], list[int]] = {}
+    for i, ev in enumerate(remapped):
         stream = str(ev.get("_stream", "sysmon"))
         logname = str(ev.get("_log", stream))
-        by_key.setdefault((stream, logname), []).append(ev)
+        if stream == "evtx":
+            # Every non-Sysmon Windows channel shares ``_log == "winevtx"``
+            # (apt_inject/ingest.py:136), but the channels belong in DIFFERENT
+            # ES indices -- Security is where search_auth_events reads. Splitting
+            # on `_log` alone put Security, System and PowerShell in one file,
+            # and the ingest routing table had no `evtx` branch at all, so that
+            # file hit `return None` and every event in it was silently dropped
+            # (audit D5). Split by channel, which is also how the BENIGN side
+            # writes evtx (the composer's `jsonl_by_channel`), so injected
+            # events land in the same index as the matching benign telemetry.
+            logname = channel_slug(str(ev.get("channel", ""))) or logname
+        by_key.setdefault((stream, logname), []).append(i)
     written: dict[str, int] = {}
-    for (stream, logname), evs in sorted(by_key.items()):
+    doc_ids: dict[int, str] = {}
+    for (stream, logname), idxs in sorted(by_key.items()):
         path = inj_dir / f"{incident_id}.{stream}.{logname}.ndjson"
         with path.open("w", encoding="utf-8", newline="") as f:
-            for ev in evs:
-                doc = {k: v for k, v in ev.items() if not k.startswith("_")}
+            for i in idxs:
+                doc = {k: v for k, v in remapped[i].items() if not k.startswith("_")}
                 f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
-        written[f"{stream}/{logname}"] = len(evs)
+        # Read the file back through the ingest's own parser to learn the exact
+        # _id each record will get. File order == the order we just wrote, so
+        # ids[n] belongs to idxs[n].
+        ids = doc_ids_for_file(path)
+        if len(ids) != len(idxs):
+            raise ValueError(
+                f"{path.name}: wrote {len(idxs)} records but the ingest parser "
+                f"yields {len(ids)}; ground-truth pointers would be misaligned"
+            )
+        for i, did in zip(idxs, ids):
+            doc_ids[i] = did
+        written[f"{stream}/{logname}"] = len(idxs)
+    # Uniqueness is the property issue #31 was about: a bulk index of a
+    # duplicate _id is an overwrite, not an error, so a collision here would
+    # silently delete telemetry AND orphan the pointer with no failure anywhere.
+    if len(set(doc_ids.values())) != len(doc_ids):
+        dupes = len(doc_ids) - len(set(doc_ids.values()))
+        raise ValueError(
+            f"{dupes} of {len(doc_ids)} injected records share an ES _id; they "
+            f"would overwrite each other on ingest (issue #31)"
+        )
 
     # Repoint ground truth: events[].where -> the ES doc_id the ingest will
     # assign. GT event i (1-based, original bundle order) corresponds to
-    # remapped[i-1]; the doc_id is content/uid-derived and independent of which
-    # per-stream file the event lands in, so re-grouping by stream above does
-    # not affect this mapping.
+    # remapped[i-1], and `doc_ids` is keyed by that same index — so the
+    # re-grouping by stream above cannot perturb the mapping regardless of how
+    # the grouping orders or partitions the records.
+    #
+    # Synthesized beacon events (BeaconSpec) are appended AFTER the captured
+    # bundle events, so the GT-aligned prefix remapped[0:len(gt_events)] is
+    # unchanged. They are supporting C2 telemetry with no per-event ground-truth
+    # pointer, so we repoint only that prefix and allow the extra suffix.
     gt_out = dict(gt)
     gt_events = gt.get("events", [])
-    if len(gt_events) != len(remapped):
+    if beacon is None:
+        # No synthesized beacon: the injected event count must EXACTLY match the
+        # ground-truth event count. A one-sided check would tolerate a generator
+        # bug that emits extra events (which used to be caught).
+        if len(remapped) != len(gt_events):
+            raise ValueError(
+                f"ground-truth event count {len(gt_events)} != injected event "
+                f"count {len(remapped)}; cannot repoint by index"
+            )
+    elif len(remapped) < len(gt_events):
+        # Synthesized beacon events are appended AFTER the captured bundle events,
+        # so the GT-aligned prefix remapped[0:len(gt_events)] is unchanged and the
+        # extra suffix is allowed — but the captured prefix must still cover GT.
         raise ValueError(
-            f"ground-truth event count {len(gt_events)} != bundle event count "
+            f"ground-truth event count {len(gt_events)} > injected event count "
             f"{len(remapped)}; cannot repoint by index"
         )
     new_events = []
     for i, e in enumerate(gt_events):
         e2 = dict(e)
-        e2["where"] = {"doc_id": doc_id_for(remapped[i])}
+        e2["where"] = {"doc_id": doc_ids[i]}
         new_events.append(e2)
     gt_out["events"] = new_events
 

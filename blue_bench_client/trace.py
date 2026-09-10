@@ -104,7 +104,7 @@ class Trace(BaseModel):
     prompt_id: str
     profile_name: str
     model_id: str
-    tool_protocol: Literal["native", "text-embedded", "anthropic-native"]
+    tool_protocol: Literal["native", "text-embedded", "anthropic-native", "anthropic-cli", "openai-native"]
     question: str
     composed_system_prompt: str
     tools_available: list[str]

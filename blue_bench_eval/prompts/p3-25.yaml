@@ -1,0 +1,22 @@
+id: p3-25
+category: threat_intel
+title: Extract a shareable IOC list
+question: |
+  From the intrusion on wkst-03, pull together a set of indicators of compromise
+  we could share with partners: hosts, IP addresses, domains, user-agents, file
+  or registry artifacts. For each, say what it is and where you saw it.
+expected_tools:
+  - get_process_events
+  - get_connections
+  - get_process_tree
+expected_findings:
+  - synonyms: ["wkst-03", "10.10.0.13", "victim host"]
+  - synonyms: ["C2 IP", "destination IP", "external IP", "egress address"]
+  - synonyms: ["user-agent", "HttpBrowser", "UA string"]
+  - synonyms: ["Run key", "Atomic Red Team", "registry artifact"]
+  - synonyms: ["LSASS", "comsvcs", "credential-dump artifact", "file artifact"]
+  - synonyms: ["IOC list", "indicators of compromise", "shareable indicators"]
+pass_criteria: Extracts a grounded IOC set from the wkst-03 intrusion (host/IPs, user-agent(s), registry Run-key value, credential-dump artifacts) with each tied to where it was observed.
+tags: [tier2, threat_intel, ioc, apt]
+max_turns: 30
+tier: 2

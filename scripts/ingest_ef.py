@@ -14,10 +14,26 @@ Two contracts this adapter MUST honour (advisor 2026-06-10):
 1. **doc ``_id`` is content-derived, never positional.** ``seed_es.py`` uses
    ``_id=str(i)``; that breaks the injection orchestrator (t-9pwe / EF-P5),
    which must repoint ground-truth ``where`` to ES doc ids computed from the
-   event itself. We key ``_id`` on the source's native id (Zeek ``uid``,
-   Sysmon ``EventRecordID``, eCAR ``id``) and fall back to
-   ``sha256(canonical record)`` for line formats. Deterministic re-seed for
-   free.
+   event itself. We key ``_id`` on the source's native id (Sysmon
+   ``EventRecordID``, eCAR ``id``, Zeek ``uid`` for real captures) and fall
+   back to a hash for everything else.
+
+   That fallback is ``sha256(relpath : yield-ordinal : canonical record)``, NOT
+   ``sha256(canonical record)`` as it was until 2026-09-10. The bare content
+   hash silently collapsed duplicate records: a bulk ``index`` of an existing
+   ``_id`` is an overwrite, not an error, so N identical events became 1
+   document and ``_bulk`` still counted N successes. Genuinely repeated events
+   are normal telemetry (same Sysmon image + command line in the same second),
+   and it cost 33-51% of the injected adversary Sysmon stream (issue #31).
+   Scoping the hash by source position keeps the id content-derived while
+   making it unique by construction. Still a deterministic re-seed.
+
+   ``ordinal`` is the parser's **yield index**, not the physical line number
+   (parsers skip blank/comment lines). Anything recomputing an ``_id`` must
+   enumerate through the same parser rather than counting file lines.
+   ``doc_id()`` is the single source of truth and ``inject.py`` imports it --
+   two copies of this rule is precisely how the ground truth came to be keyed
+   by one formula and the documents written under another.
 
 2. **``@timestamp`` preserves the corpus window.** ``seed_es.py`` compresses
    everything into "the last 45 minutes" so a 60-minute lookback sees it; for a
@@ -42,7 +58,7 @@ import logging
 import re
 import sys
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
@@ -66,12 +82,31 @@ def zeek_index(logtype: str) -> str:
 
 WINDOWS_SYSMON_INDEX = "windows-sysmon"
 WINDOWS_SECURITY_INDEX = "windows-security"
+
+# Windows event-log channel -> index, for the injected ``evtx`` stream. Security
+# shares the index EF's own windows_event_security.xml lands in, so an injected
+# 4624/4625 is a needle in the real benign haystack and search_auth_events finds
+# it. System and PowerShell get their own indices: no MCP tool reads them yet
+# (tracked with the other ingested-but-unreadable indices), but ingesting them
+# is strictly better than the previous behaviour, which dropped them entirely.
+# PowerShell in particular carries 4103/4104 script-block logging, which is
+# primary evidence for living-off-the-land execution.
+_EVTX_CHANNEL_INDEX = {
+    "security": WINDOWS_SECURITY_INDEX,
+    "sysmon": WINDOWS_SYSMON_INDEX,
+    "operational": WINDOWS_SYSMON_INDEX,
+}
 ECAR_INDEX = "ecar-edr"
 SYSLOG_INDEX = "linux-syslog"
 SNORT_INDEX = "snort-alerts"
 ASA_INDEX = "firewall-asa"
 WEB_INDEX = "web-access"
 PROXY_INDEX = "proxy-access"
+# Alert indices in the default MCP index_pattern. EF/merge did not previously
+# populate these (legacy seed_es.py did); the merge pipeline now generates
+# benign Suricata noise + injected malicious/HIDS alerts that route here.
+LOGSTASH_SURICATA_INDEX = "logstash-suricata-alerts"
+WAZUH_INDEX = "wazuh-alerts"
 
 # Merged OT / IT-OT-bridge telemetry (EF-P4 merger output, NDJSON).
 OT_HOSTS_INDEX = "ot-hosts"
@@ -107,9 +142,38 @@ def _index_mappings(sample_keys: Iterable[str]) -> dict:
 # native_id: stable id string, or None to fall back to sha256(record).
 
 
-def _sha_id(rec: dict) -> str:
+def _sha_id(rec: dict, relpath: str = "", ordinal: int = 0) -> str:
+    """Content-derived ``_id``, scoped to the record's position in its source.
+
+    The bare content hash (what this was before) collapses every *duplicate*
+    record onto one ``_id``: a bulk ``index`` of an id that already exists is an
+    overwrite, not an error, so N identical events silently became 1 document.
+    That is not hypothetical — repeated Sysmon events (same image, same command
+    line, same second) are normal, and it cost 33-51% of the injected adversary
+    Sysmon stream (issue #31).
+
+    ``relpath`` + ``ordinal`` scope the hash to "this record, at this position,
+    in this file", which is unique by construction while keeping the id
+    content-derived (contract 1 in the module docstring). ``ordinal`` is the
+    parser's **yield index**, not the physical line number -- parsers skip blank
+    and comment lines -- so anything recomputing an id must enumerate through
+    the same parser rather than counting lines.
+    """
     blob = json.dumps(rec, sort_keys=True, default=str, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+    keyed = f"{relpath}:{ordinal}:{blob}"
+    return hashlib.sha256(keyed.encode("utf-8")).hexdigest()[:32]
+
+
+def doc_id(rec: dict, relpath: str, ordinal: int, native_id: str | None = None) -> str:
+    """THE canonical ES ``_id`` for a parsed record. Single source of truth.
+
+    ``blue_bench_generators/merge/inject.py`` imports this to repoint
+    ground-truth ``where.doc_id`` at the document the ingest will actually
+    write. Two independent implementations of this rule is exactly how the
+    ground-truth pointers came to be computed by one formula and the documents
+    written under another -- do not reintroduce a second copy.
+    """
+    return str(native_id) if native_id else _sha_id(rec, relpath, ordinal)
 
 
 def parse_zeek(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
@@ -190,17 +254,19 @@ _SYSLOG_RE = re.compile(r"^<\d+>\d?\s*(\d{4}-\d{2}-\d{2}T[\d:.]+Z?)\s+(\S+)\s+(\
 
 def parse_syslog(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
     """RFC5424 syslog lines carry a full ISO timestamp."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip():
-            continue
-        m = _SYSLOG_RE.match(raw)
-        if m:
-            when = _parse_iso(m.group(1))
-            rec = {"timestamp": m.group(1), "host": m.group(2), "process": m.group(3),
-                   "pid": m.group(4), "message": m.group(5), "raw": raw}
-        else:
-            when, rec = None, {"raw": raw}
-        yield rec, when, None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip():
+                continue
+            m = _SYSLOG_RE.match(raw)
+            if m:
+                when = _parse_iso(m.group(1))
+                rec = {"timestamp": m.group(1), "host": m.group(2), "process": m.group(3),
+                       "pid": m.group(4), "message": m.group(5), "raw": raw}
+            else:
+                when, rec = None, {"raw": raw}
+            yield rec, when, None
 
 
 _WEB_RE = re.compile(r"^(\S+).*\[([^\]]+)\]\s+\"([^\"]*)\"\s+(\d{3})\s+(\S+)\s+\"([^\"]*)\"\s+\"([^\"]*)\"")
@@ -208,31 +274,47 @@ _WEB_RE = re.compile(r"^(\S+).*\[([^\]]+)\]\s+\"([^\"]*)\"\s+(\d{3})\s+(\S+)\s+\
 
 def parse_web(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
     """Apache combined log: [14/May/2024:12:01:55 +0000]."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip() or raw.startswith("#"):
-            continue
-        m = _WEB_RE.match(raw)
-        if m:
-            when = _parse_apache(m.group(2))
-            rec = {"client_ip": m.group(1), "time": m.group(2), "request": m.group(3),
-                   "status": int(m.group(4)), "bytes": m.group(5), "referrer": m.group(6),
-                   "user_agent": m.group(7), "raw": raw}
-        else:
-            when, rec = None, {"raw": raw}
-        yield rec, when, None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            m = _WEB_RE.match(raw)
+            if m:
+                when = _parse_apache(m.group(2))
+                rec = {"client_ip": m.group(1), "time": m.group(2), "request": m.group(3),
+                       "status": int(m.group(4)), "bytes": m.group(5), "referrer": m.group(6),
+                       "user_agent": m.group(7), "raw": raw}
+            else:
+                when, rec = None, {"raw": raw}
+            yield rec, when, None
 
 
 def parse_lines_passthrough(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:
     """ASA / snort / proxy: keep the raw line; timestamp parsed best-effort."""
-    for raw in path.read_text().splitlines():
-        if not raw.strip() or raw.startswith("#"):
-            continue
-        yield {"raw": raw}, _line_time_best_effort(raw), None
+    with path.open() as f:
+        for raw in f:
+            raw = raw.rstrip("\r\n")
+            if not raw.strip() or raw.startswith("#"):
+                continue
+            yield {"raw": raw}, _line_time_best_effort(raw), None
 
 
 def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:
-    """Merged OT / bridge NDJSON. ``ts`` (epoch) or ``timestamp`` (ISO); ``uid``
-    is the native id. Conn-like records get src/dest aliases like Zeek."""
+    """Merged OT / bridge / injected NDJSON. ``ts`` (epoch) or ``timestamp`` (ISO).
+    Conn-like records get src/dest aliases like Zeek.
+
+    Yields ``None`` as the native id -- deliberately, even though these records
+    carry a ``uid``. A Zeek ``uid`` identifies a *connection*, not a record: an
+    http record shares its conn record's uid, and one connection can carry
+    several http transactions. Splitting by log-type keeps conn and http in
+    different indices, but multiple http transactions on one uid still collide
+    *within* zeek-http, and there is no ``trans_depth`` on these records to
+    disambiguate (it appears nowhere in this codebase). Unlike a real capture,
+    these files are authored by Blue-Bench's own merge/inject rather than being
+    an external native source, so the uid buys no cross-system addressability
+    that the content+position hash does not already provide.
+    """
     with path.open() as f:
         for line in f:
             line = line.strip()
@@ -254,7 +336,7 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
                 rec.setdefault("src_ip", rec.get("id.orig_h", ""))
                 rec.setdefault("dest_ip", rec.get("id.resp_h", ""))
                 rec.setdefault("dest_port", rec.get("id.resp_p", ""))
-            yield rec, when, rec.get("uid")
+            yield rec, when, None
 
 
 # --- timestamp helpers --------------------------------------------------------
@@ -268,10 +350,51 @@ def _parse_iso(s: str) -> datetime | None:
         s = s.replace("Z", "+00:00")
         # python fromisoformat handles 6-digit fractions; trim 7-digit (EVTX)
         s = re.sub(r"(\.\d{6})\d+", r"\1", s)
+        # normalize a colon-less tz offset (e.g. Suricata "+0000") -> "+00:00"
+        s = re.sub(r"([+-]\d{2})(\d{2})$", r"\1:\2", s)
         dt = datetime.fromisoformat(s)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
     except ValueError:
         return None
+
+
+# Sysmon UtcTime is "YYYY-MM-DD HH:MM:SS.fff" (space, ms precision).
+_UTCTIME_FMT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _shift_embedded_times(doc: dict, delta: timedelta) -> None:
+    """Shift EVERY embedded time field by the same delta as @timestamp.
+
+    ``--anchor-end-to-now`` shifts @timestamp, but the record also carries its
+    own clocks — Sysmon ``UtcTime``/``TimeCreated``, Zeek ``ts``, eCAR
+    ``timestamp_ms`` — and if those keep the original capture time the analyst
+    reads two clocks 3 months apart and can't correlate host<->network. Rewrite
+    them in place so a single timeline holds across all sources.
+    """
+    secs = delta.total_seconds()
+    v = doc.get("ts")
+    if v not in (None, ""):
+        try:
+            doc["ts"] = f"{float(v) + secs:.6f}"
+        except (TypeError, ValueError):
+            pass  # non-numeric/unparseable clock value — leave the field untouched
+    v = doc.get("timestamp_ms")
+    if v not in (None, ""):
+        try:
+            doc["timestamp_ms"] = int(v) + int(round(secs * 1000))
+        except (TypeError, ValueError):
+            pass  # non-numeric/unparseable clock value — leave the field untouched
+    v = doc.get("UtcTime")
+    if v:
+        t = _parse_iso(str(v).replace(" ", "T"))
+        if t is not None:
+            doc["UtcTime"] = (t + delta).strftime(_UTCTIME_FMT)[:-3]  # keep ms precision
+    for f in ("TimeCreated", "EventTime", "timestamp"):
+        v = doc.get(f)
+        if v and not str(v).replace(".", "", 1).isdigit():  # ISO-shaped only
+            t = _parse_iso(str(v).replace(" ", "T"))
+            if t is not None:
+                doc[f] = (t + delta).isoformat()
 
 
 def _parse_apache(s: str) -> datetime | None:
@@ -326,6 +449,9 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         return f"ot-{name[:-7]}", parse_ot_ndjson            # ot/modbus.ndjson -> ot-modbus
     if top == "ot_hosts" and name.endswith(".ndjson"):
         return OT_HOSTS_INDEX, parse_ot_ndjson
+    # benign Suricata FP noise wired into the merge (suricata/eve.ndjson)
+    if top == "suricata" and name.endswith(".ndjson"):
+        return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson
     if top == "bridge" and name.endswith(".ndjson"):
         source = name.split(".", 1)[0]                       # "<source>.<log>.ndjson"
         return _BRIDGE_INDEX.get(source, f"bridge-{source}"), parse_ot_ndjson
@@ -342,6 +468,27 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
             return WINDOWS_SYSMON_INDEX, parse_ot_ndjson
         if stream == "zeek":
             return zeek_index(log), parse_ot_ndjson          # zeek-conn / zeek-http / ...
+        if stream == "winsec":
+            return WINDOWS_SECURITY_INDEX, parse_ot_ndjson   # injected auth (4624/4625/...)
+        if stream == "linux":
+            return SYSLOG_INDEX, parse_ot_ndjson             # injected sshd auth
+        if stream == "suricata":
+            return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson  # injected malicious IDS alerts
+        if stream == "wazuh":
+            return WAZUH_INDEX, parse_ot_ndjson              # injected HIDS alerts
+        if stream == "evtx":
+            # Non-Sysmon Windows channels (Security / System / PowerShell),
+            # split per channel by the injector to match how the benign side
+            # writes them. Until 2026-09-10 there was NO evtx branch here, so
+            # the APT's whole Windows-Security channel fell through to the
+            # `return None` below and was silently dropped at ingest -- the
+            # events were written to the corpus, counted in the build summary,
+            # and never reached Elasticsearch (audit D5).
+            #
+            # An UNKNOWN channel gets its own `windows-<slug>` index rather than
+            # falling through: a new channel appearing in a regenerated bundle
+            # must not silently vanish the way Security did.
+            return _EVTX_CHANNEL_INDEX.get(log, f"windows-{log}"), parse_ot_ndjson
         return None
 
     # --- EF telemetry under data/ (routed by filename) ---
@@ -391,6 +538,11 @@ def _recreate_index(url: str, index: str, mappings: dict) -> None:
         sys.exit(1)
 
 
+# Per-index tally of documents that overwrote an existing _id. Non-zero means
+# _id generation collided and telemetry was silently lost (see issue #31).
+_OVERWRITTEN: dict[str, int] = __import__("collections").defaultdict(int)
+
+
 def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 2000) -> int:
     """Bulk-index in batches with 429 backoff.
 
@@ -415,9 +567,26 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
                 time.sleep(min(2 ** attempt, 16))
                 continue
             r.raise_for_status()
-            errs = [it for it in r.json().get("items", []) if "error" in it.get("index", {})]
+            items = r.json().get("items", [])
+            errs = [it for it in items if "error" in it.get("index", {})]
             if errs:
                 log.warning("%d index errors in %s; first: %s", len(errs), index, errs[0])
+            # An `index` of an _id that already exists is an OVERWRITE, and ES
+            # reports it as success ("updated") — so counting chunk-minus-errors
+            # as ingested hid a 33-51% document loss (issue #31). Count and
+            # report overwrites explicitly: on a corpus with unique ids this is
+            # always 0, and any non-zero value means telemetry was destroyed.
+            overwritten = sum(
+                1 for it in items
+                if it.get("index", {}).get("result") == "updated"
+            )
+            if overwritten:
+                log.error(
+                    "%d of %d docs OVERWROTE an existing _id in %s — that many "
+                    "events were silently destroyed; _id generation is colliding",
+                    overwritten, len(chunk), index,
+                )
+                _OVERWRITTEN[index] += overwritten
             ok += len(chunk) - len(errs)
             break
         else:
@@ -426,6 +595,13 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
 
 
 # --- main ingest --------------------------------------------------------------
+
+
+# High-volume benign OT protocol indices — subject to --ot-sample-rate. The OT
+# segment is benign baseline (no OT attack), so a representative slice fully
+# supports the OT prompts (protocols/devices/Purdue/normalcy) while keeping the
+# corpus ingestable on a single-node ES. ot-hosts is small and always kept whole.
+_OT_SAMPLE_INDICES = {"ot-modbus", "ot-iec104", "ot-dnp3", "ot-s7comm", "ot-conn"}
 
 
 def _corpus_window(ef_dir: Path) -> tuple[datetime | None, datetime | None]:
@@ -453,7 +629,8 @@ def _corpus_window(ef_dir: Path) -> tuple[datetime | None, datetime | None]:
     return None, None
 
 
-def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2000) -> dict[str, int]:
+def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2000,
+           ot_sample_rate: int = 1) -> dict[str, int]:
     """Stream the corpus into ES with constant memory.
 
     The parsers are per-file generators; we flush each index's docs to ES in
@@ -461,8 +638,13 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     dict first (which OOMs on an L-scale ~17 GB-of-OT corpus). The time anchor
     + year are derived from the corpus WINDOW (GROUND_TRUTH / manifest), not by
     scanning every event, so a single streaming pass suffices.
+
+    High-volume benign OT protocol indices are optionally subsampled
+    (``ot_sample_rate`` keeps 1 of every N records) so a GB-scale OT baseline
+    stays ingestable; IT/attack telemetry is never sampled.
     """
     walk_root = ef_dir
+    _OVERWRITTEN.clear()   # module-global tally; a second ingest() must start clean
     win_start, win_end = _corpus_window(ef_dir)
     if win_end is not None:
         _CORPUS_YEAR["y"] = win_end.year  # for snort/ASA line-format year inference
@@ -475,6 +657,7 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     counts: dict[str, int] = defaultdict(int)
     buffers: dict[str, list[tuple[str, dict]]] = defaultdict(list)
     created: set[str] = set()
+    ot_seen: dict[str, int] = defaultdict(int)
 
     def _flush(index: str) -> None:
         docs = buffers[index]
@@ -493,12 +676,25 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
         if routed is None:
             continue
         index, parser = routed
-        for rec, when, native_id in parser(path):
+        relpath = str(path.relative_to(walk_root)).replace("\\", "/")
+        sample = ot_sample_rate if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES) else 1
+        for ordinal, (rec, when, native_id) in enumerate(parser(path)):
+            if sample > 1:
+                # keep 1 of every `sample` benign OT records; the dropped 49/50
+                # never buffer, so subsampling stays constant-memory too
+                seen = ot_seen[index]
+                ot_seen[index] = seen + 1
+                if seen % sample != 0:
+                    continue
             doc = dict(rec)
             eff = (when + delta) if (delta and when) else when
             if eff is not None:
                 doc["@timestamp"] = eff.isoformat()
-            buffers[index].append((native_id or _sha_id(rec), doc))
+            # Keep the record's own clocks (Sysmon UtcTime, Zeek ts, ...) in sync
+            # with the shifted @timestamp so host<->network correlation holds.
+            if delta:
+                _shift_embedded_times(doc, delta)
+            buffers[index].append((doc_id(rec, relpath, ordinal, native_id), doc))
             if len(buffers[index]) >= batch:
                 _flush(index)
     for index in list(buffers):
@@ -509,6 +705,14 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     if win_start and win_end:
         log.info("corpus window: %s .. %s (shift=%s)", win_start.isoformat(), win_end.isoformat(),
                  "end->now" if delta else "none")
+    if _OVERWRITTEN:
+        total = sum(_OVERWRITTEN.values())
+        raise RuntimeError(
+            f"{total} documents overwrote an existing _id across "
+            f"{len(_OVERWRITTEN)} index(es): {dict(_OVERWRITTEN)}. That many events "
+            f"were silently destroyed and any ground-truth pointer at them is "
+            f"orphaned. This corpus is NOT usable for grading (issue #31)."
+        )
     return dict(counts)
 
 
@@ -518,12 +722,17 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--es-url", default="http://localhost:9200")
     p.add_argument("--anchor-end-to-now", action="store_true",
                    help="shift the whole corpus window so it ends ~now (spacing preserved)")
+    p.add_argument("--ot-sample-rate", type=int, default=1,
+                   help="index 1 of every N benign OT protocol records "
+                        "(modbus/dnp3/iec104/s7comm/ot-conn) to keep a GB-scale corpus "
+                        "ingestable; 1 = keep all. IT/attack telemetry is never sampled.")
     p.add_argument("-v", "--verbose", action="count", default=0)
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")
     _wait_for_es(args.es_url)
-    counts = ingest(args.ef_dir, args.es_url, anchor_end_to_now=args.anchor_end_to_now)
+    counts = ingest(args.ef_dir, args.es_url, anchor_end_to_now=args.anchor_end_to_now,
+                    ot_sample_rate=args.ot_sample_rate)
     total = sum(counts.values())
     print(f"ingested {total} docs across {len(counts)} indices:")
     for idx, n in sorted(counts.items()):

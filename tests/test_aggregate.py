@@ -135,7 +135,7 @@ def test_render_bluf_smoke(tmp_path: Path):
     _write_scored(run, "p2-01", 3, 3, 3, 3)
     result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
     md = render_bluf(result)
-    assert "# Phase 2 BLUF" in md
+    assert "# BLUF — gemma4-e4b" in md
     assert "gemma4-e4b" in md
     assert "CLEARS THRESHOLD" in md
     assert "| p2-01 |" in md
@@ -194,3 +194,189 @@ def test_verdict_reports_hallucination_count(tmp_path: Path):
     assert "| p2-01 | triage | FAIL |" in md
     # Hallucination count column shows 1.
     assert " 1 |" in md
+
+
+# ── F6: the "absent dimension = N/A, not 0" fix (regression guard) ────────────
+def _write_scored_dims(run_dir: Path, pid: str, dims: dict, verdict: str = "PARTIAL") -> None:
+    """Scored fixture that may OMIT a dimension (e.g. an RQ2 prompt with no
+    discrimination) — the case the N/A fix protects."""
+    (run_dir / "scored").mkdir(parents=True, exist_ok=True)
+    scored = {
+        "prompt_id": pid,
+        "dimensions": {k: {"score": v, "justification": "j"} for k, v in dims.items()},
+        "verdict": verdict,
+        "hallucinations": [],
+    }
+    (run_dir / "scored" / f"{pid}.json").write_text(json.dumps(scored))
+
+
+def test_verdict_absent_key_dimension_is_na_not_fail():
+    from blue_bench_eval.aggregate import _verdict_from_rubric
+    key = ["tool_usage", "findings", "attribution", "discrimination"]
+    # discrimination ABSENT (RQ2 prompt) must NOT force FAIL nor block PASS.
+    assert _verdict_from_rubric({"tool_usage": 3, "findings": 3, "attribution": 3}, key) == "PASS"
+    # a PRESENT key dimension scoring 0 still FAILs.
+    assert _verdict_from_rubric({"tool_usage": 0, "findings": 3, "attribution": 3}, key) == "FAIL"
+
+
+def test_aggregate_absent_dimension_excluded_not_zeroed(tmp_path: Path):
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)  # all four dims scored 3
+    # p2-02 OMITS 'reasoning' entirely (the N/A case).
+    _write_scored_dims(run, "p2-02", {"tool_usage": 3, "findings": 3, "response_quality": 3})
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    # 'reasoning' is present on 1 of 2 prompts at 3 → mean over PRESENT only = 100%,
+    # NOT 50% (which is what counting the absent one as 0 would give).
+    assert result.dim_pct["reasoning"] == 100.0
+    # and the omitting prompt is not FAILed for the absent dimension.
+    verdicts = {x["id"]: x["verdict"] for x in result.verdicts}
+    assert verdicts["p2-02"] != "FAIL"
+
+
+def test_overall_is_observation_weighted_not_mean_of_means(tmp_path: Path):
+    # p2-01: 4 dims @ 3 (100%); p2-02: 3 dims @ 0 (0%), 'reasoning' omitted.
+    # mean-of-means would be mean(50,50,50,100)=62.5; observation-weighted is
+    # (4*100 + 3*0)/7 = 57.1. The headline must be the latter.
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    _write_scored_dims(run, "p2-02", {"tool_usage": 0, "findings": 0, "response_quality": 0})
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert round(result.overall_pct, 1) == 57.1
+
+
+# ── B4: an all-N/A key dimension must not fail the run-level gate ─────────────
+
+def test_absent_key_dimension_does_not_fail_gate(tmp_path: Path):
+    # A 100%-perfect run where a key dimension (discrimination) is N/A for every
+    # prompt must CLEAR the threshold, not report BELOW THRESHOLD. This guards
+    # the F7 gate re-introducing the F6 "N/A = 0" bug at the run level.
+    from blue_bench_eval.aggregate import _load_rubric
+
+    run = tmp_path / "run"
+    for pid in ("p3-01", "p3-02", "p3-03"):
+        _write_trace(run, pid)
+        # All three dimensions scored 3; discrimination omitted (N/A).
+        _write_scored_dims(
+            run, pid,
+            {"tool_usage": 3, "findings": 3, "attribution": 3},
+            verdict="PASS",
+        )
+
+    phase3 = REPO / "blue_bench_eval" / "rubrics" / "phase3.yaml"
+    result = aggregate(run, phase3, prompts_dir=PROMPTS)
+
+    # discrimination is absent from dim_pct (N/A), so it must not be gated.
+    assert "discrimination" not in result.dim_pct
+    assert "discrimination" not in result.passes_key_dims
+    # The run is 100% on every scored dimension and must clear.
+    assert result.overall_pct == 100.0
+    assert result.passes_overall
+    assert all(result.passes_key_dims.values())
+    md = render_bluf(result)
+    assert "CLEARS THRESHOLD" in md
+    assert "BELOW THRESHOLD" not in md
+
+
+# ── D3: a partial judge run must not aggregate into a confident headline ─────
+
+def test_aggregate_refuses_missing_scored(tmp_path: Path):
+    from blue_bench_eval.aggregate import IncompleteRunError
+
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    # Only p2-01 is scored — p2-02 is missing (a judge run that skipped it).
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+
+    with pytest.raises(IncompleteRunError):
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+
+
+def test_aggregate_refuses_stale_scored_id(tmp_path: Path):
+    # D-C: a stale scored/*.json (from a prior slate) makes the counts match
+    # while a genuinely unscored prompt passes unnoticed. The set difference
+    # must catch both the missing prompt AND the stale id.
+    from blue_bench_eval.aggregate import IncompleteRunError
+
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_trace(run, "p2-02")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    # p2-02 is unscored, but a stale p2-99 makes len(scored) == len(traces).
+    _write_scored(run, "p2-99", 3, 3, 3, 3)
+
+    with pytest.raises(IncompleteRunError) as exc:
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert "p2-02" in str(exc.value)  # the missing prompt is named
+    assert "p2-99" in str(exc.value)  # the stale id is named
+
+
+def test_aggregate_refuses_crashed_prompt_via_run_meta(tmp_path: Path):
+    # Round-7 Defect 1: a crashed prompt (written as <id>.error.json) must still
+    # be in the denominator via run_meta.json["prompt_ids"], so a partial run
+    # fails closed instead of silently reporting 100% over the survivors.
+    from blue_bench_eval.aggregate import IncompleteRunError
+
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    # p2-02 crashed — no trace body, only an error file.
+    (run / "prompts" / "p2-02.error.json").write_text(
+        json.dumps({"prompt_id": "p2-02", "error": "boom"})
+    )
+    # run_meta records the full slate (both prompts), including the crashed one.
+    (run / "run_meta.json").write_text(
+        json.dumps({"prompt_ids": ["p2-01", "p2-02"]})
+    )
+
+    with pytest.raises(IncompleteRunError) as exc:
+        aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert "p2-02" in str(exc.value)
+
+
+def test_aggregate_allow_partial_grades_survivors(tmp_path: Path):
+    # The deliberate escape hatch: --allow-partial aggregates the survivors.
+    run = tmp_path / "run"
+    _write_trace(run, "p2-01")
+    _write_scored(run, "p2-01", 3, 3, 3, 3)
+    (run / "prompts" / "p2-02.error.json").write_text(
+        json.dumps({"prompt_id": "p2-02", "error": "boom"})
+    )
+    (run / "run_meta.json").write_text(
+        json.dumps({"prompt_ids": ["p2-01", "p2-02"]})
+    )
+
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS, allow_partial=True)
+    assert result.prompt_count == 1
+    assert result.overall_pct == 100.0
+    # Survivors-only is the intended behaviour here — but the result and the BLUF
+    # must SAY so. Without this a 1-of-N partial run rendered a bare
+    # "CLEARS THRESHOLD" indistinguishable from a complete run.
+    assert result.partial is True
+    assert result.expected_count == 2
+    assert result.missing_scored == ["p2-02"]
+    bluf = render_bluf(result)
+    assert "INCOMPLETE RUN" in bluf
+    assert "Scored 1 of 2 prompts" in bluf
+    assert "threshold NOT assessable" in bluf
+    assert "**CLEARS THRESHOLD**" not in bluf
+
+
+def test_aggregate_complete_run_is_not_marked_partial(tmp_path: Path):
+    # The converse: a complete run must carry no partial marker at all.
+    run = tmp_path / "run"
+    for pid in ("p2-01", "p2-02"):
+        _write_trace(run, pid)
+        _write_scored(run, pid, 3, 3, 3, 3)
+    (run / "run_meta.json").write_text(json.dumps({"prompt_ids": ["p2-01", "p2-02"]}))
+
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert result.partial is False
+    assert result.missing_scored == [] and result.stale_scored == []
+    bluf = render_bluf(result)
+    assert "INCOMPLETE" not in bluf
+    assert "**CLEARS THRESHOLD**" in bluf

@@ -6,7 +6,7 @@
 # tag differs (e.g. gpt-oss:120b vs gpt-oss:120b-cloud). Copy this file to add
 # other large cloud models (qwen3-coder:480b, deepseek-v3.1:671b, etc.).
 name: gpt-oss-120b-cloud
-model_id: gpt-oss:120b-cloud
+model_id: gpt-oss:120b
 tool_protocol: native
 prompt_style: terse
 context_size: 32768

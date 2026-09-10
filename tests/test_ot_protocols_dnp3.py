@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols.dnp3 import (
     AnomalyWindow,
     DNP3_PORT,
@@ -106,8 +107,10 @@ def test_schema_dnp3_records():
 def test_no_events_outside_window():
     net = build_ot_network("M")
     events = list(generate(net, T0, T1, seed=0))
-    start_e = T0.timestamp()
-    end_e = T1.timestamp()
+    # ``as_utc`` (not a bare naive ``.timestamp()``) so the expected
+    # bounds are the UTC epochs the generator emits, on any machine TZ.
+    start_e = as_utc(T0).timestamp()
+    end_e = as_utc(T1).timestamp()
     for ev in events:
         t = float(ev["ts"])
         assert start_e <= t < end_e, f"ts {t} outside [{start_e}, {end_e})"

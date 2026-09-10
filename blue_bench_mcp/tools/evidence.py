@@ -5,13 +5,13 @@ strings_extract) so Phase 2 prompts can use their archive wording unchanged.
 """
 from __future__ import annotations
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.tool_classes.evidence import EvidenceTool
 
 
-def register(server: FastMCP, cfg: ServerConfig) -> None:
+def register(server: MCPServer, cfg: ServerConfig) -> None:
     tool = EvidenceTool(cfg)
 
     @server.tool()

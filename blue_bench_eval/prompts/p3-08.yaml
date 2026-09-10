@@ -1,0 +1,21 @@
+id: p3-08
+category: lateral_movement
+title: Any lateral movement?
+question: |
+  Has any host been used to move laterally to another system? Show me the source,
+  the destination, and the mechanism, and say what evidence makes it lateral
+  movement rather than normal administration.
+expected_tools:
+  - get_process_events
+  - search_auth_events
+  - get_connections
+expected_findings:
+  - synonyms: ["lateral movement", "net use", "admin share", "C$", "T1021.002"]
+  - synonyms: ["pass-the-hash", "pass the hash", "NTLM", "Type 3", "LogonType 3", "T1550.002"]
+  - synonyms: ["srv-files-01", "file server"]
+  - synonyms: ["corp-admin", "privileged account", "administrator"]
+  - synonyms: ["wkst-03", "wkst-11", "source host"]
+pass_criteria: Identifies lateral movement — the APT's admin-share use from wkst-03 and/or the pass-the-hash NTLM network logon into srv-files-01 from wkst-11 — with the source, destination, and mechanism grounded in the evidence.
+tags: [tier1, lateral_movement, pth, auth]
+max_turns: 20
+tier: 1

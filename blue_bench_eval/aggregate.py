@@ -18,6 +18,12 @@ from pydantic import BaseModel, ConfigDict, Field
 Verdict = Literal["PASS", "PARTIAL", "FAIL"]
 
 
+class IncompleteRunError(RuntimeError):
+    """A run whose scored/ has fewer files than prompts/ — the silent-denominator
+    failure. Aggregating it would report a confident headline over the survivors
+    of a partial judge run."""
+
+
 class DimensionScore(BaseModel):
     score: int = Field(..., ge=0, le=3)
     justification: str
@@ -28,6 +34,9 @@ class PromptScore(BaseModel):
     dimensions: dict[str, DimensionScore]
     verdict: Verdict
     hallucinations: list[str] = Field(default_factory=list)
+    # Per the rubric's tuning_recommendations item: concrete bench/profile
+    # changes to lift the lowest-scoring dimensions (not fixes to the model).
+    tuning_recommendations: list[str] = Field(default_factory=list)
 
 
 class RubricThreshold(BaseModel):
@@ -55,13 +64,26 @@ class AggregateResult:
     dim_pct: dict[str, float] = field(default_factory=dict)
     overall_pct: float = 0.0
 
-    # Per-category rollups.
+    # Per-category rollups (category = RQ/topic axis).
     per_category: dict[str, dict[str, float]] = field(default_factory=dict)
+
+    # Per-tier rollups (tier = complexity axis, orthogonal to category).
+    # Keyed by int tier (1|2|3); each value mirrors per_category's dim map +
+    # "overall", plus an integer "count" of prompts in that tier.
+    per_tier: dict[int, dict[str, float]] = field(default_factory=dict)
 
     # Threshold check.
     threshold: RubricThreshold | None = None
     passes_overall: bool = False
     passes_key_dims: dict[str, bool] = field(default_factory=dict)
+
+    # Partial-run provenance. Set when --allow-partial suppressed the
+    # completeness check: without this the BLUF of a 1-of-28 run was
+    # byte-indistinguishable from a complete one.
+    partial: bool = False
+    expected_count: int = 0
+    missing_scored: list[str] = field(default_factory=list)
+    stale_scored: list[str] = field(default_factory=list)
 
     # Per-prompt detail.
     verdicts: list[dict] = field(default_factory=list)  # [{id, category, verdict, dim_scores}]
@@ -84,14 +106,14 @@ def _score_to_pct(score: int) -> float:
 
 
 def _verdict_from_rubric(dim_scores: dict[str, int], key_dimensions: list[str]) -> Verdict:
+    # A key dimension that is ABSENT is N/A (e.g. discrimination on an RQ2 prompt),
+    # not a zero — it must not force FAIL. Only scored dimensions count.
     if any(s == 0 for s in dim_scores.values()):
         return "FAIL"
-    for kd in key_dimensions:
-        if dim_scores.get(kd, 0) == 0:
-            return "FAIL"
-    if all(s >= 2 for s in dim_scores.values()) and all(
-        dim_scores.get(kd, 0) >= 2 for kd in key_dimensions
-    ):
+    present_keys = [kd for kd in key_dimensions if kd in dim_scores]
+    if any(dim_scores[kd] == 0 for kd in present_keys):
+        return "FAIL"
+    if all(s >= 2 for s in dim_scores.values()) and all(dim_scores[kd] >= 2 for kd in present_keys):
         return "PASS"
     return "PARTIAL"
 
@@ -115,10 +137,25 @@ def _load_traces(run_dir: Path) -> dict[str, dict]:
     if not prompts_dir.exists():
         return out
     for f in sorted(prompts_dir.glob("*.json")):
+        # A crashed prompt is written as <id>.error.json (qualify.py) and carries
+        # no trace body — it is not a trace, so it must not enter the trace map.
+        # (The authoritative denominator is run_meta.json["prompt_ids"], not this
+        # map — see aggregate().)
+        if f.name.endswith(".error.json"):
+            continue
         with open(f) as fh:
             data = json.load(fh)
         out[data["prompt_id"]] = data
     return out
+
+
+def _load_run_meta(run_dir: Path) -> dict | None:
+    """Load run_meta.json (written by qualify) — the authoritative prompt slate."""
+    meta_path = run_dir / "run_meta.json"
+    if not meta_path.exists():
+        return None
+    with open(meta_path) as fh:
+        return json.load(fh)
 
 
 def _load_rubric(rubric_path: Path) -> tuple[RubricThreshold, list[str], list[str], str]:
@@ -146,15 +183,64 @@ def _load_prompt_categories(prompts_dir: Path, prefix: str = "p2-") -> dict[str,
     return cats
 
 
+def _load_prompt_tiers(prompts_dir: Path, prefix: str = "p2-") -> dict[str, int]:
+    """Map prompt_id -> complexity tier (1|2|3) by reading the YAML specs.
+
+    Mirrors the PromptSpec schema default: a prompt that omits `tier` is
+    treated as tier 3 (the complex/leading tier).
+    """
+    tiers: dict[str, int] = {}
+    for f in sorted(prompts_dir.glob(f"{prefix}*.yaml")):
+        with open(f) as fh:
+            data = yaml.safe_load(fh)
+        tiers[data["id"]] = int(data.get("tier", 3))
+    return tiers
+
+
 def aggregate(
     run_dir: Path,
     rubric_path: Path,
     prompts_dir: Path | None = None,
+    *,
+    allow_partial: bool = False,
 ) -> AggregateResult:
     scores = _load_scored(run_dir)
     traces = _load_traces(run_dir)
+    meta = _load_run_meta(run_dir)
     threshold, dimensions, key_dimensions, prompt_prefix = _load_rubric(rubric_path)
     categories = _load_prompt_categories(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
+    tiers = _load_prompt_tiers(prompts_dir, prefix=prompt_prefix) if prompts_dir else {}
+
+    # D3/D-C/round-7 Defect 1: a silent denominator — scored files that don't
+    # match the run's actual prompt slate — would let a partial or stale run
+    # report a confident headline. The authoritative slate is
+    # run_meta.json["prompt_ids"] (written by qualify, includes crashed prompts);
+    # fall back to the trace map when run_meta is absent (e.g. hand-built runs).
+    # ``allow_partial`` is the deliberate escape hatch for survivors-only.
+    expected_ids: set[str] | None = None
+    if meta and meta.get("prompt_ids"):
+        expected_ids = set(meta["prompt_ids"])
+    elif traces:
+        expected_ids = set(traces)
+
+    if expected_ids is not None:
+        scored_ids = {s.prompt_id for s in scores}
+        missing = sorted(expected_ids - scored_ids)
+        stale = sorted(scored_ids - expected_ids)
+    else:
+        missing, stale = [], []
+
+    if expected_ids is not None and not allow_partial:
+        if missing or stale:
+            parts = []
+            if missing:
+                parts.append(f"missing scored: {', '.join(missing)}")
+            if stale:
+                parts.append(f"stale scored (not in run): {', '.join(stale)}")
+            raise IncompleteRunError(
+                f"scored {len(scores)}/{len(expected_ids)} prompts; {'; '.join(parts)}. "
+                "Re-run the judge, or pass --allow-partial to aggregate the survivors."
+            )
 
     result = AggregateResult(
         run_dir=run_dir,
@@ -163,6 +249,10 @@ def aggregate(
         dimensions=dimensions,
         key_dimensions=key_dimensions,
     )
+    result.partial = bool(missing or stale)
+    result.expected_count = len(expected_ids) if expected_ids is not None else len(scores)
+    result.missing_scored = missing
+    result.stale_scored = stale
 
     # Pull run-level metadata from the first trace (profile is uniform per run).
     if traces:
@@ -171,29 +261,63 @@ def aggregate(
         result.model_id = first.get("model_id", "")
         result.total_duration_ms = sum(t.get("total_duration_ms", 0) for t in traces.values())
 
-    # Dimension percentages (run-level).
+    # Dimension percentages (run-level). A dimension that NO prompt scored
+    # (e.g. discrimination/RQ3 on an RQ1/RQ2-only run, marked N/A by omission)
+    # is excluded entirely — counting it as 0 would wrongly drag overall down.
     for dim in dimensions:
         dim_pcts = [_score_to_pct(s.dimensions[dim].score) for s in scores if dim in s.dimensions]
-        result.dim_pct[dim] = mean(dim_pcts) if dim_pcts else 0.0
-    result.overall_pct = mean(result.dim_pct.values()) if result.dim_pct else 0.0
+        if dim_pcts:
+            result.dim_pct[dim] = mean(dim_pcts)
+    # Overall is observation-weighted (mean over every scored (prompt, dimension)),
+    # NOT a mean of the per-dimension means — so a thinly-sampled dimension (e.g.
+    # discrimination on ~3 RQ3 prompts) can't sway the headline as much as one
+    # scored on all 26. Each graded score counts once.
+    all_obs = [_score_to_pct(s.dimensions[d].score)
+               for s in scores for d in dimensions if d in s.dimensions]
+    result.overall_pct = mean(all_obs) if all_obs else 0.0
 
     # Threshold check.
     result.passes_overall = result.overall_pct >= threshold.overall_pct
     dim_thresholds = threshold.dim_thresholds()
     for kd in key_dimensions:
-        result.passes_key_dims[kd] = result.dim_pct.get(kd, 0.0) >= dim_thresholds.get(kd, 0.0)
+        # A dimension absent from dim_pct was N/A for every prompt (e.g.
+        # discrimination on an RQ1/RQ2-only run) — it is not a failure, so it
+        # must not be gated. Only dimensions that were actually scored count.
+        if kd in result.dim_pct:
+            result.passes_key_dims[kd] = result.dim_pct[kd] >= dim_thresholds.get(kd, 0.0)
 
     # Per-category rollup.
     by_cat: dict[str, list[PromptScore]] = defaultdict(list)
     for s in scores:
         by_cat[categories.get(s.prompt_id, "uncategorized")].append(s)
     for cat, cat_scores in by_cat.items():
-        cat_dims = {
-            dim: mean(_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions)
-            for dim in dimensions
-        }
-        cat_dims["overall"] = mean(cat_dims.values())
+        cat_dims: dict[str, float] = {}
+        for dim in dimensions:
+            pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in cat_scores if dim in sc.dimensions]
+            if pcts:
+                cat_dims[dim] = mean(pcts)
+        cat_obs = [_score_to_pct(sc.dimensions[d].score)
+                   for sc in cat_scores for d in dimensions if d in sc.dimensions]
+        cat_dims["overall"] = mean(cat_obs) if cat_obs else 0.0
         result.per_category[cat] = cat_dims
+
+    # Per-tier rollup (complexity axis). Tier defaults to 3 for any prompt
+    # whose spec omits the field, matching the PromptSpec schema default.
+    by_tier: dict[int, list[PromptScore]] = defaultdict(list)
+    for s in scores:
+        by_tier[tiers.get(s.prompt_id, 3)].append(s)
+    for tier, tier_scores in by_tier.items():
+        tier_dims: dict[str, float] = {}
+        for dim in dimensions:
+            pcts = [_score_to_pct(sc.dimensions[dim].score) for sc in tier_scores if dim in sc.dimensions]
+            if pcts:
+                tier_dims[dim] = mean(pcts)
+        # Observation-weighted overall for the tier (consistent with the headline).
+        tier_obs = [_score_to_pct(sc.dimensions[d].score)
+                    for sc in tier_scores for d in dimensions if d in sc.dimensions]
+        tier_dims["overall"] = mean(tier_obs) if tier_obs else 0.0
+        tier_dims["count"] = float(len(tier_scores))
+        result.per_tier[tier] = tier_dims
 
     # Per-prompt verdict detail.
     for s in scores:
@@ -204,6 +328,7 @@ def aggregate(
                 "verdict": s.verdict,
                 "dimensions": {dim: s.dimensions[dim].score for dim in dimensions if dim in s.dimensions},
                 "hallucinations": s.hallucinations,
+                "tuning_recommendations": s.tuning_recommendations,
             }
         )
 
@@ -219,12 +344,34 @@ def render_bluf(result: AggregateResult) -> str:
     lines: list[str] = []
     lines.append(f"# BLUF — {result.profile_name}")
     lines.append("")
+    if result.partial:
+        # A partial run's numbers are computed over the survivors only. Saying so
+        # once at the top and again on the verdict line is the difference between
+        # a caveated result and a wrong one.
+        lines.append(
+            f"> **INCOMPLETE RUN — {len(result.missing_scored) and 'partial' or 'stale'} "
+            f"slate.** Scored {result.prompt_count} of {result.expected_count} prompts "
+            "(`--allow-partial`). Every number below is over the scored subset only "
+            "and is NOT comparable to a full-slate run."
+        )
+        if result.missing_scored:
+            lines.append(f">")
+            lines.append(f"> Unscored: {', '.join(result.missing_scored)}")
+        if result.stale_scored:
+            lines.append(f">")
+            lines.append(f"> Scored but not in this run: {', '.join(result.stale_scored)}")
+        lines.append("")
     lines.append(f"- **Run directory:** `{result.run_dir}`")
     lines.append(f"- **Model:** `{result.model_id}`")
     lines.append(f"- **Prompts:** {result.prompt_count}")
     if result.total_duration_ms:
         lines.append(f"- **Total wall time:** {result.total_duration_ms / 1000:.1f}s")
     lines.append("")
+
+    # A dimension absent from dim_pct was N/A for every prompt (e.g. RQ3
+    # discrimination on an RQ1/RQ2-only run) — show N/A, not a spurious 0.0%.
+    def _pct(dim: str) -> str:
+        return f"{result.dim_pct[dim]:.1f}%" if dim in result.dim_pct else "N/A"
 
     lines.append("## Threshold check")
     lines.append("")
@@ -237,15 +384,23 @@ def render_bluf(result: AggregateResult) -> str:
     )
     for kd in key_dimensions:
         kd_threshold = dim_thresholds.get(kd, 0.0)
+        na = kd not in result.dim_pct
         kd_pass = result.passes_key_dims.get(kd, True)
+        pass_mark = "—" if na else ("✓" if kd_pass else "✗")
         lines.append(
-            f"| {kd.replace('_', ' ').title()} | {result.dim_pct.get(kd, 0.0):.1f}% | "
-            f"≥{kd_threshold:.0f}% | {'✓' if kd_pass else '✗'} |"
+            f"| {kd.replace('_', ' ').title()} | {_pct(kd)} | "
+            f"≥{kd_threshold:.0f}% | {pass_mark} |"
         )
     lines.append("")
 
     all_pass = result.passes_overall and all(result.passes_key_dims.values())
     verdict = "**CLEARS THRESHOLD**" if all_pass else "**BELOW THRESHOLD — tuning required**"
+    if result.partial:
+        # Never let a partial run render a bare pass verdict.
+        verdict = (
+            f"**INCOMPLETE — {result.prompt_count}/{result.expected_count} prompts scored; "
+            f"threshold NOT assessable.** (Subset would read: {verdict.strip('*')})"
+        )
     lines.append(f"{verdict}")
     lines.append("")
 
@@ -254,7 +409,7 @@ def render_bluf(result: AggregateResult) -> str:
     lines.append("| Dimension | Score |")
     lines.append("|-----------|-------|")
     for dim in dimensions:
-        lines.append(f"| {dim} | {result.dim_pct.get(dim, 0.0):.1f}% |")
+        lines.append(f"| {dim} | {_pct(dim)} |")
     lines.append("")
 
     if result.per_category:
@@ -266,7 +421,27 @@ def render_bluf(result: AggregateResult) -> str:
         lines.append(sep)
         for cat, dims in sorted(result.per_category.items()):
             row = f"| {cat} | {dims.get('overall', 0.0):.1f}% | "
-            row += " | ".join(f"{dims.get(d, 0.0):.1f}%" for d in dimensions)
+            row += " | ".join(f"{dims[d]:.1f}%" if d in dims else "N/A" for d in dimensions)
+            row += " |"
+            lines.append(row)
+        lines.append("")
+
+    if result.per_tier:
+        # Complexity axis (orthogonal to category). Shows where a model falls
+        # off the complexity curve. 1 = simple/single-pivot, 2 = middle/
+        # scoped-work-mode, 3 = complex/leading.
+        tier_labels = {1: "1 (simple)", 2: "2 (middle)", 3: "3 (complex)"}
+        lines.append("## Per tier")
+        lines.append("")
+        header = "| Tier | Prompts | Overall | " + " | ".join(d.replace("_", " ").title() for d in dimensions) + " |"
+        sep = "|------|---------|---------|" + "|".join("-" * max(len(d.replace("_", " ").title()) + 2, 9) for d in dimensions) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for tier in sorted(result.per_tier):
+            dims = result.per_tier[tier]
+            count = int(dims.get("count", 0))
+            row = f"| {tier_labels.get(tier, str(tier))} | {count} | {dims.get('overall', 0.0):.1f}% | "
+            row += " | ".join(f"{dims[d]:.1f}%" if d in dims else "N/A" for d in dimensions)
             row += " |"
             lines.append(row)
         lines.append("")
@@ -284,6 +459,20 @@ def render_bluf(result: AggregateResult) -> str:
         dim_cols = " | ".join(str(d.get(dim, "-")) for dim in dimensions)
         lines.append(f"| {v['id']} | {v['category']} | {v['verdict']} | {dim_cols} | {halluc} |")
     lines.append("")
+
+    # Tuning recommendations (rubric output item) — bench/profile changes to
+    # lift the lowest-scoring dimensions, grouped per prompt.
+    if any(v.get("tuning_recommendations") for v in result.verdicts):
+        lines.append("## Tuning recommendations")
+        lines.append("")
+        for v in result.verdicts:
+            recs = v.get("tuning_recommendations") or []
+            if not recs:
+                continue
+            lines.append(f"**{v['id']}** ({v['category']}):")
+            for r in recs:
+                lines.append(f"- {r}")
+            lines.append("")
 
     return "\n".join(lines)
 
@@ -310,8 +499,18 @@ def diff_runs(result_a: AggregateResult, result_b: AggregateResult) -> str:
     lines.append("| Dimension | A | B | Δ |")
     lines.append("|-----------|---|---|---|")
     for dim in ("overall", *all_dims):
-        a = result_a.overall_pct if dim == "overall" else result_a.dim_pct.get(dim, 0.0)
-        b = result_b.overall_pct if dim == "overall" else result_b.dim_pct.get(dim, 0.0)
+        if dim == "overall":
+            a, b = result_a.overall_pct, result_b.overall_pct
+        else:
+            a = result_a.dim_pct.get(dim)
+            b = result_b.dim_pct.get(dim)
+        # D-L: an N/A dimension (absent from dim_pct) must render as N/A, not a
+        # fabricated 0.0% delta.
+        if a is None or b is None:
+            a_s = f"{a:.1f}%" if a is not None else "N/A"
+            b_s = f"{b:.1f}%" if b is not None else "N/A"
+            lines.append(f"| {dim} | {a_s} | {b_s} | N/A |")
+            continue
         delta = b - a
         arrow = "↑" if delta > 0 else "↓" if delta < 0 else "="
         lines.append(f"| {dim} | {a:.1f}% | {b:.1f}% | {arrow} {delta:+.1f} |")

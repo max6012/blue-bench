@@ -44,9 +44,10 @@ import hashlib
 import logging
 import random
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols._uid import link_uid as _uid
 from blue_bench_generators.ot_protocols.topology import (
     Device,
@@ -132,6 +133,13 @@ class AnomalyWindow:
     end: datetime
     target_device: str | None = None
 
+    def __post_init__(self) -> None:
+        # Naive input means UTC (see ``as_utc``); coerce so every epoch
+        # derived from the window is TZ-independent and so the window
+        # never compares naive-vs-aware against ``generate``'s bounds.
+        object.__setattr__(self, "start", as_utc(self.start))
+        object.__setattr__(self, "end", as_utc(self.end))
+
 
 # --- helpers ---------------------------------------------------------------
 
@@ -169,7 +177,9 @@ def _is_business_hour(ts: datetime) -> bool:
 
 def _first_tuesday(year: int, month: int) -> datetime:
     """Date of the first Tuesday in (year, month) at 00:00 UTC."""
-    d = datetime(year, month, 1)
+    # Aware UTC: ``_in_maintenance`` compares this against the
+    # (now aware) window timestamps, and naive-vs-aware would raise.
+    d = datetime(year, month, 1, tzinfo=timezone.utc)
     # weekday(): Mon=0, Tue=1
     offset = (1 - d.weekday()) % 7
     return d + timedelta(days=offset)
@@ -185,6 +195,9 @@ def _maintenance_interval(year: int, month: int) -> tuple[datetime, datetime]:
 
 
 def _in_maintenance(ts: datetime) -> bool:
+    # Tolerate a naive-UTC ``ts`` so direct callers (tests, other
+    # generators) do not hit a naive-vs-aware comparison TypeError.
+    ts = as_utc(ts)
     mstart, mend = _maintenance_interval(ts.year, ts.month)
     return mstart <= ts < mend
 
@@ -640,6 +653,12 @@ def generate(
     Yields:
         dicts with ``_log`` in {"conn", "s7comm"}.
     """
+    # Coerce to aware UTC before any ``.timestamp()`` derivation: on a
+    # naive datetime ``.timestamp()`` assumes local time, which made
+    # every emitted epoch depend on the build machine's TZ (issue #30).
+    start = as_utc(start)
+    end = as_utc(end)
+
     if end <= start:
         log.warning(
             "s7comm.generate called with end<=start (%s <= %s); no events",

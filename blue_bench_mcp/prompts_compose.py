@@ -27,6 +27,13 @@ def compose(
     parts: list[str] = []
     missing: set[str] = set()
 
+    def _sub(m: re.Match) -> str:
+        key = m.group(1)
+        if key not in context:
+            missing.add(key)
+            return m.group(0)
+        return context[key]
+
     for section in SECTION_ORDER:
         filename = profile.prompt_parts.get(section)
         if not filename:
@@ -38,17 +45,24 @@ def compose(
         # Strip HTML comments (used as source-file frontmatter) before substitution —
         # otherwise placeholders inside comments get substituted and leak to the model.
         text = _HTML_COMMENT_RE.sub("", text)
-
-        def _sub(m: re.Match) -> str:
-            key = m.group(1)
-            if key not in context:
-                missing.add(key)
-                return m.group(0)
-            return context[key]
-
         text = _PLACEHOLDER_RE.sub(_sub, text)
         parts.append(text.rstrip())
 
+    # Coaching hints are profile-level (not a prompt_parts file). They are the
+    # coached arm's actual intervention — append them so the coached/uncoached
+    # A/B measures the hints, not just a guidelines-file swap. Run them through
+    # the same HTML-comment strip + placeholder substitution as every other part
+    # so a hint carrying a {placeholder} or an HTML comment behaves identically.
+    if profile.coaching_hints:
+        hint_lines = []
+        for h in profile.coaching_hints:
+            h = _HTML_COMMENT_RE.sub("", h)
+            h = _PLACEHOLDER_RE.sub(_sub, h)
+            hint_lines.append(f"- {h}")
+        parts.append("## Coaching hints\n\n" + "\n".join(hint_lines))
+
+    # Raise on missing placeholders AFTER the hints block, so a {bogus_key} in a
+    # hint raises the same way it does in a prompt-part file (not leak silently).
     if missing:
         raise ValueError(f"missing prompt placeholders: {sorted(missing)}")
 

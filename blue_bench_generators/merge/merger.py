@@ -28,6 +28,7 @@ from typing import Any, Iterable
 import yaml
 
 from blue_bench_generators import it_ot_bridge, ot_hosts, ot_protocols
+from blue_bench_generators.it_baseline import suricata_noise
 from blue_bench_generators.it_baseline.composer import _sha256_file
 from blue_bench_generators.merge.scenario_topology import shim_from_scenario
 
@@ -40,7 +41,24 @@ _EF_META = {"GROUND_TRUTH.json", "GROUND_TRUTH.md", "OUTPUT_TARGET.txt",
 
 # Managed subdirs this merger writes — wiped before write so a re-merge leaves
 # no orphan OT/bridge files.
-_MANAGED = ("ot", "ot_hosts", "bridge")
+_MANAGED = ("ot", "ot_hosts", "bridge", "suricata")
+
+
+class _FPRates:
+    """Minimal ActivityModel shim for benign Suricata FP noise.
+
+    ``suricata_noise.generate`` wants an ``it_baseline.behavior.ActivityModel``,
+    but that model is bound to a synthetic it_baseline topology whose hosts/IPs
+    would NOT match the EF/merge corpus. To keep the benign FP alerts attributed
+    to REAL corpus hosts, we feed the scenario shim as the topology and answer
+    rate() with modest per-class constants (events/hour) — enough to yield a
+    realistic-but-light stream of low-severity ET INFO/POLICY noise the analyst
+    must filter past. Duck-typed: generate() only calls ``.rate()``.
+    """
+    _RATES = {"network_connection": 8.0, "dns_query": 20.0, "http_request": 5.0}
+
+    def rate(self, host: Any, event_class: str, timestamp: datetime) -> float:
+        return self._RATES.get(event_class, 0.0)
 
 
 def _ndjson_sort_key(ev: dict) -> tuple:
@@ -139,6 +157,14 @@ def merge_corpus(
     for source, evs in sorted(by_source.items()):
         n_bridge += _write_ndjson_by_log(evs, ef_dir / "bridge", prefix=f"{source}.")
 
+    # Benign Suricata FP noise: low-severity ET INFO/POLICY alerts on the real
+    # corpus hosts. Only the alert-type eve records go to the alerts index (flow/
+    # dns/tls/http eve records are dropped — this index is the alert queue). The
+    # malicious TP alerts come from a separately-injected commodity bundle.
+    sur_alerts = [e for e in suricata_noise.generate(shim, _FPRates(), start, end, seed=seed)
+                  if e.get("event_type") == "alert"]
+    n_sur = _write_ndjson_by_log(sur_alerts, ef_dir / "suricata")
+
     build_hash, files = _content_hash(ef_dir)
     manifest = {
         "schema_version": 1,
@@ -152,12 +178,13 @@ def merge_corpus(
             "ot_protocols": {"events": n_ot},
             "ot_hosts": {"events": n_oth},
             "bridge": {"events": n_bridge, "sources": sorted(by_source)},
+            "suricata_fp": {"events": n_sur},
         },
         "file_count": len(files),
         "total_bytes": sum(f["bytes"] for f in files),
     }
     (ef_dir / "corpus-manifest.yaml").write_text(
         yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8", newline="")
-    log.info("merge: ot=%d ot_hosts=%d bridge=%d build_hash=%s",
-             n_ot, n_oth, n_bridge, build_hash[:12])
+    log.info("merge: ot=%d ot_hosts=%d bridge=%d suricata_fp=%d build_hash=%s",
+             n_ot, n_oth, n_bridge, n_sur, build_hash[:12])
     return manifest

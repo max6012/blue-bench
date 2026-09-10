@@ -45,7 +45,12 @@ class MCPStdioClient:
         assert self._session is not None
         resp = await self._session.list_tools()
         return [
-            ToolSpec(name=t.name, description=t.description or "", input_schema=t.inputSchema or {})
+            # mcp 2.0 renamed Tool.inputSchema -> input_schema; tolerate either.
+            ToolSpec(
+                name=t.name,
+                description=t.description or "",
+                input_schema=getattr(t, "input_schema", None) or getattr(t, "inputSchema", None) or {},
+            )
             for t in resp.tools
         ]
 

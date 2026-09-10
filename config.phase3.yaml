@@ -1,0 +1,47 @@
+# Phase-3 (heavy-telemetry RQ corpus) MCP config. The demo's config.yaml is
+# left intact; pass this with `qualify --phase 3 --config config.phase3.yaml`.
+#
+# NOTE: config.yaml is the canonical config (it is the qualify default and is
+# what the re-measurement runs use). This file is kept in sync with it for an
+# explicit `--config config.phase3.yaml` invocation.
+#
+# The corpus now carries generated alerts — benign false-positive IDS noise AND
+# malicious true positives (the wkst-11 commodity infection's ET MALWARE) — so
+# search_alerts has a real FP/TP mix to triage. Authentication substrates
+# (windows-security, linux-syslog) are reached by search_auth_events via its own
+# cfg.auth indices; OT connection traffic (ot-conn) by get_connections — both
+# outside this index_pattern, which only scopes the alert/zeek surface.
+limits:
+  query_timeout: 30
+  max_result_chars: 8000
+
+evidence:
+  evidence_dir: data/evidence-phase3        # empty — telemetry corpus has no forensic files
+
+elastic:
+  url: ${BLUE_BENCH_ES_URL:-http://localhost:9200}
+  index_pattern: "logstash-suricata-alerts,wazuh-alerts,zeek-conn"  # matches config.yaml (the canonical config)
+
+zeek:
+  index: zeek-conn                          # L corpus Zeek (get_connections)
+
+sysmon:
+  index: windows-sysmon                     # L corpus Sysmon (get_process_events / tree)
+
+wazuh:
+  api_url: ${BLUE_BENCH_WAZUH_URL:-https://localhost:55000}
+  es_fallback_index: "wazuh-alerts"          # injected HIDS alerts route here (ingest_ef.py)
+
+openedr:
+  url: ${BLUE_BENCH_OPENEDR_URL:-http://localhost:9443}
+
+nmap:
+  scanner_container: ${BLUE_BENCH_NMAP_SCANNER-blue-bench-scanner}
+
+transport:
+  sse:
+    host: 127.0.0.1
+    port: 8765
+    origins:
+      - "http://localhost:*"
+      - "http://127.0.0.1:*"

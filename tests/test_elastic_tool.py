@@ -66,7 +66,9 @@ def test_zeek_index_chosen_when_use_elastic_true():
         zeek=ZeekConfig(index="zeek-custom-*", use_elastic=True),
     )
     t = ElasticTool(cfg)
-    assert t.zeek_index == "zeek-custom-*"
+    # get_connections spans the Zeek IT index + the OT connection index so a
+    # defender sees OT protocol traffic (Modbus/DNP3/…) with the same tool.
+    assert t.zeek_index == "zeek-custom-*,ot-conn"
 
 
 def test_zeek_index_falls_back_when_use_elastic_false():

@@ -1,0 +1,448 @@
+"""Unit tests for blue_bench_eval.preflight — fully offline (stubbed ESClient).
+
+Covers: all-green, ES-unreachable, an empty index, and a stale-window
+(old max @timestamp) case. No live Elasticsearch required.
+"""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+import yaml
+
+from blue_bench_eval import preflight
+from blue_bench_eval.preflight import (
+    ESError,
+    PreflightReport,
+    _indices_for_tools,
+    run_preflight,
+)
+from blue_bench_mcp.config import ServerConfig
+
+
+# --- fixtures ----------------------------------------------------------------
+
+# Concrete index names used across the fake corpus.
+INDEX_PATTERN = "logstash-suricata-alerts,wazuh-alerts,zeek-conn"
+PATTERN_INDICES = INDEX_PATTERN.split(",")
+SYSMON_INDEX = "windows-sysmon"
+# Every index the tool surface reads (the union _all_read_indices returns).
+ALL_INDICES = PATTERN_INDICES + ["ot-conn", SYSMON_INDEX, "windows-security", "linux-syslog"]
+
+
+@pytest.fixture
+def config_path(tmp_path: Path) -> Path:
+    cfg = {
+        "elastic": {"url": "http://localhost:9200", "index_pattern": INDEX_PATTERN},
+        "zeek": {"index": "zeek-conn", "use_elastic": True},
+        "sysmon": {"index": SYSMON_INDEX},
+        "wazuh": {"es_fallback_index": "wazuh-alerts"},
+    }
+    p = tmp_path / "config.yaml"
+    p.write_text(yaml.safe_dump(cfg))
+    return p
+
+
+@pytest.fixture
+def prompts_dir(tmp_path: Path) -> Path:
+    d = tmp_path / "prompts"
+    d.mkdir()
+    # An ES-backed prompt (main pattern), a sysmon-backed prompt, and a
+    # non-ES prompt (nmap only) that must report n/a without dragging ok false.
+    (d / "p2-01.yaml").write_text(yaml.safe_dump({
+        "id": "p2-01", "category": "triage", "title": "t", "question": "q",
+        "expected_tools": ["search_alerts", "count_by_field"],
+    }))
+    (d / "p2-02.yaml").write_text(yaml.safe_dump({
+        "id": "p2-02", "category": "host", "title": "t", "question": "q",
+        "expected_tools": ["get_process_events"],
+    }))
+    (d / "p2-03.yaml").write_text(yaml.safe_dump({
+        "id": "p2-03", "category": "recon", "title": "t", "question": "q",
+        "expected_tools": ["nmap_scan"],
+    }))
+    return d
+
+
+@pytest.fixture
+def prompts_dir_phase3(tmp_path: Path) -> Path:
+    """A slate whose prompts read the auth + OT indices (phase-3 style), so the
+    scoped populated/window checks actually demand those indices."""
+    d = tmp_path / "prompts"
+    d.mkdir()
+    (d / "p3-11.yaml").write_text(yaml.safe_dump({
+        "id": "p3-11", "category": "credential_access", "title": "t", "question": "q",
+        "expected_tools": ["search_auth_events", "count_by_field"],
+    }))
+    (d / "p3-16.yaml").write_text(yaml.safe_dump({
+        "id": "p3-16", "category": "ot_segment", "title": "t", "question": "q",
+        "expected_tools": ["get_connections"],
+    }))
+    return d
+
+
+class FakeES:
+    """Stub ESClient. Configure per-scenario behavior via constructor args."""
+
+    def __init__(
+        self,
+        *,
+        reachable: bool = True,
+        counts: dict[str, int | None] | None = None,
+        max_ts: datetime | None = None,
+        max_ts_map: dict[str, datetime | None] | None = None,
+        probe_map: dict[str, int] | None = None,
+        raise_on: str | None = None,
+    ) -> None:
+        self._reachable = reachable
+        self._counts = counts or {}
+        self._max_ts = max_ts
+        self._max_ts_map = max_ts_map
+        self._probe_map = probe_map or {}
+        self._raise_on = raise_on  # method name that should raise ESError
+
+    def ping(self) -> tuple[bool, str]:
+        if self._reachable:
+            return True, "cluster health: green"
+        return False, "unreachable at http://localhost:9200: ConnectError"
+
+    def count(self, index: str) -> int | None:
+        if self._raise_on == "count":
+            raise ESError("count boom")
+        # An index that was never configured does not exist. HttpxESClient.count
+        # returns None on a 404, so the fake must too — defaulting to 0 modelled
+        # "present but empty", which is a different (and critical) condition.
+        return self._counts.get(index, None)
+
+    def max_timestamp(self, indices: list[str]) -> datetime | None:
+        if self._raise_on == "max_timestamp":
+            raise ESError("max_ts boom")
+        # The real client is now called per-index; support both a single global
+        # max_ts and a per-index map.
+        if self._max_ts_map is not None:
+            return self._max_ts_map.get(indices[0], self._max_ts)
+        return self._max_ts
+
+    def probe_hits(self, indices: list[str], window_hours: int) -> int:
+        if self._raise_on == "probe_hits":
+            raise ESError("probe boom")
+        # The real client is now called per-index; return the hit count for the
+        # single index passed.
+        return self._probe_map.get(indices[0], 0)
+
+
+def _check(report: PreflightReport, name: str):
+    for c in report.checks:
+        if c.name == name:
+            return c
+    raise AssertionError(f"check {name!r} not found in {[c.name for c in report.checks]}")
+
+
+# --- tool -> index mapping ---------------------------------------------------
+
+
+def test_indices_for_tools_maps_backends():
+    cfg = ServerConfig.model_validate({
+        "elastic": {"index_pattern": INDEX_PATTERN},
+        "sysmon": {"index": SYSMON_INDEX},
+    })
+    assert _indices_for_tools(["search_alerts"], cfg) == PATTERN_INDICES
+    assert _indices_for_tools(["get_process_events"], cfg) == [SYSMON_INDEX]
+    # get_connections spans zeek-conn AND ot-conn (OT reachability).
+    assert _indices_for_tools(["get_connections"], cfg) == ["zeek-conn", "ot-conn"]
+    assert _indices_for_tools(["get_agent_alerts"], cfg) == ["wazuh-alerts"]
+    # search_auth_events reads both auth substrates.
+    assert _indices_for_tools(["search_auth_events"], cfg) == ["windows-security", "linux-syslog"]
+    # Non-ES tool contributes nothing.
+    assert _indices_for_tools(["nmap_scan"], cfg) == []
+
+
+def test_all_read_indices_includes_auth_and_ot():
+    from blue_bench_eval.preflight import _all_read_indices
+    cfg = ServerConfig.model_validate({
+        "elastic": {"index_pattern": INDEX_PATTERN},
+        "sysmon": {"index": SYSMON_INDEX},
+    })
+    idxs = _all_read_indices(cfg)
+    # The stale-window check must cover the auth + OT substrates too, not just
+    # index_pattern + sysmon + wazuh fallback.
+    assert "windows-security" in idxs
+    assert "linux-syslog" in idxs
+    assert "ot-conn" in idxs
+
+
+# Tools with no ES backing — a new ES-backed tool that is NOT mapped here and
+# NOT in _indices_for_tools would silently evade the preflight probe.
+_NO_ES_TOOLS = {
+    "file_hash", "file_metadata", "list_evidence", "strings_extract",  # evidence files
+    "nmap_scan", "nmap_quick_scan",                                    # nmap
+    "validate_sigma_rule",                                             # sigma
+    "list_endpoints", "get_detections",                                # OpenEDR API
+}
+
+
+def test_every_prompt_tool_resolves_to_index_or_allowlist():
+    """Every distinct expected_tools name across the prompt corpus must either
+    resolve to >=1 ES index or sit on the explicit no-ES allowlist — otherwise
+    a new ES-backed tool would evade the preflight probe (D2)."""
+    from pathlib import Path as _Path
+    import yaml as _yaml
+
+    cfg = ServerConfig.model_validate({
+        "elastic": {"index_pattern": INDEX_PATTERN},
+        "sysmon": {"index": SYSMON_INDEX},
+    })
+    prompts = _Path(__file__).parent.parent / "blue_bench_eval" / "prompts"
+    all_tools: set[str] = set()
+    for f in prompts.glob("p*.yaml"):
+        d = _yaml.safe_load(f.read_text())
+        all_tools.update(d.get("expected_tools", []))
+
+    for tool in sorted(all_tools):
+        if tool in _NO_ES_TOOLS:
+            continue
+        assert _indices_for_tools([tool], cfg), (
+            f"tool {tool!r} resolves to no ES index and is not on the no-ES "
+            "allowlist — add it to _indices_for_tools or _NO_ES_TOOLS"
+        )
+
+
+# --- scenario: all green -----------------------------------------------------
+
+
+def test_all_green(config_path: Path, prompts_dir: Path):
+    now = datetime.now(timezone.utc)
+    fake = FakeES(
+        counts={i: 100 for i in ALL_INDICES},
+        max_ts=now - timedelta(hours=2),
+        probe_map={i: 10 for i in ALL_INDICES},
+    )
+    report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
+    assert report.ok is True
+    assert _check(report, "es_reachable").passed
+    assert _check(report, "indices_populated").passed
+    assert _check(report, "window_covers_now").passed
+    assert _check(report, "probe:p2-01").passed
+    assert _check(report, "probe:p2-02").passed  # sysmon-only coverage
+    # non-ES prompt: n/a, non-critical, passed.
+    na = _check(report, "probe:p2-03")
+    assert na.passed and na.critical is False and "n/a" in na.detail
+
+
+def test_future_max_ts_still_covers_now(config_path: Path):
+    # anchor-to-now / clock skew: max_ts slightly in the future must pass.
+    now = datetime.now(timezone.utc)
+    fake = FakeES(
+        counts={i: 5 for i in ALL_INDICES},
+        max_ts=now + timedelta(minutes=30),
+    )
+    report = run_preflight(config_path, client=fake)
+    assert _check(report, "window_covers_now").passed
+    assert report.ok is True
+
+
+# --- scenario: ES unreachable ------------------------------------------------
+
+
+def test_es_unreachable(config_path: Path, prompts_dir: Path):
+    fake = FakeES(reachable=False)
+    report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
+    assert report.ok is False
+    assert _check(report, "es_reachable").passed is False
+    # Downstream checks reported as failed (not silently skipped).
+    assert _check(report, "indices_populated").passed is False
+    assert _check(report, "window_covers_now").passed is False
+    assert _check(report, "prompt_probes").passed is False
+    assert "unreachable" in report.summary().lower()
+
+
+# --- scenario: an empty index ------------------------------------------------
+
+
+def test_empty_index_fails(config_path: Path):
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in ALL_INDICES}
+    counts["wazuh-alerts"] = 0  # one empty index
+    fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
+    report = run_preflight(config_path, client=fake)
+    assert report.ok is False
+    chk = _check(report, "indices_populated")
+    assert chk.passed is False
+    assert "wazuh-alerts" in chk.detail and "empty" in chk.detail
+
+
+def test_missing_index_fails(config_path: Path):
+    now = datetime.now(timezone.utc)
+    counts: dict[str, int | None] = {i: 100 for i in ALL_INDICES}
+    counts["zeek-conn"] = None  # 404 / missing
+    fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
+    report = run_preflight(config_path, client=fake)
+    assert report.ok is False
+    chk = _check(report, "indices_populated")
+    assert "MISSING" in chk.detail and "zeek-conn" in chk.detail
+
+
+def test_empty_auth_index_fails(config_path: Path, prompts_dir_phase3: Path):
+    # D-A: an empty auth index must fail the populated check even though the
+    # alert/zeek/sysmon indices are healthy — the exact void-grade failure the
+    # gate exists to catch. Scoped to a phase-3 slate that reads auth + OT.
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in ALL_INDICES}
+    counts["windows-security"] = 0
+    fake = FakeES(counts=counts, max_ts=now - timedelta(hours=1))
+    report = run_preflight(config_path, prompts_dir=prompts_dir_phase3, client=fake)
+    assert report.ok is False
+    chk = _check(report, "indices_populated")
+    assert chk.passed is False
+    assert "windows-security" in chk.detail and "empty" in chk.detail
+
+
+REAL_PROMPTS = Path(__file__).parent.parent / "blue_bench_eval" / "prompts"
+
+# The real p2 slate, unlike the synthetic fixture, uses get_connections (p2-02,
+# p2-03, p2-04, p2-08) and therefore resolves ot-conn. A synthetic fixture that
+# omits get_connections cannot exhibit the defect this test is named for, so
+# these two run against the committed prompt directory on purpose.
+IT_ONLY_INDICES = PATTERN_INDICES + [SYSMON_INDEX, "snort-alerts", "windows-security"]
+
+
+def test_real_phase2_slate_tolerates_an_it_only_corpus(config_path: Path):
+    # An IT-only corpus has no ot/ tree, so ot-conn is never created, and a
+    # Windows-only one has no linux-syslog. Both are ABSENT (not empty), the
+    # tools query them with ignore_unavailable, and preflight must not be
+    # stricter than the tool it gates.
+    now = datetime.now(timezone.utc)
+    fake = FakeES(
+        counts={i: 100 for i in IT_ONLY_INDICES},
+        max_ts=now - timedelta(hours=1),
+        probe_map={i: 10 for i in IT_ONLY_INDICES},
+    )
+    report = run_preflight(
+        config_path, prompts_dir=REAL_PROMPTS, prompts_prefix="p2-", client=fake
+    )
+    assert report.ok is True, [c.name for c in report.checks if not c.passed and c.critical]
+
+
+def test_real_phase3_slate_still_fails_on_an_empty_optional_index(config_path: Path):
+    # Tolerating an ABSENT optional index must not tolerate a PRESENT-but-empty
+    # one: the index existing means ingest ran and wrote nothing, which is the
+    # void-grade condition the gate exists to catch.
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in IT_ONLY_INDICES + ["linux-syslog"]}
+    counts["ot-conn"] = 0  # present, empty
+    fake = FakeES(
+        counts=counts,
+        max_ts=now - timedelta(hours=1),
+        probe_map={i: 10 for i in counts if counts[i]},
+    )
+    report = run_preflight(
+        config_path, prompts_dir=REAL_PROMPTS, prompts_prefix="p3-", client=fake
+    )
+    assert report.ok is False
+    populated = next(c for c in report.checks if c.name == "indices_populated")
+    assert "empty: ot-conn" in populated.detail
+
+
+# --- scenario: stale window --------------------------------------------------
+
+
+def test_stale_window_fails(config_path: Path):
+    # The core bug: indices populated, but max @timestamp is months in the past
+    # (un-anchored ingest). Lookback-from-now queries would return [].
+    stale = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    fake = FakeES(counts={i: 100 for i in ALL_INDICES}, max_ts=stale)
+    report = run_preflight(config_path, now_tolerance_hours=48, client=fake)
+    assert report.ok is False
+    # Indices are populated — so THIS check is what catches the bug.
+    assert _check(report, "indices_populated").passed is True
+    win = _check(report, "window_covers_now")
+    assert win.passed is False
+    assert "STALE" in win.detail
+    assert "2026-03-01" in win.detail
+
+
+def test_one_stale_index_fails_window(config_path: Path, prompts_dir_phase3: Path):
+    # D-A: one stale index must fail the window check even though the others are
+    # fresh — a single max agg over the union would mask it.
+    now = datetime.now(timezone.utc)
+    stale = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    fake = FakeES(
+        counts={i: 100 for i in ALL_INDICES},
+        max_ts_map={i: (now - timedelta(hours=1)) for i in ALL_INDICES},
+    )
+    fake._max_ts_map["windows-security"] = stale
+    report = run_preflight(config_path, prompts_dir=prompts_dir_phase3, now_tolerance_hours=48, client=fake)
+    assert report.ok is False
+    win = _check(report, "window_covers_now")
+    assert win.passed is False
+    assert "windows-security" in win.detail
+
+
+def test_null_max_ts_fails_closed(config_path: Path):
+    # ES up, pattern matched, but no usable @timestamp → fail closed.
+    fake = FakeES(counts={i: 100 for i in ALL_INDICES}, max_ts=None)
+    report = run_preflight(config_path, client=fake)
+    assert report.ok is False
+    win = _check(report, "window_covers_now")
+    assert win.passed is False
+    assert "no @timestamp" in win.detail.lower()
+
+
+# --- per-prompt probe edge cases ---------------------------------------------
+
+
+def test_prompt_probe_empty_for_prompt(config_path: Path, prompts_dir: Path):
+    now = datetime.now(timezone.utc)
+    # Everything populated + fresh, but sysmon has 0 docs in-window → the
+    # sysmon-backed prompt probe fails while the pattern-backed one passes.
+    fake = FakeES(
+        counts={i: 100 for i in ALL_INDICES},
+        max_ts=now - timedelta(hours=1),
+        probe_map={i: 10 for i in ALL_INDICES if i != SYSMON_INDEX},  # SYSMON_INDEX -> 0
+    )
+    report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
+    assert _check(report, "probe:p2-01").passed is True
+    p2 = _check(report, "probe:p2-02")
+    assert p2.passed is False
+    assert "SIEM empty" in p2.detail
+    assert report.ok is False
+
+
+def test_transport_error_midrun_is_clean_failure(config_path: Path):
+    now = datetime.now(timezone.utc)
+    fake = FakeES(
+        counts={i: 1 for i in ALL_INDICES},
+        max_ts=now,
+        raise_on="max_timestamp",
+    )
+    report = run_preflight(config_path, client=fake)
+    win = _check(report, "window_covers_now")
+    assert win.passed is False
+    assert "boom" in win.detail  # ESError message surfaced, no traceback
+    assert report.ok is False
+
+
+# --- CLI ---------------------------------------------------------------------
+
+
+def test_cli_exit_nonzero_when_not_ok(config_path: Path, monkeypatch):
+    fake = FakeES(reachable=False)
+    monkeypatch.setattr(
+        preflight, "HttpxESClient", lambda cfg, **kw: fake
+    )
+    rc = preflight.main(["--config", str(config_path)])
+    assert rc == 1
+
+
+def test_cli_exit_zero_when_ok(config_path: Path, monkeypatch):
+    now = datetime.now(timezone.utc)
+    fake = FakeES(
+        counts={i: 100 for i in ALL_INDICES},
+        max_ts=now - timedelta(hours=1),
+    )
+    monkeypatch.setattr(
+        preflight, "HttpxESClient", lambda cfg, **kw: fake
+    )
+    rc = preflight.main(["--config", str(config_path)])
+    assert rc == 0

@@ -271,7 +271,37 @@ async def _summarize_excerpt(profile: ModelProfile, excerpt: str) -> str:
                 out_parts.append(getattr(block, "text", ""))
         return "\n".join(out_parts).strip()
 
-    # native / text-embedded — both use Ollama under the hood
+    if profile.tool_protocol == "openai-native":
+        from blue_bench_client._openai import make_async_client as make_openai_client
+
+        client_oai = make_openai_client()
+        resp_oai = await client_oai.chat.completions.create(
+            model=profile.model_id,
+            messages=[{"role": "user", "content": user_msg}],
+        )
+        choice = resp_oai.choices[0] if resp_oai.choices else None
+        return (choice.message.content or "").strip() if choice else ""
+
+    if profile.tool_protocol == "anthropic-cli":
+        # The anthropic-cli transport drives `claude -p` on the subscription
+        # (OAuth), not the metered SDK — and it has no non-tool summarization
+        # surface. Route the summarization through the same CLI rather than
+        # silently sending a Claude model id to the local Ollama client.
+        import shutil
+        import subprocess
+
+        from blue_bench_client.runner import _cli_oauth_env
+
+        claude = shutil.which("claude") or "claude"
+        r = await asyncio.to_thread(
+            subprocess.run,
+            [claude, "-p", user_msg, "--model", profile.model_id,
+             "--output-format", "text"],
+            input="", capture_output=True, text=True, env=_cli_oauth_env(), timeout=300,
+        )
+        return (r.stdout or "").strip()
+
+    # native / text-embedded — Ollama under the hood.
     import ollama
 
     client_o = ollama.AsyncClient()
@@ -1119,6 +1149,7 @@ class AnalystRepl:
             loaded.messages and loaded.messages[0].get("role") == "system"
         )
         self.session._anthropic_seeded = new_profile.tool_protocol == "anthropic-native"
+        self.session._openai_seeded = new_profile.tool_protocol == "openai-native"
 
         gate = _categories_to_tools(loaded.tool_gate) if loaded.tool_gate else None
         self.session.set_tool_gate(gate)
@@ -1804,6 +1835,7 @@ async def _amain(
                 and resumed.messages[0].get("role") == "system"
             )
             session._anthropic_seeded = profile.tool_protocol == "anthropic-native"
+            session._openai_seeded = profile.tool_protocol == "openai-native"
             recorder.turns = list(resumed.turns)
             est_tokens = session.history_token_estimate
             user_turns = sum(1 for t in resumed.turns if "events" in t)

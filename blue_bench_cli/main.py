@@ -33,31 +33,115 @@ app = typer.Typer(add_completion=False, no_args_is_help=True, help="Blue-Bench o
 
 @app.command()
 def qualify(
-    profile: str = typer.Option(..., "--profile", "-p", help="Profile YAML stem, e.g. gemma4-e4b"),
-    phase: str = typer.Option("2", "--phase", help="Eval phase: 1 or 2 (default: 2)"),
+    profile: str = typer.Option(..., "--profile", "-p", help="Profile stem (local), OR with --cloud the Ollama Cloud model id, e.g. gpt-oss:120b"),
+    phase: str = typer.Option("2", "--phase", help="Eval phase: 1, 2, or 3 (default: 2)"),
     tag: str = typer.Option("", "--tag", "-t", help="Filter prompts by tag or category"),
     limit: int = typer.Option(None, "--limit", "-n", help="Stop after N prompts"),
     config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
+    cloud: bool = typer.Option(False, "--cloud", help="Run --profile as an Ollama Cloud model id via a generic cloud profile (needs OLLAMA_API_KEY in .env)"),
+    openai: bool = typer.Option(False, "--openai", help="Run --profile as a model id served behind an OpenAI-compatible endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) via a generic openai-native profile (needs OPENAI_BASE_URL; OPENAI_API_KEY only where the endpoint authenticates)"),
+    no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
+    skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip the SIEM-readiness gate that refuses to grade an empty/stale Elasticsearch (intentional dry runs only)"),
 ) -> None:
-    """Run the prompt corpus under PROFILE and write traces."""
-    run_dir = asyncio.run(
-        run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase)
-    )
+    """Run the prompt corpus under PROFILE and write traces.
+
+    Local (default): PROFILE is a profiles/<stem>.yaml. With --cloud, PROFILE is
+    an Ollama Cloud model id (see `blue-bench models --cloud`) run via a generic
+    cloud profile — no per-model file needed.
+    """
+    override = None
+    if cloud:
+        import os
+        os.environ.setdefault("OLLAMA_HOST", "https://ollama.com")
+        if not os.environ.get("OLLAMA_API_KEY"):
+            typer.echo("ERROR: --cloud needs OLLAMA_API_KEY (put it in .env).", err=True)
+            raise typer.Exit(1)
+        from blue_bench_client.cloud_models import generic_cloud_profile
+        override = generic_cloud_profile(profile, coached=not no_coaching)
+        profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
+    elif openai:
+        import os
+        if not os.environ.get("OPENAI_BASE_URL"):
+            typer.echo("ERROR: --openai needs OPENAI_BASE_URL (e.g. http://localhost:11434/v1 or a Cray /v1). Put it in .env.", err=True)
+            raise typer.Exit(1)
+        from blue_bench_client.cloud_models import generic_openai_profile
+        override = generic_openai_profile(profile, coached=not no_coaching)
+        profile = override.name  # for the run-dir label (…-uncoached when no_coaching)
+    from blue_bench_eval.qualify import PreflightError
+    try:
+        run_dir = asyncio.run(
+            run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
+                       profile_override=override, skip_preflight=skip_preflight)
+        )
+    except PreflightError as e:
+        typer.echo(f"\n{e}", err=True)
+        raise typer.Exit(1)
     typer.echo(f"\nRun dir: {run_dir}")
+
+
+@app.command()
+def models(
+    cloud: bool = typer.Option(True, "--cloud/--local", help="List Ollama Cloud catalogue (default) or local profiles"),
+    since_months: float = typer.Option(6.0, "--since-months", help="Cloud: only models modified within N months (0 = all)"),
+    size: str = typer.Option(None, "--size", help="Cloud size band: small (<=100GB) | mid (100-500GB) | large (>500GB)"),
+) -> None:
+    """List the models you can run. Cloud defaults to a recency+size shortlist
+    (the full catalogue is too long); pass to --profile with --cloud."""
+    if not cloud:
+        for p in sorted((REPO / "blue_bench_mcp" / "profiles").glob("*.yaml")):
+            typer.echo(f"  {p.stem}")
+        return
+    from blue_bench_client.cloud_models import list_cloud_models
+    rows = list_cloud_models(since_months=since_months or None, size=size)
+    typer.echo(f"Ollama Cloud — {len(rows)} models"
+               + (f", last {since_months:g}mo" if since_months else "")
+               + (f", size={size}" if size else "") + " (newest first):")
+    for m in rows:
+        sz = f"{m.size_gb:6.0f} GB" if m.size_gb else "  hosted "
+        typer.echo(f"  {m.model:24s} {m.modified.date()}  {sz}  ({m.age_months:.1f}mo)")
+    typer.echo("\nRun one:  blue-bench qualify --cloud --profile <model> --phase 3")
+
+
+@app.command("judge")
+def judge_cmd(
+    run_dir: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
+    phase: str = typer.Option("3", "--phase", help="Eval phase (selects the rubric)"),
+    rubric: Path = typer.Option(None, "--rubric", "-r", help="Rubric YAML (overrides --phase default)"),
+    prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
+    overwrite: bool = typer.Option(False, "--overwrite", help="Re-judge traces already in scored/"),
+    model: str = typer.Option(None, "--model", help="Override the rubric's judge model"),
+    allow_partial: bool = typer.Option(False, "--allow-partial", help="Grade the survivors when some traces fail to score (default: refuse)"),
+) -> None:
+    """Score a run's traces with the LLM-as-judge → writes scored/*.json.
+
+    Reads the rubric's `judge:` block (model + reasoning_effort), grades each
+    trace in RUN_DIR/prompts/ against the rubric grounded on expected_findings,
+    and writes RUN_DIR/scored/<id>.json. Follow with `aggregate` for the BLUF.
+    Needs ANTHROPIC_API_KEY.
+    """
+    if rubric is None:
+        rubric = REPO / "blue_bench_eval" / "rubrics" / f"phase{phase}.yaml"
+    from blue_bench_eval.judge import judge_run
+    scores = judge_run(run_dir, rubric, prompts_dir=prompts, overwrite=overwrite, model_override=model, allow_partial=allow_partial)
+    for s in scores:
+        dims = " ".join(f"{k}={v.score}" for k, v in s.dimensions.items())
+        typer.echo(f"  {s.prompt_id}: {s.verdict}  [{dims}]", err=True)
+    typer.echo(f"scored {len(scores)} prompt(s) → {run_dir}/scored/  (run `aggregate` for the BLUF)")
 
 
 @app.command("aggregate")
 def aggregate_cmd(
     run_dir: Path = typer.Argument(..., exists=True, file_okay=False, dir_okay=True),
-    phase: str = typer.Option("2", "--phase", help="Eval phase: 1 or 2 (selects default rubric)"),
+    phase: str = typer.Option("2", "--phase", help="Eval phase: 1, 2, or 3 (selects default rubric)"),
     rubric: Path = typer.Option(None, "--rubric", "-r", help="Rubric YAML (overrides --phase default)"),
     prompts: Path = typer.Option(DEFAULT_PROMPTS, "--prompts", help="Prompts directory"),
     write_bluf: bool = typer.Option(True, "--write/--no-write", help="Write BLUF.md to run dir"),
+    allow_partial: bool = typer.Option(False, "--allow-partial", help="Aggregate the survivors when some prompts are unscored (default: refuse)"),
 ) -> None:
     """Aggregate a scored run into BLUF.md (expects scored/ + prompts/ inside RUN_DIR)."""
     if rubric is None:
         rubric = REPO / "blue_bench_eval" / "rubrics" / f"phase{phase}.yaml"
-    result = aggregate(run_dir, rubric, prompts_dir=prompts)
+    result = aggregate(run_dir, rubric, prompts_dir=prompts, allow_partial=allow_partial)
     md = render_bluf(result)
     if write_bluf:
         bluf_path = run_dir / "BLUF.md"
@@ -68,7 +152,8 @@ def aggregate_cmd(
     # Summary line to stderr so --no-write stdout stays clean.
     all_pass = result.passes_overall and all(result.passes_key_dims.values())
     key_dim_parts = " ".join(
-        f"{kd}={result.dim_pct.get(kd, 0):.1f}%" for kd in result.key_dimensions
+        f"{kd}={result.dim_pct[kd]:.1f}%" if kd in result.dim_pct else f"{kd}=N/A"
+        for kd in result.key_dimensions
     )
     line = f"overall={result.overall_pct:.1f}% {key_dim_parts} pass={all_pass}"
     typer.echo(line, err=True)

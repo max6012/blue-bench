@@ -53,6 +53,7 @@ from datetime import datetime, timedelta
 from random import Random
 from typing import Iterable, Iterator, Literal
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols._uid import link_uid
 from blue_bench_generators.ot_protocols.topology import (
     PROTOCOL_PORTS,
@@ -132,6 +133,13 @@ class AnomalyWindow:
     start: datetime
     end: datetime
     target_device: str | None = None
+
+    def __post_init__(self) -> None:
+        # Naive input means UTC (see ``as_utc``); coerce so every epoch
+        # derived from the window is TZ-independent and so the window
+        # never compares naive-vs-aware against ``generate``'s bounds.
+        object.__setattr__(self, "start", as_utc(self.start))
+        object.__setattr__(self, "end", as_utc(self.end))
 
 
 # --- internal helpers -----------------------------------------------------
@@ -598,6 +606,12 @@ def generate(
         each carrying the IT-baseline-style ``ts`` (epoch-seconds
         string) plus the documented per-stream field set.
     """
+    # Coerce to aware UTC before any ``.timestamp()`` derivation: on a
+    # naive datetime ``.timestamp()`` assumes local time, which made
+    # every emitted epoch depend on the build machine's TZ (issue #30).
+    start = as_utc(start)
+    end = as_utc(end)
+
     if end <= start:
         log.info(
             "iec104.generate called with end<=start (%s <= %s); no events emitted",

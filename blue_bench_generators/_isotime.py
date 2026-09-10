@@ -1,4 +1,4 @@
-"""Shared ISO-8601 timestamp parsing.
+"""Shared ISO-8601 timestamp parsing and UTC coercion.
 
 Python 3.10's ``datetime.fromisoformat`` rejects the ``+HHMM`` offset
 (no colon) shape that Suricata's ``eve.json`` emits by convention. Our
@@ -13,7 +13,30 @@ there and is a no-op on already-normalised input.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def as_utc(ts: datetime) -> datetime:
+    """Coerce a datetime to timezone-aware UTC.
+
+    The generators' calling convention is "naive UTC": callers hand in
+    naive datetimes that *mean* UTC. But ``datetime.timestamp()`` on a
+    naive datetime interprets it in the **local** timezone, so any epoch
+    derived from one shifts with the build machine's ``TZ`` (issue #30).
+    Attaching ``timezone.utc`` makes ``.timestamp()`` TZ-independent
+    without changing the wall-clock fields, so a naive-UTC caller gets
+    the epoch it already meant.
+
+    Args:
+        ts: naive datetime (interpreted as UTC) or any aware datetime.
+
+    Returns:
+        The same instant as a ``timezone.utc``-aware datetime. Naive
+        input keeps its wall-clock fields; aware input is converted.
+    """
+    if ts.tzinfo is None:
+        return ts.replace(tzinfo=timezone.utc)
+    return ts.astimezone(timezone.utc)
 
 
 def parse_iso(ts: str) -> datetime:

@@ -20,6 +20,7 @@ from pathlib import Path
 
 from blue_bench_client.runner import run
 from blue_bench_client.trace import Trace
+from blue_bench_eval.preflight import run_preflight
 from blue_bench_eval.prompts._schema import PromptSpec, load_all
 from blue_bench_mcp.profiles import ModelProfile, load_profile
 
@@ -44,6 +45,42 @@ class RunMeta:
     started_at: str = ""
     finished_at: str = ""
     prompt_ids: list[str] = field(default_factory=list)
+    guidelines: str = ""
+    """The guidelines file the profile composed (e.g. threat_hunting_protocol.md
+    vs investigation_protocol.md). Stamped so a run's coaching arm is observable
+    — the two files carry opposite stopping rules, and a "% of frontier" number
+    is only comparable when the arms are known."""
+
+
+class PreflightError(RuntimeError):
+    """Preflight gate failed — the SIEM is not ready, so the run is refused.
+
+    Raised BEFORE any model calls are spent. A prior run graded models against an
+    empty Elasticsearch and produced meaningless "all fail" grades; this gate
+    makes that impossible to repeat. The only intentional bypass is
+    ``--skip-preflight`` (dry runs).
+    """
+
+
+def _preflight_gate(config_path: Path | None, prompts_dir: Path, prompts_prefix: str) -> None:
+    """Fail-closed readiness check, run ONCE at the start of a corpus run.
+
+    Prints the full preflight summary and raises ``PreflightError`` if the SIEM
+    is not ready (unreachable / empty / stale window / a prompt with no data).
+    Per-prompt probes are ``critical=True`` in the preflight module — a single
+    legitimately-sparse prompt aborts the whole run; that is the deliberate
+    fail-closed posture, and ``--skip-preflight`` is the escape hatch.
+    """
+    cfg_path = config_path or (REPO / "config.yaml")
+    report = run_preflight(cfg_path, prompts_dir=prompts_dir, prompts_prefix=prompts_prefix)
+    print(report.summary())
+    if not report.ok:
+        raise PreflightError(
+            "PREFLIGHT FAILED — refusing to spend model calls on an unready SIEM "
+            "(see the summary above). This is the guard against grading an empty "
+            "Elasticsearch. Fix the corpus/ingest, or pass --skip-preflight for an "
+            "intentional dry run."
+        )
 
 
 def _git_head() -> str:
@@ -100,10 +137,24 @@ async def run_corpus(
     profiles_dir: Path = PROFILES_DIR,
     results_dir: Path = RESULTS_DIR,
     phase: str = "2",
+    profile_override: "ModelProfile | None" = None,
+    skip_preflight: bool = False,
 ) -> Path:
-    """Execute the prompt corpus under `profile_name` and return the run dir."""
+    """Execute the prompt corpus under `profile_name` and return the run dir.
+
+    ``profile_override`` lets the caller supply a pre-built ModelProfile (e.g. a
+    generic cloud profile synthesised for an arbitrary Ollama Cloud model id)
+    instead of loading a ``profiles/<name>.yaml`` file.
+    """
     prefix = f"p{phase}-"
-    profile = load_profile(profiles_dir / f"{profile_name}.yaml")
+
+    # Primary gate (t-pfwire): never grade an empty/stale SIEM. Runs ONCE, before
+    # any model calls are spent, scoped to this phase's prompt tier. Aborts the
+    # whole run on failure unless the operator explicitly opts out.
+    if not skip_preflight:
+        _preflight_gate(config_path, prompts_dir, prefix)
+
+    profile = profile_override or load_profile(profiles_dir / f"{profile_name}.yaml")
     specs = _select(load_all(prompts_dir, prefix=prefix), tag=tag, limit=limit)
     if not specs:
         raise ValueError(
@@ -125,7 +176,18 @@ async def run_corpus(
         git_head=_git_head(),
         started_at=datetime.now().isoformat(),
         prompt_ids=[s.id for s in specs],
+        guidelines=getattr(profile, "prompt_parts", {}).get("guidelines", ""),
     )
+
+    def _write_meta() -> None:
+        (out_dir / "run_meta.json").write_text(json.dumps(asdict(meta), indent=2))
+
+    # Write the slate BEFORE the loop. run_meta.json is aggregate's authoritative
+    # denominator, and writing it only at the end meant an interrupted run had no
+    # slate at all: Ctrl-C (a BaseException, so the per-prompt `except Exception`
+    # never sees it) left aggregate to fall back to the trace map and report a
+    # confident headline over however many prompts happened to finish.
+    _write_meta()
 
     print(
         f"\n=== Blue-Bench Phase {phase} — profile={profile.name} protocol={profile.tool_protocol} "
@@ -162,7 +224,7 @@ async def run_corpus(
             )
     meta.total_duration_ms = int((time.monotonic() - overall_start) * 1000)
     meta.finished_at = datetime.now().isoformat()
-    (out_dir / "run_meta.json").write_text(json.dumps(asdict(meta), indent=2))
+    _write_meta()  # rewrite with timings + counters
 
     print(
         f"\nDone — {meta.prompts_completed}/{meta.prompt_count} completed, "
@@ -176,10 +238,15 @@ async def run_corpus(
 def main() -> None:
     p = argparse.ArgumentParser(description="Run Blue-Bench prompts under a profile")
     p.add_argument("--profile", required=True, help="Profile YAML stem (e.g., gemma4-e4b)")
-    p.add_argument("--phase", default="2", choices=["1", "2"], help="Eval phase (1 or 2, default: 2)")
+    p.add_argument("--phase", default="2", choices=["1", "2", "3"], help="Eval phase (1, 2, or 3; default: 2)")
     p.add_argument("--tag", default="", help="Filter prompts by tag or category")
     p.add_argument("--limit", type=int, default=None, help="Stop after N prompts")
     p.add_argument("--config", type=Path, default=REPO / "config.yaml", help="MCP server config.yaml")
+    p.add_argument(
+        "--skip-preflight",
+        action="store_true",
+        help="Skip the SIEM-readiness gate (intentional dry runs only)",
+    )
     args = p.parse_args()
     asyncio.run(
         run_corpus(
@@ -188,6 +255,7 @@ def main() -> None:
             limit=args.limit,
             config_path=args.config,
             phase=args.phase,
+            skip_preflight=args.skip_preflight,
         )
     )
 

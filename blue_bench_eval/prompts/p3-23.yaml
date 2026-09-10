@@ -1,0 +1,21 @@
+id: p3-23
+category: incident_scoping
+title: Scope the blast radius of a compromise
+question: |
+  wkst-03 is compromised. Scope it: did the actor reach any other host, what
+  credentials or data were exposed, and what's the blast radius we need to
+  contain? Base the answer on what the telemetry actually shows.
+expected_tools:
+  - get_process_events
+  - get_process_tree
+  - get_connections
+expected_findings:
+  - synonyms: ["lateral movement", "net use", "admin share", "reached another host", "T1021.002"]
+  - synonyms: ["credential dump", "LSASS", "credentials exposed", "harvested credentials", "T1003"]
+  - synonyms: ["collection", "staged data", "makecab", "archive", "data at risk", "T1560"]
+  - synonyms: ["exfiltration", "exfil", "outbound", "T1041"]
+  - synonyms: ["blast radius", "scope", "containment", "impacted accounts/hosts"]
+pass_criteria: Scopes the wkst-03 incident — credential exposure (LSASS dump), lateral reach (admin-share use), staged/exfiltrated data — into a coherent blast radius, grounded in the observed evidence.
+tags: [tier2, incident_scoping, apt, sysmon]
+max_turns: 30
+tier: 2

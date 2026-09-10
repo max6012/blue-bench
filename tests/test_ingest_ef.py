@@ -9,6 +9,7 @@ tests lock the parsing/routing contract for CI.
 from __future__ import annotations
 
 import importlib.util
+import json
 from datetime import timezone
 from pathlib import Path
 
@@ -69,9 +70,48 @@ def test_parse_ecar_uses_id_and_epoch_ms(tmp_path: Path):
 
 
 def test_sha_id_is_stable_and_content_derived():
-    a = ingest_ef._sha_id({"x": 1, "y": 2})
-    b = ingest_ef._sha_id({"y": 2, "x": 1})  # key order independent
+    a = ingest_ef._sha_id({"x": 1, "y": 2}, "data/h/syslog.log", 0)
+    b = ingest_ef._sha_id({"y": 2, "x": 1}, "data/h/syslog.log", 0)  # key order independent
     assert a == b and len(a) == 32
+    # ...and still content-derived: different content -> different id
+    assert a != ingest_ef._sha_id({"x": 1, "y": 3}, "data/h/syslog.log", 0)
+
+
+def test_sha_id_is_scoped_by_source_position():
+    """Identical records at different positions must NOT share an _id.
+
+    A bulk index of an existing _id is an overwrite, not an error, so a bare
+    content hash silently destroyed every duplicate event (issue #31).
+    """
+    rec = {"raw": "May 14 12:00:20 host sshd[1]: Accepted publickey for svc"}
+    same_file = [ingest_ef._sha_id(rec, "data/h1/syslog.log", n) for n in range(5)]
+    assert len(set(same_file)) == 5, "duplicate lines in one file collapse onto one _id"
+    # and the same line in two different files is two different documents
+    assert (ingest_ef._sha_id(rec, "data/h1/syslog.log", 0)
+            != ingest_ef._sha_id(rec, "data/h2/syslog.log", 0))
+
+
+def test_doc_id_prefers_a_real_native_id():
+    rec = {"EventRecordID": 4242, "Image": "x.exe"}
+    assert ingest_ef.doc_id(rec, "data/h/sysmon.xml", 0, 4242) == "4242"
+    # no native id -> position-scoped content hash
+    assert len(ingest_ef.doc_id(rec, "data/h/sysmon.xml", 0, None)) == 32
+
+
+def test_merged_ndjson_does_not_key_id_on_the_zeek_uid(tmp_path):
+    """A uid identifies a connection, not a record: one connection can carry
+    several http transactions, so uid-keyed ids collapse them (issue #36).
+    """
+    path = tmp_path / "http.ndjson"
+    path.write_text("\n".join(
+        json.dumps({"uid": "CsharedUID", "ts": 1.0 + i, "uri": f"/stage{i}"})
+        for i in range(3)
+    ) + "\n")
+    yielded = list(ingest_ef.parse_ot_ndjson(path))
+    assert [n for _r, _w, n in yielded] == [None, None, None]
+    ids = [ingest_ef.doc_id(r, "injected/a.zeek.http.ndjson", i, n)
+           for i, (r, _w, n) in enumerate(yielded)]
+    assert len(set(ids)) == 3
 
 
 def test_year_inference_resolves_snort_and_asa_lines():

@@ -33,7 +33,7 @@ from pathlib import Path
 import yaml
 
 from blue_bench_generators.cybercrime_foil.bundle import SchemaValidationError, validate_bundle
-from blue_bench_generators.merge.inject import HostRemap, inject_bundle
+from blue_bench_generators.merge.inject import BeaconSpec, HostRemap, inject_bundle
 from blue_bench_generators.merge.merger import _EF_META, merge_corpus
 from blue_bench_generators.merge.scenario_topology import shim_from_scenario
 
@@ -52,12 +52,45 @@ _CAPTURE = HostRemap(
 
 # tier -> [(incident_id, bundle_subdir, target_host_short), ...].
 # Foil fits all tiers; the APT's 10-day dwell only fits L (see module docstring).
+# Low-and-slow C2 beacon synthesized into APT bundles only (the foil stays a
+# smash-and-grab burst). Dest is a dedicated, unremarkable hosting-range IP
+# (DigitalOcean-class) contacted ONLY by the victim — realistic targeted-actor
+# C2 infra. Surface (port/proto/service/bytes) is matched to the foil's github
+# stager so the RQ3 gates stay green (dest IP is not a surface feature); the
+# signal is "rare external destination + regular full-window cadence", found by
+# hunting, not by destination reputation. A famous-CDN dest (GitHub/Google) is
+# waved through as benign even by a frontier model — see the oracle A/B run.
+# DISABLED (2026-07-17, Max): beacons should NOT be findable. The synthesized
+# low-and-slow beacon made the APT's network C2 artificially detectable — that
+# fudges the test. The captured bundle's real C2 (a handful of connections
+# buried in legit GitHub/Google traffic) stays as-is: realistically near-
+# invisible, so RQ2 detection must rest on HOST-side tradecraft. The synthesizer
+# code (inject.BeaconSpec) is kept but unused. Re-enable only if the exercise
+# deliberately wants a findable network signal.
+_BEACON_SPECS: dict[str, BeaconSpec] = {}
+
 _DEFAULT_ADVERSARIES: dict[str, list[tuple[str, str, str]]] = {
     "S": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
     "M": [("cybercrime-bb-001", "cybercrime_foil", "wkst-03")],
     "L": [("apt-bb-001", "apt_inject", "wkst-03"),
-          ("cybercrime-bb-001", "cybercrime_foil", "wkst-07")],
+          ("cybercrime-bb-001", "cybercrime_foil", "wkst-07"),
+          # Credential-attack + noisy-commodity injections (single-host each).
+          # These are NOT the RQ3 discrimination pair; the non-separability gate
+          # is scoped to apt-bb-001 vs cybercrime-bb-001 only (see _RQ3_PAIR).
+          ("ssh-bruteforce-01", "cred_bruteforce", "srv-app-01"),
+          ("pw-spray-01", "cred_spray", "dc-01"),
+          ("dormant-cred-01", "cred_dormant", "wkst-14"),
+          ("pass-the-hash-01", "cred_pth", "srv-files-01"),
+          ("impossible-travel-01", "cred_travel", "wkst-16"),
+          ("commodity-01", "commodity", "wkst-11")],
 }
+
+# The RQ3 non-separability gate compares ONLY this designated pair — the targeted
+# APT intrusion vs the commodity-cybercrime foil. Other injected attacks (the
+# credential + noisy-commodity bundles above) must NOT enter the gate computation,
+# or their distinct telemetry (Windows-auth EIDs, loud IDS alerts) would push the
+# surface-separability AUC past the gate threshold and abort the build.
+_RQ3_PAIR = ("apt-bb-001", "cybercrime-bb-001")
 
 # Files/dirs excluded from the corpus build_hash: EF metadata (generated_at
 # varies) and the ground-truth dir (it CONTAINS the hash — would be circular).
@@ -109,6 +142,38 @@ def _stamp_ground_truth(corpus_dir: Path, build_hash: str) -> list[str]:
     return stamped
 
 
+def _require_utc_clock() -> None:
+    """Abort unless the process clock is UTC. Enforced, not documented.
+
+    The OT generators (`ot_protocols/`, `it_ot_bridge/`) build tz-aware UTC
+    datetimes, so their epochs are TZ-independent. The IT generators
+    (`it_baseline/network_zeek.py`, `c2/`) still call `.timestamp()` on NAIVE
+    datetimes, which Python interprets in the machine's LOCAL zone. On a
+    non-UTC machine the two halves of the corpus therefore land at different
+    absolute times -- measured 5h apart on America/New_York -- which destroys
+    the host<->network and IT<->OT correlation that RQ1 and RQ2 are built on.
+
+    Under TZ=UTC both interpretations coincide and the corpus is correct, so
+    this is a guard rather than a blocker. It is a hard failure and not a
+    warning because the damage is invisible in the output: every file parses,
+    every gate passes, and the corpus is simply wrong by a fixed offset.
+
+    Remove this once `it_baseline/` and `c2/` are tz-aware (issue #39).
+    """
+    import time
+    if time.timezone == 0 and (not time.daylight or time.altzone == 0):
+        return
+    local = time.tzname[0] if time.tzname else "unknown"
+    raise SystemExit(
+        f"ABORT: corpus builds require a UTC clock, but this process is in "
+        f"{local!r} (UTC offset {-time.timezone // 3600:+d}h).\n"
+        f"The OT generators emit UTC epochs while the IT generators still "
+        f"interpret naive datetimes as local time, so building here would "
+        f"silently desync IT from OT by that offset and invalidate RQ1/RQ2.\n"
+        f"Re-run with:  TZ=UTC <your command>"
+    )
+
+
 def build_corpus(
     *,
     tier: str,
@@ -120,6 +185,7 @@ def build_corpus(
     ef_dir: Path | None,
     enforce_gates: bool = True,
 ) -> dict:
+    _require_utc_clock()
     out = Path(out)
 
     # 1. EvidenceForge benign IT telemetry.
@@ -140,7 +206,8 @@ def build_corpus(
     injected = []
     for incident, subdir, host in adversaries:
         remap = _remap_for_host(scenario, tier, host)
-        summary = inject_bundle(out, DEFAULT_BUNDLES / subdir, incident, remap)
+        summary = inject_bundle(out, DEFAULT_BUNDLES / subdir, incident, remap,
+                                beacon=_BEACON_SPECS.get(incident), seed=seed)
         injected.append({"incident": incident, "source_class": summary["source_class"],
                          "host": remap.to_fqdn, "events": summary["events"]})
         log.info("injected %s (%s) -> %s: %d events",
@@ -178,25 +245,34 @@ def build_corpus(
 
 
 def _run_corpus_gates(corpus_dir: Path, injected: list[dict]) -> dict | None:
-    """Run the RQ3 gates on the injected events grouped by source_class.
+    """Run the RQ3 non-separability gates on the DESIGNATED pair only.
 
-    Returns None when fewer than two classes are present (no discrimination
-    test to run, e.g. an S tier with the foil only)."""
+    Scoped to ``_RQ3_PAIR`` — the targeted APT intrusion vs the commodity-
+    cybercrime foil, matched by incident id — NOT all apt-class vs all
+    cybercrime-class events. Other injected attacks (credential + noisy-
+    commodity bundles) are deliberately excluded: their distinct telemetry
+    (Windows-auth EIDs, loud IDS alerts) is not part of the RQ3 discrimination
+    test and would otherwise inflate surface-separability and abort the build.
+
+    Returns None when the designated pair isn't both present (e.g. an S tier
+    with the foil only — no discrimination test to run)."""
     import json as _json
 
     from blue_bench_generators.merge.gates import run_gates
 
-    by_class: dict[str, list[dict]] = {}
-    for inj in injected:
-        evs: list[dict] = []
-        for f in sorted((corpus_dir / "injected").glob(f"{inj['incident']}.*.ndjson")):
-            evs += [_json.loads(l) for l in f.read_text().splitlines() if l.strip()]
-        by_class.setdefault(inj["source_class"], []).extend(evs)
+    apt_incident, cyber_incident = _RQ3_PAIR
 
-    if "apt" not in by_class or "cybercrime" not in by_class:
+    def _load_incident(incident: str) -> list[dict]:
+        evs: list[dict] = []
+        for f in sorted((corpus_dir / "injected").glob(f"{incident}.*.ndjson")):
+            evs += [_json.loads(l) for l in f.read_text().splitlines() if l.strip()]
+        return evs
+
+    present = {inj["incident"] for inj in injected}
+    if apt_incident not in present or cyber_incident not in present:
         return None
 
-    rep = run_gates(by_class["apt"], by_class["cybercrime"])
+    rep = run_gates(_load_incident(apt_incident), _load_incident(cyber_incident))
     log.info("RQ3 gates: %s", "ALL PASS" if rep.all_passed else "FAILED")
     for r in rep.results:
         log.info("  [%s] %-26s %.3f (thr %s)", "PASS" if r.passed else "FAIL",

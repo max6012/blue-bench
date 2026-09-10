@@ -7,7 +7,7 @@ disjointness for anomalies, composer signature compatibility.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -401,7 +401,11 @@ def test_no_events_outside_window(events_clean_1d):
             if ts.tzinfo is not None:
                 ts = ts.replace(tzinfo=None)
         elif "ts" in e:
-            ts = datetime.fromtimestamp(float(e["ts"]))
+            # ``tz=timezone.utc``, not a bare ``fromtimestamp``: the Zeek
+            # ``ts`` epochs are UTC, so a local-time conversion here would
+            # shift them off the (naive-UTC) window bounds below on any
+            # non-UTC machine.
+            ts = datetime.fromtimestamp(float(e["ts"]), tz=timezone.utc).replace(tzinfo=None)
         else:
             pytest.fail(f"event has neither timestamp nor ts: {e}")
         assert WINDOW_START <= ts < WINDOW_END_1D, f"event outside window: {ts}"

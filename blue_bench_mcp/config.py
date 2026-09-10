@@ -44,6 +44,10 @@ class ZeekConfig(BaseModel):
     """Zeek index settings for get_connections (ES-backed)."""
     index: str = "zeek-conn"
     use_elastic: bool = True
+    # OT/plant connection log lives in a separate index (the OT VLAN is not on the
+    # Zeek IT sensor). get_connections searches it alongside zeek-conn so a defender
+    # can see OT protocol traffic (Modbus/DNP3/IEC-104/S7) with the same tool.
+    ot_conn_index: str = "ot-conn"
 
 
 class SysmonConfig(BaseModel):
@@ -54,6 +58,47 @@ class SysmonConfig(BaseModel):
     ParentImage, ProcessGuid, ParentProcessGuid, User, TargetFilename, etc.
     """
     index: str = "windows-sysmon"
+
+
+class AuthConfig(BaseModel):
+    """Authentication-log index settings for search_auth_events.
+
+    Two auth substrates the other tools do not touch:
+      - windows-security: Windows Security EventLog auth records. EventID (int)
+        4624 logon / 4625 failed logon / 4768 TGT / 4769 TGS / 4771 Kerberos
+        pre-auth fail / 4776 NTLM validation. Fields: Computer, SubjectUserName,
+        TargetUserName, TargetDomainName, LogonType, IpAddress, WorkstationName,
+        Status, FailureReason. Benign records carry time in TimeCreated; injected
+        adversary records carry UtcTime — both are range-filtered via @timestamp
+        (set by ingest) and surfaced natively.
+      - linux-syslog: sshd/auth syslog lines. Fields: timestamp, host, process,
+        pid, message, raw. Auth outcome ("Failed password"/"Accepted") and the
+        source IP live in the message text.
+    """
+    windows_security_index: str = "windows-security"
+    linux_syslog_index: str = "linux-syslog"
+
+
+class BeaconingConfig(BaseModel):
+    """Tuning envelope for the detect_beaconing analytic.
+
+    These are the exercise-control DEFAULTS and legal floors — players
+    re-baseline their SOC's beacon detector between rounds by editing
+    config.yaml or setting the env vars (``${BB_BEACON_*:-default}``); the model
+    tunes WITHIN this envelope per-query via the tool's parameters. Loosening
+    the floors makes low-and-slow actors easier to catch (and floods FPs);
+    tightening them makes the range harder.
+    """
+    enabled: bool = False                    # gate the detect_beaconing tool OFF by
+                                             # default: beacons are not meant to be
+                                             # network-findable (host-side detection).
+    default_window_minutes: int = 10080     # 7d — beacons need a wide lookback
+    default_min_connections: int = 20        # a cadence needs enough callbacks
+    min_connections_floor: int = 5           # the model may not go below this
+    default_max_jitter: float = 0.35         # interval-CV cutoff for "regular"
+    max_jitter_ceiling: float = 1.0          # the model may not go above this
+    agg_granularity: str = "ip"              # ip | /24 | domain (rotation handling)
+    top_n: int = 50                          # max candidate pairs returned
 
 
 class WazuhConfig(BaseModel):
@@ -111,6 +156,8 @@ class ServerConfig(BaseModel):
     elastic: ElasticConfig = Field(default_factory=ElasticConfig)
     zeek: ZeekConfig = Field(default_factory=ZeekConfig)
     sysmon: SysmonConfig = Field(default_factory=SysmonConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
+    beaconing: BeaconingConfig = Field(default_factory=BeaconingConfig)
     wazuh: WazuhConfig = Field(default_factory=WazuhConfig)
     openedr: OpenEDRConfig = Field(default_factory=OpenEDRConfig)
     nmap: NmapConfig = Field(default_factory=NmapConfig)

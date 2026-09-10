@@ -1,4 +1,4 @@
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 from blue_bench_mcp.config import EvidenceConfig, ServerConfig
 from blue_bench_mcp.server import register_all
@@ -7,7 +7,7 @@ from blue_bench_mcp.server import register_all
 async def test_evidence_registered(tmp_path):
     (tmp_path / "hello.txt").write_bytes(b"hello world\n")
     cfg = ServerConfig(evidence=EvidenceConfig(evidence_dir=str(tmp_path)))
-    server = FastMCP("test")
+    server = MCPServer("test")
     registered = register_all(server, cfg)
     assert "evidence" in registered
 

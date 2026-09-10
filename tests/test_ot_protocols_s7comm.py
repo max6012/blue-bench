@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols.s7comm import (
     AnomalyWindow,
     generate,
@@ -98,7 +99,9 @@ def test_all_events_lie_inside_requested_window():
     end = WEEK_START + timedelta(hours=14)
     events = list(generate(net, start, end))
     assert events
-    s, e = start.timestamp(), end.timestamp()
+    # ``as_utc`` (not a bare naive ``.timestamp()``) so the expected
+    # bounds are the UTC epochs the generator emits, on any machine TZ.
+    s, e = as_utc(start).timestamp(), as_utc(end).timestamp()
     for ev in events:
         ts = float(ev["ts"])
         assert s <= ts < e, f"event at {ts} outside [{s}, {e})"
@@ -118,13 +121,13 @@ def test_business_hours_dominate_record_volume():
     net = _network()
     events = list(generate(net, WEEK_START, WEEK_END))
     assert events
-    # Both the generator and this test convert naive datetimes via
-    # ``.timestamp()`` (Python interprets naive as local) and recover
-    # via the inverse arithmetic below. Using explicit
-    # ``(dt - WEEK_START).total_seconds()`` arithmetic keeps the test
-    # TZ-independent: we never compare wall-clock semantics across the
-    # boundary, only relative offsets from a known anchor.
-    week_start_epoch = WEEK_START.timestamp()
+    # The anchor must be the *UTC* epoch of ``WEEK_START`` -- the same
+    # interpretation the generator uses. A bare naive ``.timestamp()``
+    # anchors in local time, which offsets ``hour_of_day`` below by the
+    # machine's UTC offset and moves records out of the business-hours
+    # band on any non-UTC machine. Everything after the anchor is
+    # relative offset arithmetic, so it carries no wall-clock semantics.
+    week_start_epoch = as_utc(WEEK_START).timestamp()
     in_bh = 0
     total = 0
     for ev in events:

@@ -20,7 +20,7 @@ from pydantic import BaseModel, Field
 from blue_bench_mcp.task_classes import TaskClass, all_task_classes
 
 
-ToolProtocol = Literal["native", "text-embedded", "anthropic-native"]
+ToolProtocol = Literal["native", "text-embedded", "anthropic-native", "anthropic-cli", "openai-native"]
 PromptStyle = Literal["verbose-ok", "terse", "thinking-enabled"]
 
 

@@ -1,19 +1,38 @@
 """Runner — profile + question → model loop with tool dispatch → trace.
 
-Three paths keyed on profile.tool_protocol:
+Four paths keyed on profile.tool_protocol:
 - "native": Ollama chat() with tools= schema, parses message.tool_calls
 - "text-embedded": model emits <tool>name</tool><args>{...}</args> in content,
   parsed with regex, tool result injected as a user message
 - "anthropic-native": Anthropic Messages API with tool_use / tool_result blocks
+- "openai-native": OpenAI-compatible Chat Completions (vLLM/TGI/SGLang/Ollama
+  /v1, e.g. a Cray) with tools= schema, parses message.tool_calls
 
-All three paths write the same Trace schema, so Phase 2 scoring is protocol-agnostic.
+All paths write the same Trace schema, so Phase 2 scoring is protocol-agnostic.
+
+Operator note (Cray / OpenAI-compatible endpoint): set OPENAI_BASE_URL to the
+inference server's /v1 (e.g. http://localhost:11434/v1 for local Ollama, or the
+Cray's /v1) and OPENAI_API_KEY to a non-empty value, then run with
+`blue-bench qualify --openai --profile <model_id>`. Pointing at the Cray is a
+config change only. THEN verify per served-model that native tool-calling works
+through the Cray's inference server — vLLM/TGI/SGLang each parse tool calls
+differently (vLLM needs --enable-auto-tool-choice and a per-model
+--tool-call-parser; for models whose tokenizer template does not handle
+`tool`-role messages, a per-model --chat-template is also needed; a mis-config
+silently returns empty tool_calls). Where a served model does not do native
+tool-calling, fall back to the text-embedded protocol. This per-model
+verification is the real variable cost and needs the live Cray.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -288,6 +307,45 @@ def _tool_specs_to_anthropic(tools: list[ToolSpec]) -> list[dict[str, Any]]:
     ]
 
 
+def _tool_specs_to_openai(tools: list[ToolSpec]) -> list[dict[str, Any]]:
+    """Convert MCP tool specs to OpenAI function schema.
+
+    OpenAI format matches Ollama's: a ``type: function`` wrapper around a
+    ``function`` object with name/description/parameters. The parameters schema
+    is the MCP input_schema (already JSON Schema).
+    """
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": t.name,
+                "description": t.description,
+                "parameters": t.input_schema or {"type": "object", "properties": {}},
+            },
+        }
+        for t in tools
+    ]
+
+
+def _openai_args(arguments: str | None) -> dict[str, Any]:
+    """Parse an OpenAI tool-call ``arguments`` field into a dict.
+
+    In the OpenAI wire protocol ``function.arguments`` is a JSON *string* (unlike
+    Ollama's native protocol, where it is already a mapping). Tolerate a decode
+    error (or a non-string input) by returning an empty dict rather than crashing
+    the loop.
+    """
+    if not arguments:
+        return {}
+    if isinstance(arguments, dict):
+        return arguments
+    try:
+        parsed = json.loads(arguments)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
 async def _run_native(
     profile: ModelProfile,
     system_prompt: str,
@@ -543,10 +601,13 @@ async def _run_anthropic(
             "system": system_blocks,
             "messages": messages,
             "tools": tool_specs,
-            "temperature": g.temperature,
         }
-        # Anthropic API rejects temperature + top_p together — pass only temperature.
-        # top_p in the profile is ignored for this path.
+        # Only send temperature when the profile sets it: newer models (e.g.
+        # claude-opus-4-8) reject `temperature` outright ("deprecated for this
+        # model"). Anthropic also rejects temperature + top_p together, so
+        # top_p in the profile is ignored for this path regardless.
+        if g.temperature is not None:
+            kwargs["temperature"] = g.temperature
         resp = await client.messages.create(**kwargs)
         dur = int((time.monotonic() - t0) * 1000)
 
@@ -619,6 +680,273 @@ async def _run_anthropic(
     trace.error = f"max_turns ({max_turns}) exhausted without final answer"
 
 
+async def _run_openai(
+    profile: ModelProfile,
+    system_prompt: str,
+    question: str,
+    tools: list[ToolSpec],
+    mcp: MCPStdioClient,
+    max_turns: int,
+    trace: Trace,
+) -> None:
+    """OpenAI-compatible tool-use loop (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray).
+
+    Mirrors ``_run_anthropic`` but against the OpenAI Chat Completions wire
+    protocol: send messages + tools, parse ``choices[0].message.tool_calls``,
+    dispatch each via MCP, feed results back as ``{role: tool, tool_call_id,
+    content}`` messages, and loop until the model stops calling tools.
+    """
+    # Import here so tests that don't exercise the OpenAI path don't require
+    # the SDK to be installed.
+    from blue_bench_client._openai import make_async_client
+
+    client = make_async_client()
+    tool_specs = _tool_specs_to_openai(tools)
+
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": question},
+    ]
+
+    g = profile.generation
+    kwargs: dict[str, Any] = {
+        "model": profile.model_id,
+        "messages": messages,
+        "tools": tool_specs,
+    }
+    if g.temperature is not None:
+        kwargs["temperature"] = g.temperature
+    if g.top_p is not None:
+        kwargs["top_p"] = g.top_p
+
+    for _ in range(max_turns):
+        t0 = time.monotonic()
+        resp = await client.chat.completions.create(**kwargs)
+        dur = int((time.monotonic() - t0) * 1000)
+
+        choice = resp.choices[0] if resp.choices else None
+        if choice is None:
+            trace.error = "openai-native: empty choices in response"
+            return
+        msg = choice.message
+        content = msg.content or ""
+        tool_calls_raw = list(msg.tool_calls or [])
+
+        tool_calls = [
+            ToolCall(name=tc.function.name, args=_openai_args(tc.function.arguments))
+            for tc in tool_calls_raw
+        ]
+        trace.turns.append(
+            Turn(role="assistant", content=content, tool_calls=tool_calls, duration_ms=dur)
+        )
+        # Append the assistant turn with its tool_calls so the next request
+        # carries the full context (OpenAI requires the tool_calls to be echoed
+        # back when the following message is a tool result).
+        messages.append(
+            {
+                "role": "assistant",
+                "content": content or None,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments or "{}",
+                        },
+                    }
+                    for tc in tool_calls_raw
+                ],
+            }
+        )
+        trace.turns_used += 1
+
+        if not tool_calls:
+            # Normal exit: model stopped calling tools.
+            if content:
+                trace.final_answer = content
+                return
+            # Empty final turn — salvage from prior turns.
+            for prior in reversed(trace.turns[:-1]):
+                if prior.role == "assistant" and prior.content:
+                    trace.final_answer = prior.content
+                    break
+            return
+
+        # Dispatch each tool call via MCP and feed results back as tool messages.
+        for tc in tool_calls_raw:
+            name = tc.function.name
+            args = _openai_args(tc.function.arguments)
+            t1 = time.monotonic()
+            result = await mcp.call_tool(name, args)
+            tdur = int((time.monotonic() - t1) * 1000)
+            trace.turns.append(
+                Turn(role="tool", content=result, tool_name=name, duration_ms=tdur)
+            )
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                }
+            )
+
+    # Max turns exhausted — salvage last non-empty assistant content.
+    for prior in reversed(trace.turns):
+        if prior.role == "assistant" and prior.content:
+            trace.final_answer = prior.content
+            break
+    trace.error = f"max_turns ({max_turns}) exhausted without final answer"
+
+
+# ── anthropic-cli transport ──────────────────────────────────────────────────
+# Drives a Claude model via the `claude` CLI headless on the SUBSCRIPTION (OAuth),
+# not the metered API. Only OAuth tokens are available in this deployment, and the
+# SDK rejects them as x-api-key — the LLM-judge hit the same wall and solved it the
+# same way. The CLI runs the tool-use loop itself against our MCP server; we parse
+# its stream-json into the same Trace shape the SDK/native paths emit.
+_MCP_SERVER_NAME = "blue-bench"
+_MCP_TOOL_PREFIX = f"mcp__{_MCP_SERVER_NAME}__"
+
+
+def _strip_mcp_prefix(name: str) -> str:
+    return name[len(_MCP_TOOL_PREFIX):] if name.startswith(_MCP_TOOL_PREFIX) else name
+
+
+def _cli_oauth_env() -> dict[str, str]:
+    """Subprocess env for `claude` on the subscription: OAuth token in
+    CLAUDE_CODE_OAUTH_TOKEN, api-key vars stripped so it can't fall back to a
+    metered key (mirrors the judge's CLI auth)."""
+    env = dict(os.environ)
+    tok = env.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if not tok:
+        for v in ("ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY"):
+            if env.get(v, "").startswith("sk-ant-oat"):
+                tok = env[v]
+                break
+    if tok:
+        env["CLAUDE_CODE_OAUTH_TOKEN"] = tok
+    env.pop("ANTHROPIC_API_KEY", None)
+    env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    return env
+
+
+def _cli_tool_result_text(content: Any) -> str:
+    """Flatten a CLI tool_result block to the raw payload the judge expects."""
+    if isinstance(content, str):
+        s = content
+    elif isinstance(content, list):
+        s = "".join(b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text")
+        s = s or json.dumps(content, default=str)
+    else:
+        s = json.dumps(content, default=str)
+    # MCPServer wraps a bare-string tool return as {"result": "..."} — unwrap it so
+    # the judge sees the same payload the SDK/native paths deliver.
+    try:
+        obj = json.loads(s)
+        if isinstance(obj, dict) and list(obj.keys()) == ["result"] and isinstance(obj["result"], str):
+            return obj["result"]
+    except (json.JSONDecodeError, ValueError, TypeError):
+        # Not the {"result": "..."} envelope — the payload is already the answer,
+        # so return it verbatim. Nothing to recover or report.
+        pass
+    return s
+
+
+async def _run_anthropic_cli(
+    profile: ModelProfile,
+    system: str,
+    question: str,
+    tools: list[ToolSpec],
+    server_cmd: list[str],
+    max_turns: int,
+    trace: Trace,
+) -> None:
+    # NOTE: ``max_turns`` is NOT enforced here. The `claude` CLI runs its own
+    # tool-use loop and exposes no --max-turns flag, so the frontier ceiling is
+    # measured with an unbounded tool-call budget while local models are capped
+    # at max_turns. Accepted asymmetry (see claude-opus-5.yaml); the parameter is
+    # kept for signature parity with the other _run_* loops.
+    claude = shutil.which("claude") or "claude"
+    mcp_cfg = {"mcpServers": {_MCP_SERVER_NAME: {"command": server_cmd[0], "args": list(server_cmd[1:])}}}
+    fd, cfg_path = tempfile.mkstemp(suffix=".json", prefix="bb-mcp-")
+    with os.fdopen(fd, "w") as f:
+        json.dump(mcp_cfg, f)
+    args = [
+        claude, "-p", question,
+        "--model", profile.model_id,
+        "--system-prompt", system,
+        "--mcp-config", cfg_path, "--strict-mcp-config",
+        "--tools", "",  # disable all built-in tools; only the blue-bench MCP surface remains
+        "--permission-mode", "bypassPermissions",
+        "--output-format", "stream-json", "--verbose",
+    ]
+    allowed = [f"{_MCP_TOOL_PREFIX}{t.name}" for t in tools]
+    if allowed:
+        args += ["--allowed-tools", *allowed]
+    env = _cli_oauth_env()
+
+    def _run() -> subprocess.CompletedProcess:
+        return subprocess.run(args, input="", capture_output=True, text=True, env=env, timeout=1800)
+
+    try:
+        r = await asyncio.to_thread(_run)
+    finally:
+        try:
+            os.unlink(cfg_path)
+        except OSError:
+            # Best-effort cleanup of our own temp config. Already gone, or a
+            # permission/FS error on a file we are done with — either way it
+            # must not mask the subprocess result we are returning.
+            pass
+
+    names_by_id: dict[str, str] = {}
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        etype = e.get("type")
+        if etype == "assistant":
+            blocks = (e.get("message") or {}).get("content") or []
+            text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text")
+            calls: list[ToolCall] = []
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "tool_use":
+                    nm = _strip_mcp_prefix(str(b.get("name", "")))
+                    calls.append(ToolCall(name=nm, args=dict(b.get("input") or {})))
+                    names_by_id[str(b.get("id", ""))] = nm
+            if text or calls:
+                trace.turns.append(Turn(role="assistant", content=text, tool_calls=calls))
+                trace.turns_used += 1
+        elif etype == "user":
+            blocks = (e.get("message") or {}).get("content") or []
+            for b in blocks:
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    trace.turns.append(Turn(
+                        role="tool",
+                        content=_cli_tool_result_text(b.get("content")),
+                        tool_name=names_by_id.get(str(b.get("tool_use_id", ""))),
+                    ))
+        elif etype == "result":
+            res = e.get("result")
+            if isinstance(res, str) and res.strip():
+                trace.final_answer = res
+            if e.get("is_error"):
+                trace.error = f"claude CLI result: {e.get('subtype', 'error')}"
+
+    if not trace.final_answer:
+        for prior in reversed(trace.turns):
+            if prior.role == "assistant" and prior.content:
+                trace.final_answer = prior.content
+                break
+    if r.returncode != 0 and not trace.error:
+        trace.error = f"claude CLI exit {r.returncode}: {(r.stderr or '')[-200:]}"
+
+
 async def run(
     profile: ModelProfile,
     question: str,
@@ -655,6 +983,10 @@ async def run(
                 await _run_native(profile, system_prompt, question, tools, mcp, max_turns, trace)
             elif profile.tool_protocol == "anthropic-native":
                 await _run_anthropic(profile, system_prompt, question, tools, mcp, max_turns, trace)
+            elif profile.tool_protocol == "anthropic-cli":
+                await _run_anthropic_cli(profile, system_prompt, question, tools, cmd, max_turns, trace)
+            elif profile.tool_protocol == "openai-native":
+                await _run_openai(profile, system_prompt, question, tools, mcp, max_turns, trace)
             else:
                 await _run_text_embedded(profile, system_prompt, question, tools, mcp, max_turns, trace)
         except Exception as e:

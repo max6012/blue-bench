@@ -1,0 +1,23 @@
+id: p3-21
+category: discovery
+title: Build a site map + inferred context
+question: |
+  You're new to this environment. Build a map of it from the telemetry (and the
+  scanning tools where useful): what network segments and hosts exist, what each
+  host appears to do, and what you can infer about the site — its size, its
+  business, and how it's segmented.
+expected_tools:
+  - count_by_field
+  - get_connections
+  - list_endpoints
+  - nmap_quick_scan
+  - nmap_scan
+expected_findings:
+  - synonyms: ["workstation subnet", "10.10.0.0", "server subnet", "10.20.0.0", "OT subnet", "segments"]
+  - synonyms: ["domain controller", "dc-01", "file server", "srv-files-01", "web/app", "srv-app", "database", "srv-db"]
+  - synonyms: ["OT/plant network", "ICS", "HMI", "historian", "PLC", "RTU"]
+  - synonyms: ["corp.example.invalid", "enterprise IT plus OT", "segmented", "inferred purpose"]
+pass_criteria: Produces a coherent inventory (IT workstation/server subnets + roles, and the OT/plant segment) inferred from telemetry and scanning, with reasonable inferences about the site's structure and purpose.
+tags: [tier2, discovery, sitemap, nmap]
+max_turns: 30
+tier: 2

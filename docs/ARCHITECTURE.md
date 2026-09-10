@@ -150,7 +150,7 @@ only differences are transport and where the tool-call loop runs.
 
 | Client                                | Path                                                       | Transport | Loop location           |
 |---------------------------------------|------------------------------------------------------------|-----------|-------------------------|
-| Reference MCP client + Ollama runner  | [`blue_bench_client/`](../blue_bench_client)               | stdio     | `runner.py` (Python)    |
+| Reference MCP client + runner        | [`blue_bench_client/`](../blue_bench_client)               | stdio     | `runner.py` (Python)    |
 | Operator CLI (`blue-bench …`)         | [`blue_bench_cli/`](../blue_bench_cli)                     | stdio     | Delegates to `runner.py` |
 | Evaluation harness (`qualify`)        | [`blue_bench_eval/`](../blue_bench_eval)                   | stdio     | Delegates to `runner.py` |
 | Browser UI / custom web app           | [`blue_bench_frontend/`](../blue_bench_frontend)           | SSE       | `loop.js` (JavaScript)  |
@@ -158,10 +158,13 @@ only differences are transport and where the tool-call loop runs.
 
 **Reference client + runner** ([`blue_bench_client/runner.py`](../blue_bench_client/runner.py))
 launches the MCP server as a subprocess, loads a profile, composes the
-system prompt, calls Ollama or Anthropic, parses whichever tool-call
-protocol the profile declared, dispatches each call back through the MCP
-client, and captures a structured `Trace` ([`trace.py`](../blue_bench_client/trace.py))
-that downstream aggregation can consume.
+system prompt, calls Ollama, Anthropic, or an OpenAI-compatible endpoint,
+parses whichever tool-call protocol the profile declared, dispatches each call
+back through the MCP client, and captures a structured `Trace`
+([`trace.py`](../blue_bench_client/trace.py)) that downstream aggregation can
+consume. The `openai-native` protocol targets any OpenAI-compatible
+`/v1/chat/completions` (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) — see the
+runner docstring for the operator note on per-model tool-calling verification.
 
 **Operator CLI** ([`blue_bench_cli/main.py`](../blue_bench_cli/main.py)) is a
 thin `typer` wrapper: `blue-bench qualify --profile X` runs the eval corpus
@@ -418,7 +421,7 @@ class EvidenceTool:
 
 ```python
 # blue_bench_mcp/tools/evidence.py
-def register(server: FastMCP, cfg: ServerConfig) -> None:
+def register(server: MCPServer, cfg: ServerConfig) -> None:
     tool = EvidenceTool(cfg)
 
     @server.tool()
@@ -502,13 +505,13 @@ blue_bench_mcp/           MCP server: tools, profiles, composable prompts, SSE t
   config.py                 Typed ServerConfig; ${VAR:-default} env substitution
   guardrails.py             truncate_results, validate_path_under, validate_target_in_range
   prompts_compose.py        Pure-function composer (placeholder substitution)
-  server.py                 FastMCP entry: stdio | sse
+  server.py                 MCPServer entry: stdio | sse
   transport_sse.py          Starlette wrapper: CORS + /health
   anthropic_proxy.py        FastAPI forwarder to api.anthropic.com (Tier 2)
 
 blue_bench_client/        Reference Python MCP client + Ollama runner + Trace
   mcp_client.py             Stdio MCP client (JSON-RPC framing)
-  runner.py                 Three-protocol tool-call loop, emits Trace
+  runner.py                 Multi-protocol tool-call loop (native / text-embedded / anthropic-native / anthropic-cli / openai-native), emits Trace
   trace.py                  Trace / Turn / ToolCall dataclasses
 
 blue_bench_cli/           Operator CLI (typer): qualify | aggregate | diff | server

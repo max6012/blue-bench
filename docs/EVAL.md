@@ -132,3 +132,105 @@ A low `findings` score with adequate `tool_usage` means the model is calling the
 A low `reasoning` score alongside adequate `findings` means the model is reaching the right answer through a suspicious path — worth investigating even if the verdict passes.
 
 `response_quality` mismatches (terse prompt, verbose answer or vice versa) are fixed by adjusting `prompt_style` in the profile YAML and tuning the coaching file accordingly.
+
+## Known limitations — read before citing any number
+
+Recorded 2026-09-10, from a corpus-integrity audit of the re-measurement
+harness. The harness code is exercised by the offline suite; **the corpus and
+answer keys it grades against are not yet valid.** Every item below is a reason
+a produced number does not mean what its label says.
+
+### Phase-3 grades are not currently gradeable
+
+- **A prompt's `tier` does not bind it to a corpus containing its evidence.**
+  24 of 28 phase-3 prompts are unanswerable or mis-keyed on any tier but L.
+  Running the phase-3 slate against an S or M corpus produces numbers, and
+  they are meaningless. (Audit D10.)
+- **The tier→adversary map makes `wkst-03` a different attacker per tier.** S
+  and M carry only the cybercrime foil; L carries the APT on `wkst-03` and the
+  foil on `wkst-07`. S/M contain no APT and no credential bundles, so every
+  RQ2/RQ3 prompt is unanswerable there and any tier-agnostic answer key is
+  wrong. (Audit D8.)
+- **The credential bundles reference identities and hosts that exist nowhere in
+  the corpus.** A model cannot corroborate them, and is scored down for the
+  data's absence rather than its own performance. (Audit D7.)
+- **The RQ2 beacon is disabled.** `merge/__main__.py` sets
+  `_BEACON_SPECS = {}`, so `detect_beaconing` — shipped as a headline analytic
+  — has nothing to find in any built corpus. (Audit D5.)
+
+An earlier phase-3 run is separately void: the SIEM was 100% empty at run time.
+
+### The published coaching A/B number is mislabeled
+
+`blue_bench_client/cloud_models.py:99,134` selects the guidelines file from the
+same `coached` flag that selects the hints:
+
+```python
+g = guidelines or ("threat_hunting_protocol.md" if coached else "investigation_protocol.md")
+```
+
+**Historically the hints were never applied.** `compose()` builds the prompt from
+`prompt_parts` in `SECTION_ORDER = (role, site, guidelines, coaching)`, and
+`profile.coaching_hints` is not a `prompt_parts` file, so before `847bd4c` it
+never reached the composed system prompt. The coached arm therefore differed
+from the baseline *only* in its guidelines file.
+
+So the published **"overall 21.7% coached vs 13.3% uncoached"** (measured at
+`e4cb6ca`, which predates `847bd4c`) is a **hunting-protocol vs
+investigation-protocol delta, not a coaching delta.** The measurement is real;
+the label is wrong. Cite it as a protocol comparison.
+
+**As of `847bd4c` the mechanism is fixed** — `prompts_compose.py:56-62` appends
+a `## Coaching hints` block, run through the same HTML-comment strip and
+placeholder substitution as every other part. Future coached runs do apply the
+five hints.
+
+That leaves a narrower but still real confound: `coached` now flips **two**
+things at once — the hints *and* the guidelines file. To attribute an effect to
+the hints, pass `guidelines=` explicitly so it is held constant across arms.
+
+The same confound exists across the committed profiles. The two protocols have
+opposite stopping rules:
+
+```
+blue_bench_mcp/prompts/guidelines/investigation_protocol.md:13
+    "Stop when you have enough to answer. After 4-6 tool calls, or sooner
+     when the picture is clear..."
+blue_bench_mcp/prompts/guidelines/threat_hunting_protocol.md:50
+    "Let the data, not your narrative, decide when you're done. Stop when
+     your leading hypothesis is corroborated across at least two layers..."
+```
+
+and exactly 2 of the 10 profiles in `blue_bench_mcp/profiles/` use the hunting
+one — `claude-opus-5.yaml` and `claude-opus-4-8.yaml`, the two frontier oracles.
+The other 8 use investigation. **Any comparison across those profiles varies
+turn-budget discipline as well as model capability.** Hold the guidelines file
+constant across arms you intend to compare, or vary it deliberately as the
+treatment.
+
+`qualify.py` stamps the composed guidelines file into `run_meta.json`, written
+before the prompt loop, so runs from here on are self-documenting. Runs before
+that have unrecoverable invocation provenance.
+
+### No CI runs the test suite
+
+`.github/workflows/` contains CodeQL and a sandbox-atomic job only. **No
+workflow runs `pytest`.** Every "N tests pass" claim in a PR or commit message
+on this repo is self-reported and was not independently verified by CI. Treat
+it accordingly, and run the suite locally before relying on it.
+
+### Corpus builds require a UTC clock
+
+`build_corpus()` aborts on a non-UTC clock. The OT generators emit tz-aware UTC
+epochs while `it_baseline/` and `c2/` still interpret naive datetimes as local
+time, so a non-UTC build desyncs IT from OT by the local offset — invisibly, as
+every file parses and every gate passes. Build with `TZ=UTC` until that is
+resolved.
+
+### Two tool surfaces, two different defaults
+
+`blue_bench_mcp/tools/` (the registered MCP surface) and
+`blue_bench_mcp/tool_classes/` (the direct/CLI path) declare **different**
+default lookbacks for the same logical tool — 240 vs 60 minutes. The documented
+default depends on which surface a caller uses, and the 60-minute path cannot
+reach a multi-day corpus.

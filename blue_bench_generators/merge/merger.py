@@ -247,7 +247,7 @@ def merge_corpus(
             "ef_it": "data/",
             "ot_protocols": {"events": n_ot},
             "ot_hosts": {"events": n_oth},
-            "bridge": {"events": n_bridge, "sources": sorted(by_source)},
+            "bridge": {"events": n_bridge, "sources": sorted(bridge_by_source)},
             "suricata_fp": {"events": n_sur},
         },
         "file_count": len(files),

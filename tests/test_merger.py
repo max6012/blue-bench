@@ -105,3 +105,53 @@ def test_write_ndjson_accepts_a_generator_without_materializing(tmp_path: Path):
     assert n == 1000
     rows = (tmp_path / "modbus.ndjson").read_text().splitlines()
     assert len(rows) == 1000
+
+
+def test_merge_corpus_end_to_end_smoke(tmp_path: Path, monkeypatch):
+    """Drive the REAL merge_corpus with stubbed generators.
+
+    The heavy path was documented as "exercised live, not in CI", and that gap
+    let a NameError in the manifest block ship: the writer unit tests all passed
+    while `merge_corpus` itself crashed after writing 17 GB. Stubbing the three
+    generators keeps this at a few milliseconds while still executing every line
+    of the real function, which is what catches that class of bug.
+    """
+    ef = tmp_path / "corpus"
+    ef.mkdir()
+    (ef / "GROUND_TRUTH.json").write_text(json.dumps({
+        "collection_window": {"start": "2026-03-02T05:00:00Z",
+                              "end": "2026-03-03T05:00:00Z"}}))
+
+    def _ot(*a, **k):
+        yield {"_log": "modbus", "_source": "ot", "ts": "1.0", "uid": "m1"}
+
+    def _hosts(*a, **k):
+        yield {"_log": "auth", "_source": "ot_hosts", "timestamp": "2026-03-02T06:00:00Z",
+               "uid": "h1"}
+
+    def _bridge(*a, **k):
+        yield {"_log": "conn", "_source": "zeek", "ts": "2.0", "uid": "b1"}
+        yield {"_log": "conn", "_source": "ot", "ts": "3.0", "uid": "b2"}
+
+    def _sur(*a, **k):
+        yield {"_log": "eve", "event_type": "alert", "ts": "4.0", "uid": "s1"}
+        yield {"_log": "eve", "event_type": "flow", "ts": "5.0", "uid": "s2"}  # dropped
+
+    monkeypatch.setattr(merger.ot_protocols, "generate", _ot)
+    monkeypatch.setattr(merger.ot_hosts, "generate", _hosts)
+    monkeypatch.setattr(merger.it_ot_bridge, "generate", _bridge)
+    monkeypatch.setattr(merger.suricata_noise, "generate", _sur)
+
+    scenario = Path(__file__).resolve().parents[1] / "scenarios" / "heavy-telemetry" / "bb-benign-s.yaml"
+    manifest = merger.merge_corpus(ef, scenario, tier="S", seed=0)
+
+    seg = manifest["segments"]
+    assert seg["ot_protocols"]["events"] == 1
+    assert seg["ot_hosts"]["events"] == 1
+    assert seg["bridge"]["events"] == 2
+    # the field that was a NameError: bridge sources must be reported
+    assert seg["bridge"]["sources"] == ["ot", "zeek"]
+    assert seg["suricata_fp"]["events"] == 1          # non-alert eve dropped
+    assert manifest["build_hash"] and manifest["tier"] == "S"
+    assert (ef / "ot" / "modbus.ndjson").exists()
+    assert (ef / "bridge" / "zeek.conn.ndjson").exists()

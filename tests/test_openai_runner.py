@@ -6,7 +6,6 @@ Covers the schema converter, the generic profile, and (via a stub client) the
 to ``dict()`` and crashed the loop on the first tool call.
 """
 import asyncio
-import json
 
 from blue_bench_client import _openai
 from blue_bench_client.mcp_client import ToolSpec

@@ -19,8 +19,11 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+# Imported as a module (not `from ... import`) because the tests monkeypatch
+# attributes ON it -- `monkeypatch.setattr(qualify, "run_preflight", ...)` only
+# affects callers that resolve through the module, which is how run_corpus does
+# it. Importing the same module both ways is also a CodeQL code-quality finding.
 import blue_bench_eval.qualify as qualify
-from blue_bench_eval.qualify import PreflightError, run_corpus
 from blue_bench_eval.judge import VoidRunError, judge_run
 
 RUBRIC = Path("blue_bench_eval/rubrics/phase3.yaml")
@@ -105,9 +108,9 @@ def test_qualify_aborts_when_preflight_not_ok(monkeypatch, tmp_path, prompts_dir
     _wire_run_corpus(monkeypatch, tmp_path, run_called)
     monkeypatch.setattr(qualify, "run_preflight", lambda *a, **k: _Report(ok=False))
 
-    with pytest.raises(PreflightError):
+    with pytest.raises(qualify.PreflightError):
         asyncio.run(
-            run_corpus(
+            qualify.run_corpus(
                 "fake",
                 config_path=tmp_path / "config.yaml",
                 prompts_dir=prompts_dir,
@@ -129,7 +132,7 @@ def test_qualify_proceeds_when_preflight_ok(monkeypatch, tmp_path, prompts_dir):
     monkeypatch.setattr(qualify, "run_preflight", _pf)
 
     out_dir = asyncio.run(
-        run_corpus(
+        qualify.run_corpus(
             "fake",
             config_path=tmp_path / "config.yaml",
             prompts_dir=prompts_dir,
@@ -151,7 +154,7 @@ def test_skip_preflight_bypasses_gate(monkeypatch, tmp_path, prompts_dir):
     monkeypatch.setattr(qualify, "run_preflight", _boom)
 
     out_dir = asyncio.run(
-        run_corpus(
+        qualify.run_corpus(
             "fake",
             config_path=tmp_path / "config.yaml",
             prompts_dir=prompts_dir,
@@ -175,7 +178,7 @@ def test_gate_scopes_probe_prefix_to_phase(monkeypatch, tmp_path, prompts_dir):
 
     monkeypatch.setattr(qualify, "run_preflight", _pf)
     asyncio.run(
-        run_corpus("fake", config_path=tmp_path / "c.yaml", prompts_dir=prompts_dir, phase="3")
+        qualify.run_corpus("fake", config_path=tmp_path / "c.yaml", prompts_dir=prompts_dir, phase="3")
     )
     assert captured["prefix"] == "p3-"
 

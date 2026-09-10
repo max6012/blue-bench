@@ -847,6 +847,8 @@ def _cli_tool_result_text(content: Any) -> str:
         if isinstance(obj, dict) and list(obj.keys()) == ["result"] and isinstance(obj["result"], str):
             return obj["result"]
     except (json.JSONDecodeError, ValueError, TypeError):
+        # Not the {"result": "..."} envelope — the payload is already the answer,
+        # so return it verbatim. Nothing to recover or report.
         pass
     return s
 
@@ -893,6 +895,9 @@ async def _run_anthropic_cli(
         try:
             os.unlink(cfg_path)
         except OSError:
+            # Best-effort cleanup of our own temp config. Already gone, or a
+            # permission/FS error on a file we are done with — either way it
+            # must not mask the subprocess result we are returning.
             pass
 
     names_by_id: dict[str, str] = {}

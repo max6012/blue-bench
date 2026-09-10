@@ -881,6 +881,9 @@ class InteractiveSession:
             try:
                 os.unlink(cfg_path)
             except OSError:
+                # Best-effort cleanup of our own temp config. Already gone, or a
+                # permission/FS error on a file we are done with — either way it
+                # must not mask the subprocess result we are returning.
                 pass
         dur = int((time.monotonic() - t0) * 1000)
 

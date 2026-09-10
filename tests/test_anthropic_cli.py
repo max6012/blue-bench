@@ -3,10 +3,8 @@
 The stream-json parser needs no model; these cover the tool-result unwrap, the
 mcp__ prefix strip, and the OAuth env shaping that the CLI path relies on.
 """
-import json
 
 from blue_bench_client.runner import (
-    _MCP_SERVER_NAME,
     _MCP_TOOL_PREFIX,
     _cli_oauth_env,
     _cli_tool_result_text,

@@ -14,6 +14,7 @@ retrieval, so `_query` is mocked and the tests always run.
 from __future__ import annotations
 
 import json
+import pathlib
 
 import pytest
 
@@ -174,3 +175,49 @@ def _async(value):
     async def _coro():
         return value
     return _coro()
+
+
+# --- issue #37: the Sysmon event-id field name differs per ingest path --------
+
+def test_process_events_query_matches_both_event_id_spellings():
+    """EF's EVTX path writes `EventID`; the NDJSON path wrote lowercase
+    `event_id`. A built L corpus carried 826k of the former and 868 of the
+    latter in ONE index, and a `term: {EventID: n}` filter matched ZERO of the
+    NDJSON documents -- which are exactly the injected adversary events.
+    """
+    tool = ElasticTool(_cfg())
+    body = tool._build_process_events_query(
+        host="", image="", parent_image="", command_line_contains="",
+        event_id=1, timerange_minutes=60)
+    flat = json.dumps(body)
+    assert '"EventID"' in flat and '"event_id"' in flat, flat
+    # and it must be an OR, not two ANDed terms (which would match nothing)
+    assert '"minimum_should_match": 1' in flat
+
+
+def test_ingest_canonicalises_event_id_to_EventID(tmp_path):
+    """Fix the field name at write time too, so a fresh corpus has one spelling."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_t_ingest", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
+    ing = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ing)
+
+    path = tmp_path / "apt.sysmon.sysmon.ndjson"
+    path.write_text(json.dumps({"event_id": 1, "Image": "powershell.exe"}) + "\n")
+    rec, _when, _nid = next(iter(ing.parse_ot_ndjson(path)))
+    assert rec["EventID"] == 1, "EventID not backfilled from event_id"
+    assert rec["event_id"] == 1, "original spelling must be kept for compatibility"
+
+
+def test_ingest_does_not_clobber_an_existing_EventID(tmp_path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_t_ingest2", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
+    ing = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ing)
+
+    path = tmp_path / "x.sysmon.sysmon.ndjson"
+    path.write_text(json.dumps({"event_id": 1, "EventID": 4624}) + "\n")
+    rec, _w, _n = next(iter(ing.parse_ot_ndjson(path)))
+    assert rec["EventID"] == 4624

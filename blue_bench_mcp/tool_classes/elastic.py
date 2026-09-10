@@ -441,7 +441,15 @@ class ElasticTool:
         if parent_image:
             must.append({"term": {"ParentImage.keyword": parent_image}})
         if event_id:
-            must.append({"term": {"EventID": event_id}})
+            # Match either spelling: the EVTX ingest path writes `EventID`, the
+            # NDJSON path historically wrote only lowercase `event_id`, and a
+            # corpus ingested before that was canonicalised carries both. A
+            # single-field term query silently missed one whole population --
+            # the injected adversary events (issue #37).
+            must.append({"bool": {"should": [
+                {"term": {"EventID": event_id}},
+                {"term": {"event_id": event_id}},
+            ], "minimum_should_match": 1}})
         if command_line_contains:
             must.append({
                 "wildcard": {

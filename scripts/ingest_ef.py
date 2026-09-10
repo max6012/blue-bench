@@ -332,6 +332,17 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
                 when = _parse_iso(str(rec["UtcTime"]).replace(" ", "T"))
             else:
                 when = None
+            # Canonicalise the Sysmon event-id field name. EF's EVTX path emits
+            # `EventID` (826k docs in a built L corpus) while this NDJSON path
+            # emits lowercase `event_id` (868 docs), so windows-sysmon ends up
+            # with BOTH and a `term: {EventID: n}` filter matches ZERO of the
+            # NDJSON documents -- which are exactly the injected adversary
+            # events. get_process_events(event_id=1), the most obvious
+            # process-creation hunt there is, returned no adversary activity at
+            # all (issue #37). Keep `event_id` too so anything already querying
+            # it keeps working.
+            if "event_id" in rec and "EventID" not in rec:
+                rec["EventID"] = rec["event_id"]
             if "id.orig_h" in rec:
                 rec.setdefault("src_ip", rec.get("id.orig_h", ""))
                 rec.setdefault("dest_ip", rec.get("id.resp_h", ""))

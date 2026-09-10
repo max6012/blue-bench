@@ -688,7 +688,16 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
             continue
         index, parser = routed
         relpath = str(path.relative_to(walk_root)).replace("\\", "/")
-        sample = ot_sample_rate if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES) else 1
+        # Subsampling is for the BENIGN OT protocol baseline (high-volume noise
+        # that would otherwise make a GB-scale corpus uningestable). Bridge legs
+        # land in ot-conn too (_BRIDGE_INDEX["ot"]), but they are the IT<->OT
+        # crossing evidence -- the RQ1 signal itself -- so keying the decision on
+        # the INDEX alone silently threw away 49 of every 50 of them. Key on the
+        # source tree instead: nothing under bridge/ is ever sampled (issue #36).
+        is_bridge = relpath.startswith("bridge/")
+        sample = (ot_sample_rate
+                  if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES and not is_bridge)
+                  else 1)
         for ordinal, (rec, when, native_id) in enumerate(parser(path)):
             if sample > 1:
                 # keep 1 of every `sample` benign OT records; the dropped 49/50

@@ -221,3 +221,49 @@ def test_ingest_does_not_clobber_an_existing_EventID(tmp_path):
     path.write_text(json.dumps({"event_id": 1, "EventID": 4624}) + "\n")
     rec, _w, _n = next(iter(ing.parse_ot_ndjson(path)))
     assert rec["EventID"] == 4624
+
+
+# --- issue #36: OT subsampling must not decimate the IT<->OT bridge -----------
+
+def test_bridge_legs_are_never_subsampled(tmp_path, monkeypatch):
+    """Bridge legs land in ot-conn (`_BRIDGE_INDEX["ot"]`), which is in
+    `_OT_SAMPLE_INDICES`. Keying the sampling decision on the index alone threw
+    away 49 of every 50 bridge records -- and the IT<->OT crossing IS the RQ1
+    signal. Sampling is for the benign OT protocol baseline only.
+    """
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "_t_ing36", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
+    ing = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ing)
+
+    # both trees route to the SAME index, which is what made this easy to miss
+    assert ing.route("bridge/ot.conn.ndjson")[0] == ing.route("ot/conn.ndjson")[0] == "ot-conn"
+    assert "ot-conn" in ing._OT_SAMPLE_INDICES
+
+    written: dict[str, list] = {}
+
+    def _fake_bulk(url, index, docs, **kw):
+        written.setdefault(index, []).extend(docs)
+        return len(docs)
+
+    monkeypatch.setattr(ing, "_bulk", _fake_bulk)
+    monkeypatch.setattr(ing, "_recreate_index", lambda *a, **k: None)
+    monkeypatch.setattr(ing, "httpx", type("_H", (), {
+        "post": staticmethod(lambda *a, **k: None)})())
+
+    n = 100
+    for sub in ("bridge", "ot"):
+        d = tmp_path / sub
+        d.mkdir(parents=True, exist_ok=True)
+        (d / ("ot.conn.ndjson" if sub == "bridge" else "conn.ndjson")).write_text(
+            "\n".join(json.dumps({"uid": f"{sub}{i}", "ts": 1.0 + i}) for i in range(n)) + "\n")
+
+    ing.ingest(tmp_path, "http://es.invalid", anchor_end_to_now=False, ot_sample_rate=50)
+
+    docs = written.get("ot-conn", [])
+    uids = [d[1].get("uid", "") for d in docs]
+    bridge_kept = sum(1 for u in uids if u.startswith("bridge"))
+    ot_kept = sum(1 for u in uids if u.startswith("ot"))
+    assert bridge_kept == n, f"bridge legs were sampled: kept {bridge_kept} of {n}"
+    assert ot_kept < n, f"benign OT should still be sampled, kept {ot_kept} of {n}"

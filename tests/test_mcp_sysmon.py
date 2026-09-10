@@ -98,9 +98,21 @@ def test_process_events_image_and_parent_use_keyword(tool):
 
 
 def test_process_events_event_id_is_numeric_term(tool):
+    """The event id must be a NUMERIC term (both fields are `long`-mapped).
+
+    Asserts the intent rather than the literal clause shape: since issue #37 the
+    filter is an OR across both spellings (`EventID` from the EVTX ingest path,
+    `event_id` from the NDJSON path), because a single-field term matched ZERO of
+    the injected adversary documents.
+    """
     body = tool._build_process_events_query("", "", "", "", 1, 240)
     must = body["query"]["bool"]["must"]
-    assert {"term": {"EventID": 1}} in must
+    should = next(c["bool"]["should"] for c in must if "bool" in c)
+    assert {"term": {"EventID": 1}} in should
+    assert {"term": {"event_id": 1}} in should
+    # numeric, not "1" -- a string term never matches a long-mapped field
+    for clause in should:
+        assert isinstance(next(iter(clause["term"].values())), int)
 
 
 def test_process_events_event_id_zero_omitted(tool):

@@ -14,10 +14,26 @@ Two contracts this adapter MUST honour (advisor 2026-06-10):
 1. **doc ``_id`` is content-derived, never positional.** ``seed_es.py`` uses
    ``_id=str(i)``; that breaks the injection orchestrator (t-9pwe / EF-P5),
    which must repoint ground-truth ``where`` to ES doc ids computed from the
-   event itself. We key ``_id`` on the source's native id (Zeek ``uid``,
-   Sysmon ``EventRecordID``, eCAR ``id``) and fall back to
-   ``sha256(canonical record)`` for line formats. Deterministic re-seed for
-   free.
+   event itself. We key ``_id`` on the source's native id (Sysmon
+   ``EventRecordID``, eCAR ``id``, Zeek ``uid`` for real captures) and fall
+   back to a hash for everything else.
+
+   That fallback is ``sha256(relpath : yield-ordinal : canonical record)``, NOT
+   ``sha256(canonical record)`` as it was until 2026-09-10. The bare content
+   hash silently collapsed duplicate records: a bulk ``index`` of an existing
+   ``_id`` is an overwrite, not an error, so N identical events became 1
+   document and ``_bulk`` still counted N successes. Genuinely repeated events
+   are normal telemetry (same Sysmon image + command line in the same second),
+   and it cost 33-51% of the injected adversary Sysmon stream (issue #31).
+   Scoping the hash by source position keeps the id content-derived while
+   making it unique by construction. Still a deterministic re-seed.
+
+   ``ordinal`` is the parser's **yield index**, not the physical line number
+   (parsers skip blank/comment lines). Anything recomputing an ``_id`` must
+   enumerate through the same parser rather than counting file lines.
+   ``doc_id()`` is the single source of truth and ``inject.py`` imports it --
+   two copies of this rule is precisely how the ground truth came to be keyed
+   by one formula and the documents written under another.
 
 2. **``@timestamp`` preserves the corpus window.** ``seed_es.py`` compresses
    everything into "the last 45 minutes" so a 60-minute lookback sees it; for a
@@ -112,9 +128,38 @@ def _index_mappings(sample_keys: Iterable[str]) -> dict:
 # native_id: stable id string, or None to fall back to sha256(record).
 
 
-def _sha_id(rec: dict) -> str:
+def _sha_id(rec: dict, relpath: str = "", ordinal: int = 0) -> str:
+    """Content-derived ``_id``, scoped to the record's position in its source.
+
+    The bare content hash (what this was before) collapses every *duplicate*
+    record onto one ``_id``: a bulk ``index`` of an id that already exists is an
+    overwrite, not an error, so N identical events silently became 1 document.
+    That is not hypothetical — repeated Sysmon events (same image, same command
+    line, same second) are normal, and it cost 33-51% of the injected adversary
+    Sysmon stream (issue #31).
+
+    ``relpath`` + ``ordinal`` scope the hash to "this record, at this position,
+    in this file", which is unique by construction while keeping the id
+    content-derived (contract 1 in the module docstring). ``ordinal`` is the
+    parser's **yield index**, not the physical line number -- parsers skip blank
+    and comment lines -- so anything recomputing an id must enumerate through
+    the same parser rather than counting lines.
+    """
     blob = json.dumps(rec, sort_keys=True, default=str, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+    keyed = f"{relpath}:{ordinal}:{blob}"
+    return hashlib.sha256(keyed.encode("utf-8")).hexdigest()[:32]
+
+
+def doc_id(rec: dict, relpath: str, ordinal: int, native_id: str | None = None) -> str:
+    """THE canonical ES ``_id`` for a parsed record. Single source of truth.
+
+    ``blue_bench_generators/merge/inject.py`` imports this to repoint
+    ground-truth ``where.doc_id`` at the document the ingest will actually
+    write. Two independent implementations of this rule is exactly how the
+    ground-truth pointers came to be computed by one formula and the documents
+    written under another -- do not reintroduce a second copy.
+    """
+    return str(native_id) if native_id else _sha_id(rec, relpath, ordinal)
 
 
 def parse_zeek(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
@@ -242,8 +287,20 @@ def parse_lines_passthrough(path: Path) -> Iterable[tuple[dict, datetime | None,
 
 
 def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | None]]:
-    """Merged OT / bridge NDJSON. ``ts`` (epoch) or ``timestamp`` (ISO); ``uid``
-    is the native id. Conn-like records get src/dest aliases like Zeek."""
+    """Merged OT / bridge / injected NDJSON. ``ts`` (epoch) or ``timestamp`` (ISO).
+    Conn-like records get src/dest aliases like Zeek.
+
+    Yields ``None`` as the native id -- deliberately, even though these records
+    carry a ``uid``. A Zeek ``uid`` identifies a *connection*, not a record: an
+    http record shares its conn record's uid, and one connection can carry
+    several http transactions. Splitting by log-type keeps conn and http in
+    different indices, but multiple http transactions on one uid still collide
+    *within* zeek-http, and there is no ``trans_depth`` on these records to
+    disambiguate (it appears nowhere in this codebase). Unlike a real capture,
+    these files are authored by Blue-Bench's own merge/inject rather than being
+    an external native source, so the uid buys no cross-system addressability
+    that the content+position hash does not already provide.
+    """
     with path.open() as f:
         for line in f:
             line = line.strip()
@@ -265,7 +322,7 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
                 rec.setdefault("src_ip", rec.get("id.orig_h", ""))
                 rec.setdefault("dest_ip", rec.get("id.resp_h", ""))
                 rec.setdefault("dest_port", rec.get("id.resp_p", ""))
-            yield rec, when, rec.get("uid")
+            yield rec, when, None
 
 
 # --- timestamp helpers --------------------------------------------------------
@@ -454,6 +511,11 @@ def _recreate_index(url: str, index: str, mappings: dict) -> None:
         sys.exit(1)
 
 
+# Per-index tally of documents that overwrote an existing _id. Non-zero means
+# _id generation collided and telemetry was silently lost (see issue #31).
+_OVERWRITTEN: dict[str, int] = __import__("collections").defaultdict(int)
+
+
 def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 2000) -> int:
     """Bulk-index in batches with 429 backoff.
 
@@ -478,9 +540,26 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
                 time.sleep(min(2 ** attempt, 16))
                 continue
             r.raise_for_status()
-            errs = [it for it in r.json().get("items", []) if "error" in it.get("index", {})]
+            items = r.json().get("items", [])
+            errs = [it for it in items if "error" in it.get("index", {})]
             if errs:
                 log.warning("%d index errors in %s; first: %s", len(errs), index, errs[0])
+            # An `index` of an _id that already exists is an OVERWRITE, and ES
+            # reports it as success ("updated") — so counting chunk-minus-errors
+            # as ingested hid a 33-51% document loss (issue #31). Count and
+            # report overwrites explicitly: on a corpus with unique ids this is
+            # always 0, and any non-zero value means telemetry was destroyed.
+            overwritten = sum(
+                1 for it in items
+                if it.get("index", {}).get("result") == "updated"
+            )
+            if overwritten:
+                log.error(
+                    "%d of %d docs OVERWROTE an existing _id in %s — that many "
+                    "events were silently destroyed; _id generation is colliding",
+                    overwritten, len(chunk), index,
+                )
+                _OVERWRITTEN[index] += overwritten
             ok += len(chunk) - len(errs)
             break
         else:
@@ -538,6 +617,7 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     stays ingestable; IT/attack telemetry is never sampled.
     """
     walk_root = ef_dir
+    _OVERWRITTEN.clear()   # module-global tally; a second ingest() must start clean
     win_start, win_end = _corpus_window(ef_dir)
     if win_end is not None:
         _CORPUS_YEAR["y"] = win_end.year  # for snort/ASA line-format year inference
@@ -569,8 +649,9 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
         if routed is None:
             continue
         index, parser = routed
+        relpath = str(path.relative_to(walk_root)).replace("\\", "/")
         sample = ot_sample_rate if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES) else 1
-        for rec, when, native_id in parser(path):
+        for ordinal, (rec, when, native_id) in enumerate(parser(path)):
             if sample > 1:
                 # keep 1 of every `sample` benign OT records; the dropped 49/50
                 # never buffer, so subsampling stays constant-memory too
@@ -586,7 +667,7 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
             # with the shifted @timestamp so host<->network correlation holds.
             if delta:
                 _shift_embedded_times(doc, delta)
-            buffers[index].append((native_id or _sha_id(rec), doc))
+            buffers[index].append((doc_id(rec, relpath, ordinal, native_id), doc))
             if len(buffers[index]) >= batch:
                 _flush(index)
     for index in list(buffers):
@@ -597,6 +678,14 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     if win_start and win_end:
         log.info("corpus window: %s .. %s (shift=%s)", win_start.isoformat(), win_end.isoformat(),
                  "end->now" if delta else "none")
+    if _OVERWRITTEN:
+        total = sum(_OVERWRITTEN.values())
+        raise RuntimeError(
+            f"{total} documents overwrote an existing _id across "
+            f"{len(_OVERWRITTEN)} index(es): {dict(_OVERWRITTEN)}. That many events "
+            f"were silently destroyed and any ground-truth pointer at them is "
+            f"orphaned. This corpus is NOT usable for grading (issue #31)."
+        )
     return dict(counts)
 
 

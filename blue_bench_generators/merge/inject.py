@@ -262,20 +262,62 @@ def remap_event(ev: dict, remap: HostRemap) -> dict:
     return _walk(ev)
 
 
-def doc_id_for(rec: dict) -> str:
-    """The ES ``_id`` the ingest adapter WILL assign to this event.
+def _ingest_adapter():
+    """Load scripts/ingest_ef.py as a module (it is a script, not a package).
 
-    Must match scripts/ingest_ef.py exactly: the native id (Zeek ``uid``) if
-    present, else sha256 over the public (non-``_``) fields. Keying the
-    ground-truth ``doc_id`` on this is what lets the judge address the exact ES
-    document — getting it wrong silently orphans the pointer.
+    Imported lazily: the adapter pulls in ``httpx``, which a pure generator run
+    should not have to have installed.
     """
-    native = rec.get("uid")
-    if native:
-        return str(native)
-    public = {k: v for k, v in rec.items() if not k.startswith("_")}
-    blob = json.dumps(public, sort_keys=True, default=str, ensure_ascii=False)
-    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:32]
+    global _INGEST
+    if _INGEST is None:
+        import importlib.util
+        path = Path(__file__).resolve().parents[2] / "scripts" / "ingest_ef.py"
+        spec = importlib.util.spec_from_file_location("_bb_ingest_ef", path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        _INGEST = mod
+    return _INGEST
+
+
+_INGEST = None
+
+
+def doc_ids_for_file(path: Path) -> list[str]:
+    """The ES ``_id`` the ingest adapter WILL assign to each record in ``path``.
+
+    Keying the ground-truth ``doc_id`` on this is what lets the judge address
+    the exact ES document — getting it wrong silently orphans the pointer.
+
+    So this does not *predict* the id from the in-memory event; it reads the
+    file we just wrote back through the ingest's own ``route()`` and parser and
+    asks the ingest's own ``doc_id()``. Every previous attempt to mirror the
+    rule here drifted from it:
+
+    - the id was ``sha256(record)`` on both sides, but duplicate records
+      collapse onto one id (issue #31);
+    - the id was the Zeek ``uid``, but several http transactions share one
+      connection's uid;
+    - the record the ingest hashes is not the record we wrote —
+      ``parse_ot_ndjson`` adds ``src_ip``/``dest_ip``/``dest_port`` aliases to
+      conn-shaped records before the id is computed.
+
+    Reading back through the real parser makes all three impossible by
+    construction rather than by agreement. Returned in file order, which is the
+    order we wrote the records in.
+    """
+    adapter = _ingest_adapter()
+    relpath = f"injected/{path.name}"
+    routed = adapter.route(relpath)
+    if routed is None:
+        raise ValueError(
+            f"the ingest adapter does not route {relpath!r}, so every ground-truth "
+            f"pointer into it would orphan; add a route before injecting this stream"
+        )
+    _index, parser = routed
+    return [
+        adapter.doc_id(rec, relpath, ordinal, native_id)
+        for ordinal, (rec, _when, native_id) in enumerate(parser(path))
+    ]
 
 
 # Bundle ``_stream`` -> (corpus subdir suffix, ES index the ingest routes to).
@@ -390,25 +432,49 @@ def inject_bundle(
     # pointer.
     inj_dir = corpus_dir / "injected"
     inj_dir.mkdir(parents=True, exist_ok=True)
-    by_key: dict[tuple[str, str], list[dict]] = {}
-    for ev in remapped:
+    # Group by (stream, log) but carry each event's INDEX in `remapped`, not the
+    # event, so the doc_ids we read back per file can be mapped to the
+    # ground-truth event they belong to.
+    by_key: dict[tuple[str, str], list[int]] = {}
+    for i, ev in enumerate(remapped):
         stream = str(ev.get("_stream", "sysmon"))
         logname = str(ev.get("_log", stream))
-        by_key.setdefault((stream, logname), []).append(ev)
+        by_key.setdefault((stream, logname), []).append(i)
     written: dict[str, int] = {}
-    for (stream, logname), evs in sorted(by_key.items()):
+    doc_ids: dict[int, str] = {}
+    for (stream, logname), idxs in sorted(by_key.items()):
         path = inj_dir / f"{incident_id}.{stream}.{logname}.ndjson"
         with path.open("w", encoding="utf-8", newline="") as f:
-            for ev in evs:
-                doc = {k: v for k, v in ev.items() if not k.startswith("_")}
+            for i in idxs:
+                doc = {k: v for k, v in remapped[i].items() if not k.startswith("_")}
                 f.write(json.dumps(doc, sort_keys=True, default=str) + "\n")
-        written[f"{stream}/{logname}"] = len(evs)
+        # Read the file back through the ingest's own parser to learn the exact
+        # _id each record will get. File order == the order we just wrote, so
+        # ids[n] belongs to idxs[n].
+        ids = doc_ids_for_file(path)
+        if len(ids) != len(idxs):
+            raise ValueError(
+                f"{path.name}: wrote {len(idxs)} records but the ingest parser "
+                f"yields {len(ids)}; ground-truth pointers would be misaligned"
+            )
+        for i, did in zip(idxs, ids):
+            doc_ids[i] = did
+        written[f"{stream}/{logname}"] = len(idxs)
+    # Uniqueness is the property issue #31 was about: a bulk index of a
+    # duplicate _id is an overwrite, not an error, so a collision here would
+    # silently delete telemetry AND orphan the pointer with no failure anywhere.
+    if len(set(doc_ids.values())) != len(doc_ids):
+        dupes = len(doc_ids) - len(set(doc_ids.values()))
+        raise ValueError(
+            f"{dupes} of {len(doc_ids)} injected records share an ES _id; they "
+            f"would overwrite each other on ingest (issue #31)"
+        )
 
     # Repoint ground truth: events[].where -> the ES doc_id the ingest will
     # assign. GT event i (1-based, original bundle order) corresponds to
-    # remapped[i-1]; the doc_id is content/uid-derived and independent of which
-    # per-stream file the event lands in, so re-grouping by stream above does
-    # not affect this mapping.
+    # remapped[i-1], and `doc_ids` is keyed by that same index — so the
+    # re-grouping by stream above cannot perturb the mapping regardless of how
+    # the grouping orders or partitions the records.
     #
     # Synthesized beacon events (BeaconSpec) are appended AFTER the captured
     # bundle events, so the GT-aligned prefix remapped[0:len(gt_events)] is
@@ -436,7 +502,7 @@ def inject_bundle(
     new_events = []
     for i, e in enumerate(gt_events):
         e2 = dict(e)
-        e2["where"] = {"doc_id": doc_id_for(remapped[i])}
+        e2["where"] = {"doc_id": doc_ids[i]}
         new_events.append(e2)
     gt_out["events"] = new_events
 

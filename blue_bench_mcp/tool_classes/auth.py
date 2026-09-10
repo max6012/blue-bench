@@ -21,7 +21,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.guardrails import truncate_result_list, truncate_results
+from blue_bench_mcp.guardrails import json_dump_within, truncate_result_list
 
 
 class AuthTool:
@@ -152,7 +152,13 @@ class AuthTool:
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
         hits, truncated = truncate_result_list(hits, self.max_results)
-        out = json.dumps(hits, indent=2, default=str)
-        if truncated:
-            out += f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-        return truncate_results(out, self.max_chars)
+        # Drop whole records rather than slicing the serialized string:
+        # truncate_results would splice a marker through the middle of the JSON
+        # and hand the model something unparseable (issue #41).
+        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
+                  if truncated else "")
+        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
+        if dropped and not truncated:
+            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
+                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        return body + footer

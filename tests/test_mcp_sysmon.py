@@ -161,14 +161,6 @@ async def test_tree_requires_guid(tool):
 # --- live path ----------------------------------------------------------------
 
 @requires_sysmon
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #41: guardrails.truncate_results splices head + TRUNC_MARKER + tail "
-           "into the serialized JSON, so any result over max_result_chars is not "
-           "parseable. Real defect across 18 call sites in 7 tool classes, not a "
-           "problem with this test. strict=True so this fails loudly if #41 is fixed "
-           "and the marker is left behind.",
-)
 async def test_process_events_live_process_create(tool):
     out = await tool.get_process_events(event_id=1, timerange_minutes=4000)
     assert isinstance(out, str)

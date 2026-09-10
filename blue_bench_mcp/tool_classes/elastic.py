@@ -15,7 +15,11 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.guardrails import truncate_result_list, truncate_results
+from blue_bench_mcp.guardrails import (
+    json_dump_within,
+    truncate_result_list,
+    truncate_results,
+)
 
 # RFC1918 / link-local: a "beacon" is internal-host -> external-dest, so these
 # are excluded from the destination side of the analysis.
@@ -134,10 +138,17 @@ class ElasticTool:
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
         hits, truncated = truncate_result_list(hits, self.max_results)
-        result = json.dumps(hits, indent=2, default=str)
-        if truncated:
-            result += f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-        return truncate_results(result, self.max_chars)
+        # Budget the footer so the JSON body plus footer both fit, and drop whole
+        # RECORDS rather than slicing the serialized string -- truncate_results
+        # would splice a marker through the middle of the JSON and hand the model
+        # something unparseable (issue #41).
+        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
+                  if truncated else "")
+        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
+        if dropped and not truncated:
+            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
+                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        return body + footer
 
     async def get_connections(
         self,
@@ -182,10 +193,17 @@ class ElasticTool:
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
         hits, truncated = truncate_result_list(hits, self.max_results)
-        result = json.dumps(hits, indent=2, default=str)
-        if truncated:
-            result += f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-        return truncate_results(result, self.max_chars)
+        # Budget the footer so the JSON body plus footer both fit, and drop whole
+        # RECORDS rather than slicing the serialized string -- truncate_results
+        # would splice a marker through the middle of the JSON and hand the model
+        # something unparseable (issue #41).
+        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
+                  if truncated else "")
+        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
+        if dropped and not truncated:
+            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
+                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        return body + footer
 
     async def count_by_field(
         self,
@@ -387,7 +405,19 @@ class ElasticTool:
             },
             "candidates": surfaced,
         }
-        return truncate_results(json.dumps(out, indent=2, default=str), self.max_chars)
+        # The coverage block is the point of this tool (it reports its own blind
+        # spots), so only `candidates` shrinks.
+        body, dropped = json_dump_within(out, self.max_chars, shrink=("candidates",))
+        if dropped:
+            # A silently dropped candidate is a blind spot, and this tool exists
+            # to declare its blind spots rather than hide them. Record it where
+            # the model already looks, then re-fit (the note itself costs bytes).
+            out["analysis"]["blind_spots"].append(
+                f"{dropped} lower-ranked candidate(s) were cadence-checked but "
+                f"OMITTED from this response to fit the {self.max_chars}-character "
+                f"limit — raise min_connections or filter by src_ip/dest_ip to see them")
+            body, _ = json_dump_within(out, self.max_chars, shrink=("candidates",))
+        return body
 
     # --- Sysmon host telemetry -------------------------------------------------
     # Sysmon string fields are dynamically mapped (text + a `.keyword` subfield),
@@ -459,10 +489,17 @@ class ElasticTool:
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
         hits, truncated = truncate_result_list(hits, self.max_results)
-        result = json.dumps(hits, indent=2, default=str)
-        if truncated:
-            result += f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-        return truncate_results(result, self.max_chars)
+        # Budget the footer so the JSON body plus footer both fit, and drop whole
+        # RECORDS rather than slicing the serialized string -- truncate_results
+        # would splice a marker through the middle of the JSON and hand the model
+        # something unparseable (issue #41).
+        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
+                  if truncated else "")
+        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
+        if dropped and not truncated:
+            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
+                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        return body + footer
 
     def _build_process_tree_self_query(
         self, process_guid: str, host: str, timerange_minutes: int
@@ -530,7 +567,12 @@ class ElasticTool:
             "self_and_parent": self_hits,
             "children": child_hits,
         }
-        result = json.dumps(tree, indent=2, default=str)
-        if self_trunc or child_trunc:
-            result += f"\n\n--- Some result sets truncated to first {self.max_results}. Narrow your query. ---"
-        return truncate_results(result, self.max_chars)
+        footer = (f"\n\n--- Some result sets truncated to first {self.max_results}. "
+                  f"Narrow your query. ---" if (self_trunc or child_trunc) else "")
+        # Shrink the two record lists; process_guid and the object shape survive.
+        body, dropped = json_dump_within(
+            tree, self.max_chars - len(footer), shrink=("self_and_parent", "children"))
+        if dropped and not footer:
+            footer = ("\n\n--- Response truncated to fit the size limit. "
+                      "Narrow your query. ---")
+        return body + footer

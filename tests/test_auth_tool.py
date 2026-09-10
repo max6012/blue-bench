@@ -124,7 +124,7 @@ async def test_account_matches_windows_and_linux_fields():
 
 async def test_src_ip_matches_windows_ip_and_syslog_message():
     tool = _tool(); seen = _capture(tool)
-    await tool.search_auth_events(src_ip="185.220.101.42")
+    await tool.search_auth_events(src_ip="198.51.100.42")
     blob = _flat(seen[0])
     assert "IpAddress" in blob and "match_phrase" in blob
 

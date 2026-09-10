@@ -12,7 +12,7 @@ expected_tools:
 expected_findings:
   - synonyms: ["brute force", "brute-force", "failed logins", "failed password", "authentication_failed", "T1110.001"]
   - synonyms: ["srv-app-01", "web server", "10.20.0.30"]
-  - synonyms: ["single source", "one source IP", "185.220.101.42", "external"]
+  - synonyms: ["single source", "one source IP", "198.51.100.42", "external"]
   - synonyms: ["successful login after failures", "success", "then accepted", "nonexistent user"]
   - synonyms: ["Wazuh", "rule 5710", "SSH", "sshd"]
 pass_criteria: Identifies the SSH brute-force against srv-app-01 from a single external source (~40 failures then a success), grounded in the auth-log burst and/or the Wazuh authentication-failure alerts.

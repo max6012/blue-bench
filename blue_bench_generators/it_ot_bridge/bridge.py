@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterator, Literal
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.it_baseline.topology import Host, Topology
 from blue_bench_generators.ot_protocols.topology import Device, OTNetwork
 
@@ -164,6 +165,13 @@ class AnomalyWindow:
     start: datetime
     end: datetime
     target_device: str | None = None
+
+    def __post_init__(self) -> None:
+        # Naive input means UTC (see ``as_utc``); coerce so every epoch
+        # derived from the window is TZ-independent and so the window
+        # never compares naive-vs-aware against the corpus bounds.
+        object.__setattr__(self, "start", as_utc(self.start))
+        object.__setattr__(self, "end", as_utc(self.end))
 
 
 # --- RNG / UID helpers -----------------------------------------------------
@@ -416,7 +424,10 @@ def _emit_linux_auth_accepted(
         "_log": "auth_log",
         # Second precision -- matches the natural sshd record format
         # (linux_logs uses second-precision ISO strings for auth.log).
-        "timestamp": ts.replace(microsecond=0).isoformat(),
+        # strftime (not isoformat) so the emitted text stays offset-free
+        # even though ``ts`` is now UTC-aware -- linux_logs' auth.log
+        # convention is a naive-UTC second-precision ISO string.
+        "timestamp": ts.strftime("%Y-%m-%dT%H:%M:%S"),
         "hostname": host_fqdn,
         "facility": "auth",
         "process": "sshd",
@@ -726,7 +737,11 @@ _ANOMALY_BUILDERS = {
 
 
 def _weekdays_in_window(start: datetime, end: datetime) -> list[datetime]:
-    """Return naive-UTC midnights of each weekday inside ``[start, end)``.
+    """Return the UTC midnights of each weekday inside ``[start, end)``.
+
+    Tz-awareness follows ``start``: ``generate_for_topologies`` coerces
+    its bounds to aware UTC before calling this, so the returned days
+    are aware UTC too.
 
     Caveat: when ``start`` falls mid-day, the cursor rolls forward to
     the next midnight, dropping that day's sessions entirely. The
@@ -789,6 +804,13 @@ def generate_for_topologies(
     Each event carries a ``_source`` field naming the destination
     source directory; the composer strips it before writing.
     """
+    # Coerce to aware UTC before any ``.timestamp()`` derivation: on a
+    # naive datetime ``.timestamp()`` assumes local time, which made
+    # every emitted Zeek epoch depend on the build machine's TZ
+    # (issue #30).
+    start = as_utc(start)
+    end = as_utc(end)
+
     if end <= start:
         log.info("it_ot_bridge: empty window, no events")
         return

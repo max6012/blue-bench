@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols.iec104 import (
     AnomalyWindow,
     generate,
@@ -131,8 +132,10 @@ def test_iec104_record_schema(network, one_hour_window):
 def test_events_inside_window(network, one_hour_window):
     start, end = one_hour_window
     events = list(generate(network, start, end, seed=11))
-    start_e = start.timestamp()
-    end_e = end.timestamp()
+    # ``as_utc`` (not a bare naive ``.timestamp()``) so the expected
+    # bounds are the UTC epochs the generator emits, on any machine TZ.
+    start_e = as_utc(start).timestamp()
+    end_e = as_utc(end).timestamp()
     for ev in events:
         ts = float(ev["ts"])
         assert start_e <= ts < end_e, f"event {ev} outside window"

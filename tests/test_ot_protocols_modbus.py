@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 import pytest
 
+from blue_bench_generators._isotime import as_utc
 from blue_bench_generators.ot_protocols.modbus import (
     AnomalyWindow,
     generate,
@@ -81,8 +82,10 @@ def test_schema_modbus_records_have_required_fields(events_clean_1h):
 
 
 def test_no_events_outside_window(events_clean_1h):
-    start_epoch = WINDOW_START.timestamp()
-    end_epoch = WINDOW_END_1H.timestamp()
+    # ``as_utc`` (not a bare naive ``.timestamp()``) so the expected
+    # bounds are the UTC epochs the generator emits, on any machine TZ.
+    start_epoch = as_utc(WINDOW_START).timestamp()
+    end_epoch = as_utc(WINDOW_END_1H).timestamp()
     for r in events_clean_1h:
         t = float(r["ts"])
         assert start_epoch <= t < end_epoch, (

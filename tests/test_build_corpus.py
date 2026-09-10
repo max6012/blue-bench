@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import os
+
 import yaml
 
 from blue_bench_generators.merge import __main__ as build
@@ -127,3 +129,37 @@ def test_run_corpus_gates_scoped_to_designated_pair(tmp_path: Path):
         {"incident": "pw-spray-01", "source_class": "cybercrime"},
     ])
     assert res is None
+
+
+def test_build_aborts_on_a_non_utc_clock():
+    """The OT generators emit UTC epochs; it_baseline/network_zeek.py and c2/
+    still interpret naive datetimes as LOCAL time. On a non-UTC machine the two
+    halves of the corpus land at different absolute times (5h on
+    America/New_York), which destroys the IT<->OT correlation RQ1/RQ2 rest on.
+
+    The damage is invisible -- every file parses and every gate passes -- so the
+    guard is a hard failure, and it is enforced here rather than documented.
+    See issue #39.
+    """
+    import time
+    from blue_bench_generators.merge.__main__ import _require_utc_clock
+
+    old = os.environ.get("TZ")
+    try:
+        os.environ["TZ"] = "America/New_York"
+        time.tzset()
+        try:
+            _require_utc_clock()
+            assert False, "a non-UTC clock must abort the build"
+        except SystemExit as e:
+            assert "TZ=UTC" in str(e)
+
+        os.environ["TZ"] = "UTC"
+        time.tzset()
+        _require_utc_clock()          # must not raise
+    finally:
+        if old is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = old
+        time.tzset()

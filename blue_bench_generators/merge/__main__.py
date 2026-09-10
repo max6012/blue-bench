@@ -142,6 +142,38 @@ def _stamp_ground_truth(corpus_dir: Path, build_hash: str) -> list[str]:
     return stamped
 
 
+def _require_utc_clock() -> None:
+    """Abort unless the process clock is UTC. Enforced, not documented.
+
+    The OT generators (`ot_protocols/`, `it_ot_bridge/`) build tz-aware UTC
+    datetimes, so their epochs are TZ-independent. The IT generators
+    (`it_baseline/network_zeek.py`, `c2/`) still call `.timestamp()` on NAIVE
+    datetimes, which Python interprets in the machine's LOCAL zone. On a
+    non-UTC machine the two halves of the corpus therefore land at different
+    absolute times -- measured 5h apart on America/New_York -- which destroys
+    the host<->network and IT<->OT correlation that RQ1 and RQ2 are built on.
+
+    Under TZ=UTC both interpretations coincide and the corpus is correct, so
+    this is a guard rather than a blocker. It is a hard failure and not a
+    warning because the damage is invisible in the output: every file parses,
+    every gate passes, and the corpus is simply wrong by a fixed offset.
+
+    Remove this once `it_baseline/` and `c2/` are tz-aware (issue #39).
+    """
+    import time
+    if time.timezone == 0 and (not time.daylight or time.altzone == 0):
+        return
+    local = time.tzname[0] if time.tzname else "unknown"
+    raise SystemExit(
+        f"ABORT: corpus builds require a UTC clock, but this process is in "
+        f"{local!r} (UTC offset {-time.timezone // 3600:+d}h).\n"
+        f"The OT generators emit UTC epochs while the IT generators still "
+        f"interpret naive datetimes as local time, so building here would "
+        f"silently desync IT from OT by that offset and invalidate RQ1/RQ2.\n"
+        f"Re-run with:  TZ=UTC <your command>"
+    )
+
+
 def build_corpus(
     *,
     tier: str,
@@ -153,6 +185,7 @@ def build_corpus(
     ef_dir: Path | None,
     enforce_gates: bool = True,
 ) -> dict:
+    _require_utc_clock()
     out = Path(out)
 
     # 1. EvidenceForge benign IT telemetry.

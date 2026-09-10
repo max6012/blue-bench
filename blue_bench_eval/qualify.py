@@ -179,6 +179,16 @@ async def run_corpus(
         guidelines=getattr(profile, "prompt_parts", {}).get("guidelines", ""),
     )
 
+    def _write_meta() -> None:
+        (out_dir / "run_meta.json").write_text(json.dumps(asdict(meta), indent=2))
+
+    # Write the slate BEFORE the loop. run_meta.json is aggregate's authoritative
+    # denominator, and writing it only at the end meant an interrupted run had no
+    # slate at all: Ctrl-C (a BaseException, so the per-prompt `except Exception`
+    # never sees it) left aggregate to fall back to the trace map and report a
+    # confident headline over however many prompts happened to finish.
+    _write_meta()
+
     print(
         f"\n=== Blue-Bench Phase {phase} — profile={profile.name} protocol={profile.tool_protocol} "
         f"prompts={len(specs)}{f' tag={tag}' if tag else ''} ==="
@@ -214,7 +224,7 @@ async def run_corpus(
             )
     meta.total_duration_ms = int((time.monotonic() - overall_start) * 1000)
     meta.finished_at = datetime.now().isoformat()
-    (out_dir / "run_meta.json").write_text(json.dumps(asdict(meta), indent=2))
+    _write_meta()  # rewrite with timings + counters
 
     print(
         f"\nDone — {meta.prompts_completed}/{meta.prompt_count} completed, "

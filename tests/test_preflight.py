@@ -110,7 +110,10 @@ class FakeES:
     def count(self, index: str) -> int | None:
         if self._raise_on == "count":
             raise ESError("count boom")
-        return self._counts.get(index, 0)
+        # An index that was never configured does not exist. HttpxESClient.count
+        # returns None on a 404, so the fake must too — defaulting to 0 modelled
+        # "present but empty", which is a different (and critical) condition.
+        return self._counts.get(index, None)
 
     def max_timestamp(self, indices: list[str]) -> datetime | None:
         if self._raise_on == "max_timestamp":
@@ -295,18 +298,50 @@ def test_empty_auth_index_fails(config_path: Path, prompts_dir_phase3: Path):
     assert "windows-security" in chk.detail and "empty" in chk.detail
 
 
-def test_phase2_slate_does_not_demand_auth_or_ot(config_path: Path, prompts_dir: Path):
-    # Defect 2 (round 7): a phase-2 slate must NOT demand auth/OT/Sysmon indices
-    # it never touches. The p2 slate reads only index_pattern + sysmon.
+REAL_PROMPTS = Path(__file__).parent.parent / "blue_bench_eval" / "prompts"
+
+# The real p2 slate, unlike the synthetic fixture, uses get_connections (p2-02,
+# p2-03, p2-04, p2-08) and therefore resolves ot-conn. A synthetic fixture that
+# omits get_connections cannot exhibit the defect this test is named for, so
+# these two run against the committed prompt directory on purpose.
+IT_ONLY_INDICES = PATTERN_INDICES + [SYSMON_INDEX, "snort-alerts", "windows-security"]
+
+
+def test_real_phase2_slate_tolerates_an_it_only_corpus(config_path: Path):
+    # An IT-only corpus has no ot/ tree, so ot-conn is never created, and a
+    # Windows-only one has no linux-syslog. Both are ABSENT (not empty), the
+    # tools query them with ignore_unavailable, and preflight must not be
+    # stricter than the tool it gates.
     now = datetime.now(timezone.utc)
-    counts = {i: 100 for i in PATTERN_INDICES + [SYSMON_INDEX]}
+    fake = FakeES(
+        counts={i: 100 for i in IT_ONLY_INDICES},
+        max_ts=now - timedelta(hours=1),
+        probe_map={i: 10 for i in IT_ONLY_INDICES},
+    )
+    report = run_preflight(
+        config_path, prompts_dir=REAL_PROMPTS, prompts_prefix="p2-", client=fake
+    )
+    assert report.ok is True, [c.name for c in report.checks if not c.passed and c.critical]
+
+
+def test_real_phase3_slate_still_fails_on_an_empty_optional_index(config_path: Path):
+    # Tolerating an ABSENT optional index must not tolerate a PRESENT-but-empty
+    # one: the index existing means ingest ran and wrote nothing, which is the
+    # void-grade condition the gate exists to catch.
+    now = datetime.now(timezone.utc)
+    counts = {i: 100 for i in IT_ONLY_INDICES + ["linux-syslog"]}
+    counts["ot-conn"] = 0  # present, empty
     fake = FakeES(
         counts=counts,
         max_ts=now - timedelta(hours=1),
-        probe_map={i: 10 for i in PATTERN_INDICES + [SYSMON_INDEX]},
+        probe_map={i: 10 for i in counts if counts[i]},
     )
-    report = run_preflight(config_path, prompts_dir=prompts_dir, client=fake)
-    assert report.ok is True
+    report = run_preflight(
+        config_path, prompts_dir=REAL_PROMPTS, prompts_prefix="p3-", client=fake
+    )
+    assert report.ok is False
+    populated = next(c for c in report.checks if c.name == "indices_populated")
+    assert "empty: ot-conn" in populated.detail
 
 
 # --- scenario: stale window --------------------------------------------------

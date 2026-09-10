@@ -62,6 +62,25 @@ def _zeek_index(cfg: ServerConfig) -> str:
     return cfg.zeek.index if cfg.zeek.use_elastic else cfg.elastic.index_pattern
 
 
+def _optional_indices(cfg: ServerConfig) -> set[str]:
+    """Indices a legitimate deployment may simply not have.
+
+    The OT segment and the Linux auth substrate are optional by design: an
+    IT-only corpus has no ``ot/`` tree (``scenarios/heavy-telemetry/README.md``
+    documents baseline-only ingest, and neither bb-benign-s nor bb-benign-m has
+    a plant segment), and a Windows-only corpus has no syslog. The tools already
+    tolerate their absence — ``tool_classes/elastic.py`` queries with
+    ``ignore_unavailable=true`` precisely so "ot-conn absent in an IT-only
+    deployment" degrades to no-data rather than a 404.
+
+    So preflight must not be stricter than the tool it gates: an ABSENT optional
+    index is reported non-critically. Present-but-empty and present-but-stale
+    are still critical failures — those mean ingest ran and produced nothing,
+    which is the void-grade condition this gate exists to catch.
+    """
+    return {cfg.zeek.ot_conn_index, cfg.auth.linux_syslog_index}
+
+
 def _indices_for_tools(tools: list[str], cfg: ServerConfig) -> list[str]:
     """Resolve the ES indices an expected_tools list would read.
 
@@ -388,7 +407,12 @@ def _check_indices_populated(
     except ESError as e:
         report.add("indices_populated", False, str(e))
         return
-    missing = [i for i, n in counts.items() if n is None]
+    optional = _optional_indices(cfg)
+    # An ABSENT optional index is a deployment shape, not a fault (see
+    # _optional_indices). Present-but-empty stays critical for every index:
+    # the index existing means ingest created it and wrote nothing.
+    absent_optional = [i for i, n in counts.items() if n is None and i in optional]
+    missing = [i for i, n in counts.items() if n is None and i not in optional]
     empty = [i for i, n in counts.items() if n == 0]
     detail_parts = [
         f"{i}={'MISSING' if counts[i] is None else counts[i]}" for i in indices
@@ -403,6 +427,15 @@ def _check_indices_populated(
         report.add("indices_populated", False, f"{detail} ({'; '.join(problems)})")
     else:
         report.add("indices_populated", True, detail)
+    if absent_optional:
+        report.add(
+            "optional_indices_absent",
+            True,
+            f"not present, tolerated: {', '.join(absent_optional)} — the tools "
+            "query with ignore_unavailable, so prompts reading them degrade to "
+            "no-data rather than erroring",
+            critical=False,
+        )
 
 
 def _check_window_covers_now(
@@ -416,14 +449,22 @@ def _check_window_covers_now(
     # union would let one fresh index mask six stale ones — the same OR flaw the
     # per-prompt probe had. Every index the selected slate reads must cover now.
     now = datetime.now(timezone.utc)
+    optional = _optional_indices(cfg)
     stale: list[str] = []
     no_ts: list[str] = []
+    absent_optional: list[str] = []
     details: list[str] = []
     try:
         for idx in indices:
             max_ts = client.max_timestamp([idx])
             if max_ts is None:
-                no_ts.append(idx)
+                # An absent optional index has no @timestamp because it does not
+                # exist — a deployment shape, not a stale window. A present
+                # optional index that IS stale still lands in `stale` below.
+                if idx in optional and client.count(idx) is None:
+                    absent_optional.append(idx)
+                else:
+                    no_ts.append(idx)
                 continue
             gap_hours = (now - max_ts).total_seconds() / 3600.0
             if gap_hours < 0:
@@ -440,6 +481,8 @@ def _check_window_covers_now(
     # a concurrent stale index (and vice versa).
     passed = not stale and not no_ts
     detail = "; ".join(details) + f"; tolerance = {now_tolerance_hours}h"
+    if absent_optional:
+        detail += f" — absent (optional, tolerated): {', '.join(absent_optional)}"
     if no_ts:
         detail += (
             f" — no @timestamp in: {', '.join(no_ts)} (empty corpus or "
@@ -485,11 +528,19 @@ def _check_prompt_probes(
         # single union search would pass if ANY index has data — so an auth-only
         # prompt whose auth indices are empty would be masked by the alert
         # indices (the exact void-grade failure this gate exists to catch).
+        optional = _optional_indices(cfg)
         empty_indices: list[str] = []
         per_index: list[str] = []
         try:
             for idx in indices:
                 hits = client.probe_hits([idx], probe_window_hours)
+                # probe_hits uses ignore_unavailable, so a MISSING index and a
+                # present-but-empty one both read 0. Distinguish via count():
+                # an absent optional index is tolerated here (check 2 reports it
+                # non-critically); present-but-empty stays a probe failure.
+                if hits < 1 and idx in optional and client.count(idx) is None:
+                    per_index.append(f"{idx}=absent(optional)")
+                    continue
                 per_index.append(f"{idx}={hits}")
                 if hits < 1:
                     empty_indices.append(idx)

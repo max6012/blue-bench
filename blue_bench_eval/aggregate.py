@@ -77,6 +77,14 @@ class AggregateResult:
     passes_overall: bool = False
     passes_key_dims: dict[str, bool] = field(default_factory=dict)
 
+    # Partial-run provenance. Set when --allow-partial suppressed the
+    # completeness check: without this the BLUF of a 1-of-28 run was
+    # byte-indistinguishable from a complete one.
+    partial: bool = False
+    expected_count: int = 0
+    missing_scored: list[str] = field(default_factory=list)
+    stale_scored: list[str] = field(default_factory=list)
+
     # Per-prompt detail.
     verdicts: list[dict] = field(default_factory=list)  # [{id, category, verdict, dim_scores}]
 
@@ -215,10 +223,14 @@ def aggregate(
     elif traces:
         expected_ids = set(traces)
 
-    if expected_ids is not None and not allow_partial:
+    if expected_ids is not None:
         scored_ids = {s.prompt_id for s in scores}
         missing = sorted(expected_ids - scored_ids)
         stale = sorted(scored_ids - expected_ids)
+    else:
+        missing, stale = [], []
+
+    if expected_ids is not None and not allow_partial:
         if missing or stale:
             parts = []
             if missing:
@@ -237,6 +249,10 @@ def aggregate(
         dimensions=dimensions,
         key_dimensions=key_dimensions,
     )
+    result.partial = bool(missing or stale)
+    result.expected_count = len(expected_ids) if expected_ids is not None else len(scores)
+    result.missing_scored = missing
+    result.stale_scored = stale
 
     # Pull run-level metadata from the first trace (profile is uniform per run).
     if traces:
@@ -328,6 +344,23 @@ def render_bluf(result: AggregateResult) -> str:
     lines: list[str] = []
     lines.append(f"# BLUF — {result.profile_name}")
     lines.append("")
+    if result.partial:
+        # A partial run's numbers are computed over the survivors only. Saying so
+        # once at the top and again on the verdict line is the difference between
+        # a caveated result and a wrong one.
+        lines.append(
+            f"> **INCOMPLETE RUN — {len(result.missing_scored) and 'partial' or 'stale'} "
+            f"slate.** Scored {result.prompt_count} of {result.expected_count} prompts "
+            "(`--allow-partial`). Every number below is over the scored subset only "
+            "and is NOT comparable to a full-slate run."
+        )
+        if result.missing_scored:
+            lines.append(f">")
+            lines.append(f"> Unscored: {', '.join(result.missing_scored)}")
+        if result.stale_scored:
+            lines.append(f">")
+            lines.append(f"> Scored but not in this run: {', '.join(result.stale_scored)}")
+        lines.append("")
     lines.append(f"- **Run directory:** `{result.run_dir}`")
     lines.append(f"- **Model:** `{result.model_id}`")
     lines.append(f"- **Prompts:** {result.prompt_count}")
@@ -362,6 +395,12 @@ def render_bluf(result: AggregateResult) -> str:
 
     all_pass = result.passes_overall and all(result.passes_key_dims.values())
     verdict = "**CLEARS THRESHOLD**" if all_pass else "**BELOW THRESHOLD — tuning required**"
+    if result.partial:
+        # Never let a partial run render a bare pass verdict.
+        verdict = (
+            f"**INCOMPLETE — {result.prompt_count}/{result.expected_count} prompts scored; "
+            f"threshold NOT assessable.** (Subset would read: {verdict.strip('*')})"
+        )
     lines.append(f"{verdict}")
     lines.append("")
 

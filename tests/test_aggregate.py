@@ -353,3 +353,30 @@ def test_aggregate_allow_partial_grades_survivors(tmp_path: Path):
     result = aggregate(run, RUBRIC, prompts_dir=PROMPTS, allow_partial=True)
     assert result.prompt_count == 1
     assert result.overall_pct == 100.0
+    # Survivors-only is the intended behaviour here — but the result and the BLUF
+    # must SAY so. Without this a 1-of-N partial run rendered a bare
+    # "CLEARS THRESHOLD" indistinguishable from a complete run.
+    assert result.partial is True
+    assert result.expected_count == 2
+    assert result.missing_scored == ["p2-02"]
+    bluf = render_bluf(result)
+    assert "INCOMPLETE RUN" in bluf
+    assert "Scored 1 of 2 prompts" in bluf
+    assert "threshold NOT assessable" in bluf
+    assert "**CLEARS THRESHOLD**" not in bluf
+
+
+def test_aggregate_complete_run_is_not_marked_partial(tmp_path: Path):
+    # The converse: a complete run must carry no partial marker at all.
+    run = tmp_path / "run"
+    for pid in ("p2-01", "p2-02"):
+        _write_trace(run, pid)
+        _write_scored(run, pid, 3, 3, 3, 3)
+    (run / "run_meta.json").write_text(json.dumps({"prompt_ids": ["p2-01", "p2-02"]}))
+
+    result = aggregate(run, RUBRIC, prompts_dir=PROMPTS)
+    assert result.partial is False
+    assert result.missing_scored == [] and result.stale_scored == []
+    bluf = render_bluf(result)
+    assert "INCOMPLETE" not in bluf
+    assert "**CLEARS THRESHOLD**" in bluf

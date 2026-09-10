@@ -45,11 +45,30 @@ def test_session_rejects_disallowed_task_class():
 
 
 def test_session_rejects_missing_task_class():
+    """No class bound at engagement START is an error.
+
+    Must pass ``at_entry=True`` — that is the flag the real session entry uses
+    (``interactive.py:187``). Bare ``_enforce_scope()`` defaults to
+    ``at_entry=False``, which deliberately ALLOWS an unbound class (a
+    mid-session profile swap does not re-establish engagement scope), so
+    calling it here asserted a raise the code is documented not to perform.
+    """
     profile = _profile()
     session = InteractiveSession(profile)
     with pytest.raises(EngagementScopeError) as exc:
-        session._enforce_scope()
+        session._enforce_scope(at_entry=True)
     assert "no silent defaulting" in str(exc.value)
+
+
+def test_session_allows_missing_task_class_on_a_midsession_swap():
+    """The other half of the at_entry contract, which nothing covered.
+
+    Without this, `at_entry` could be hard-wired True and the suite would stay
+    green while mid-session profile swaps started failing.
+    """
+    profile = _profile()
+    session = InteractiveSession(profile)
+    session._enforce_scope()          # at_entry=False — must not raise
 
 
 def test_session_skips_enforcement_when_require_task_class_false():

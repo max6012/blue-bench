@@ -371,6 +371,21 @@ def doc_ids_for_file(path: Path) -> list[str]:
 _STREAM_LOG = {"sysmon": "sysmon", "zeek": "zeek"}
 
 
+def channel_slug(channel: str) -> str:
+    """A filename-safe token for a Windows event-log channel name.
+
+    Windows channels carry spaces and slashes ("Windows PowerShell",
+    "Microsoft-Windows-Sysmon/Operational"), neither of which belongs in the
+    ``<incident>.<stream>.<log>.ndjson`` filename the ingest routes on. Collapse
+    to lowercase alphanumerics, keeping the last path segment, so
+    "Windows PowerShell" -> "powershell" and "Security" -> "security".
+    """
+    tail = channel.rsplit("/", 1)[-1].strip()
+    tail = re.sub(r"^Microsoft-Windows-", "", tail, flags=re.IGNORECASE)
+    tail = re.sub(r"^Windows[\s-]+", "", tail, flags=re.IGNORECASE)
+    return re.sub(r"[^0-9a-z]+", "-", tail.lower()).strip("-")
+
+
 def leak_check(events: list[dict], remap: HostRemap) -> list[str]:
     """Return any capture-identity strings still present (should be empty)."""
     blob = json.dumps(events, default=str, ensure_ascii=False)
@@ -491,6 +506,17 @@ def inject_bundle(
     for i, ev in enumerate(remapped):
         stream = str(ev.get("_stream", "sysmon"))
         logname = str(ev.get("_log", stream))
+        if stream == "evtx":
+            # Every non-Sysmon Windows channel shares ``_log == "winevtx"``
+            # (apt_inject/ingest.py:136), but the channels belong in DIFFERENT
+            # ES indices -- Security is where search_auth_events reads. Splitting
+            # on `_log` alone put Security, System and PowerShell in one file,
+            # and the ingest routing table had no `evtx` branch at all, so that
+            # file hit `return None` and every event in it was silently dropped
+            # (audit D5). Split by channel, which is also how the BENIGN side
+            # writes evtx (the composer's `jsonl_by_channel`), so injected
+            # events land in the same index as the matching benign telemetry.
+            logname = channel_slug(str(ev.get("channel", ""))) or logname
         by_key.setdefault((stream, logname), []).append(i)
     written: dict[str, int] = {}
     doc_ids: dict[int, str] = {}

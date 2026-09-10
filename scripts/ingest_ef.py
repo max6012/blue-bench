@@ -82,6 +82,20 @@ def zeek_index(logtype: str) -> str:
 
 WINDOWS_SYSMON_INDEX = "windows-sysmon"
 WINDOWS_SECURITY_INDEX = "windows-security"
+
+# Windows event-log channel -> index, for the injected ``evtx`` stream. Security
+# shares the index EF's own windows_event_security.xml lands in, so an injected
+# 4624/4625 is a needle in the real benign haystack and search_auth_events finds
+# it. System and PowerShell get their own indices: no MCP tool reads them yet
+# (tracked with the other ingested-but-unreadable indices), but ingesting them
+# is strictly better than the previous behaviour, which dropped them entirely.
+# PowerShell in particular carries 4103/4104 script-block logging, which is
+# primary evidence for living-off-the-land execution.
+_EVTX_CHANNEL_INDEX = {
+    "security": WINDOWS_SECURITY_INDEX,
+    "sysmon": WINDOWS_SYSMON_INDEX,
+    "operational": WINDOWS_SYSMON_INDEX,
+}
 ECAR_INDEX = "ecar-edr"
 SYSLOG_INDEX = "linux-syslog"
 SNORT_INDEX = "snort-alerts"
@@ -462,6 +476,19 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
             return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson  # injected malicious IDS alerts
         if stream == "wazuh":
             return WAZUH_INDEX, parse_ot_ndjson              # injected HIDS alerts
+        if stream == "evtx":
+            # Non-Sysmon Windows channels (Security / System / PowerShell),
+            # split per channel by the injector to match how the benign side
+            # writes them. Until 2026-09-10 there was NO evtx branch here, so
+            # the APT's whole Windows-Security channel fell through to the
+            # `return None` below and was silently dropped at ingest -- the
+            # events were written to the corpus, counted in the build summary,
+            # and never reached Elasticsearch (audit D5).
+            #
+            # An UNKNOWN channel gets its own `windows-<slug>` index rather than
+            # falling through: a new channel appearing in a regenerated bundle
+            # must not silently vanish the way Security did.
+            return _EVTX_CHANNEL_INDEX.get(log, f"windows-{log}"), parse_ot_ndjson
         return None
 
     # --- EF telemetry under data/ (routed by filename) ---

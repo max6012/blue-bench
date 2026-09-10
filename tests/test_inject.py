@@ -418,3 +418,76 @@ def test_cooldown_is_deterministic_across_rebuilds():
     for incident_id in ("apt", "cybercrime", "commodity", "ot-intrusion", "x"):
         mins = cooldown_for(incident_id).total_seconds() / 60
         assert 0 < mins <= MCP_DEFAULT_LOOKBACK_MINUTES, (incident_id, mins)
+
+
+# --- audit D5: the evtx routing gap ------------------------------------------
+
+def test_injected_evtx_channels_split_and_route(tmp_path: Path):
+    """Every Windows channel must reach an index, not `route() -> None`.
+
+    apt_inject tags Security/System/PowerShell with `_stream: "evtx"` and a
+    shared `_log: "winevtx"`. Splitting on `_log` alone put all three in one
+    file, and the ingest routing table had no `evtx` branch, so the file hit
+    `return None` and the APT's entire Windows-Security channel was silently
+    dropped at ingest -- written to the corpus and counted in the build summary,
+    but never in Elasticsearch.
+    """
+    ing = _ingest_module()
+    bd = tmp_path / "bundle"
+    bd.mkdir()
+    channels = ["Security", "System", "Windows PowerShell"]
+    events = [
+        {"_stream": "evtx", "_log": "winevtx", "channel": ch,
+         "Computer": "ws-fin-014.corp.example", "EventID": 4624 + i,
+         "UtcTime": f"2026-01-05 09:0{i}:00.000"}
+        for i, ch in enumerate(channels)
+    ]
+    (bd / "e.events.ndjson").write_text("\n".join(json.dumps(e) for e in events) + "\n")
+    gt = {
+        "schema_version": "1.0", "incident_id": "e", "source_class": "apt",
+        "segment_class": "IT", "ttps": ["T1078"],
+        "events": [
+            {"id": f"evt-e-{i:04d}",
+             "where": {"fixture_line": {"path": "e.events.ndjson", "line": i + 1}},
+             "role": "initial-access", "ttp_links": ["T1078"]}
+            for i in range(len(channels))
+        ],
+    }
+    (bd / "e.ground-truth.yaml").write_text(yaml.safe_dump(gt))
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    inject_bundle(corpus, bd, "e", REMAP)
+
+    # one file per channel, filename-safe
+    names = sorted(p.name for p in (corpus / "injected").glob("*.ndjson"))
+    assert names == [
+        "e.evtx.powershell.ndjson", "e.evtx.security.ndjson", "e.evtx.system.ndjson",
+    ], names
+
+    # and every one routes to a real index -- none falls through to None
+    routed = {}
+    for name in names:
+        r = ing.route(f"injected/{name}")
+        assert r is not None, f"{name} is not routed; its events would be dropped"
+        routed[name] = r[0]
+    # the Security channel must share EF's own windows_event_security.xml index,
+    # so an injected 4624 is a needle in the real benign haystack
+    assert routed["e.evtx.security.ndjson"] == ing.route("windows_event_security.xml")[0]
+    assert len(set(routed.values())) == 3, routed
+
+
+def test_unknown_evtx_channel_still_routes(tmp_path: Path):
+    """A channel nobody has seen yet must not vanish the way Security did."""
+    ing = _ingest_module()
+    assert ing.route("injected/x.evtx.defender.ndjson") is not None
+
+
+def test_channel_slug_is_filename_safe():
+    from blue_bench_generators.merge.inject import channel_slug
+    assert channel_slug("Security") == "security"
+    assert channel_slug("System") == "system"
+    assert channel_slug("Windows PowerShell") == "powershell"
+    assert channel_slug("Microsoft-Windows-Sysmon/Operational") == "operational"
+    # no character that would break the <incident>.<stream>.<log>.ndjson filename
+    for ch in ("Security", "Windows PowerShell", "Microsoft-Windows-Sysmon/Operational"):
+        assert not (set(channel_slug(ch)) & set(" /\\.")), ch

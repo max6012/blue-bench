@@ -229,11 +229,32 @@ def _evtx_records(path: Path) -> Iterable[dict]:
 
 
 def parse_evtx(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
-    """Windows Security / Sysmon EventLog XML. TimeCreated ISO, EventRecordID id."""
+    """Windows Security / Sysmon EventLog XML. TimeCreated ISO.
+
+    The native id is ``Computer:EventRecordID``, NOT the bare ``EventRecordID``.
+    An EventRecordID is a per-host sequence number: every Windows machine starts
+    its own log at 1, so across a 31-host L corpus the same number recurs on
+    many hosts. Using it unqualified silently destroyed 250,299 documents in one
+    build -- 110,399 in windows-sysmon and 139,900 in windows-security -- because
+    a bulk index of an existing id is an OVERWRITE reported as success.
+
+    This is the same defect as issue #31, one layer over: #31 fixed the hashed
+    fallback and left the native-id path assuming global uniqueness. Verified
+    against the corpus: id 4730231 appears on 5 different hosts, 1341082 on 6.
+
+    Ground-truth pointers are unaffected either way (they address injected
+    records, which come through ``parse_ot_ndjson``), so qualifying the id here
+    orphans nothing.
+    """
     for rec in _evtx_records(path):
         tc = rec.get("TimeCreated")
         when = _parse_iso(tc) if tc else None
-        yield rec, when, rec.get("EventRecordID")
+        erid = rec.get("EventRecordID")
+        host = rec.get("Computer")
+        # Fall through to the position-scoped hash when either part is missing:
+        # a partially-qualified id is worse than none, since it looks native.
+        native = f"{host}:{erid}" if (erid and host) else None
+        yield rec, when, native
 
 
 def parse_ecar(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:

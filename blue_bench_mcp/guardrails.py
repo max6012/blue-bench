@@ -94,7 +94,15 @@ def json_dump_within(
              "hint": "narrow the query (fewer fields, shorter timerange, add filters)"},
             indent=indent,
         )
-    dropped = total - lo if shrink is None else max(0, total - lo)
+    if shrink is None:
+        dropped = total - lo
+    else:
+        # Sum the drops across EVERY shrinkable list, not `total - lo`. `total`
+        # is the LONGEST list, so a payload with two 40-record lists cut to 8
+        # each omits 64 records while `total - lo` reports 32. The footer prints
+        # this number, so the arithmetic has to be the real total.
+        dropped = sum(max(0, len(v) - lo) for k in shrink
+                      if isinstance(v := payload.get(k), list))
     return text, dropped
 
 

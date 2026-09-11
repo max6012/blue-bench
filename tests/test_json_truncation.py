@@ -35,6 +35,7 @@ from blue_bench_mcp.tool_classes.wazuh import WazuhTool
 # Small enough that any realistic record set overflows it.
 MAX_CHARS = 4000
 N_RECORDS = 60
+_EVTX_NS = 'xmlns="http://schemas.microsoft.com/win/2004/08/events/event"'
 
 
 def _fat_records(n: int = N_RECORDS) -> list[dict]:
@@ -340,3 +341,87 @@ async def test_no_footer_when_nothing_was_dropped(monkeypatch):
     out = await tool.search_alerts(timerange_minutes=60)
     assert "---" not in out
     assert len(json.loads(out)) == 2
+
+
+def test_dropped_count_sums_every_shrunk_list():
+    """`total - lo` used the LONGEST list, so two 40-record lists cut to 8 each
+    reported 32 omitted when 64 were. The footer prints this number, so a wrong
+    count is a wrong statement to the model about its own coverage.
+    """
+    recs = [{"i": i, "blob": "x" * 200} for i in range(40)]
+    tree = {"process_guid": "g", "self_and_parent": list(recs), "children": list(recs)}
+    body, dropped = json_dump_within(tree, 4000, shrink=("self_and_parent", "children"))
+    kept = json.loads(body)
+    actual = (40 - len(kept["self_and_parent"])) + (40 - len(kept["children"]))
+    assert dropped == actual, f"reported {dropped}, actually omitted {actual}"
+
+    # asymmetric lists: the short one may lose nothing
+    tree2 = {"a": recs[:40], "b": recs[:5]}
+    body2, dropped2 = json_dump_within(tree2, 4000, shrink=("a", "b"))
+    kept2 = json.loads(body2)
+    assert dropped2 == (40 - len(kept2["a"])) + (5 - len(kept2["b"]))
+
+    # the plain-list path is unchanged: kept + dropped == input
+    body3, dropped3 = json_dump_within(recs, 2000)
+    assert len(json.loads(body3)) + dropped3 == len(recs)
+
+
+async def test_process_tree_footer_counts_both_lists(monkeypatch):
+    tool = ElasticTool(_cfg())
+    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    out = await tool.get_process_tree(process_guid="{abc}", timerange_minutes=60)
+    parsed = json.loads(_json_part(out))
+    footer = out[len(_json_part(out)):]
+    # Each list is capped to max_results BEFORE json_dump_within sees it, so the
+    # size-limit count is relative to the capped lists, not the raw fetch.
+    capped = min(N_RECORDS, _cfg().limits.max_results)
+    omitted = ((capped - len(parsed["self_and_parent"]))
+               + (capped - len(parsed["children"])))
+    assert omitted > 0, "fixture must overflow, or this proves nothing"
+    assert f"{omitted} further record(s) omitted" in footer, footer
+    assert f"capped at first {_cfg().limits.max_results}" in footer, footer
+
+
+def test_evtx_native_id_is_host_qualified(tmp_path):
+    """EventRecordID is a PER-HOST sequence number, not a global id.
+
+    Every Windows machine starts its log at 1, so across a 31-host corpus the
+    same number recurs on many hosts. Unqualified it destroyed 250,299 documents
+    in one build (110,399 windows-sysmon + 139,900 windows-security), silently,
+    because a bulk index of an existing id is an overwrite reported as success.
+
+    Same defect as #31 one layer over: #31 fixed the hashed fallback and left
+    the native-id path assuming global uniqueness.
+    """
+    ing = _ingest_module("_t_evtx")
+    ids = set()
+    for host in ("wkst-02.corp.example", "wkst-05.corp.example"):
+        d = tmp_path / "data" / host
+        d.mkdir(parents=True)
+        f = d / "windows_event_sysmon.xml"
+        f.write_text(
+            '<?xml version="1.0" encoding="utf-8"?>\n<Events>\n'
+            '<Event ' + _EVTX_NS + '>\n  <System>\n'
+            '    <Computer>' + host + '</Computer>\n'
+            '    <EventRecordID>4730231</EventRecordID>\n'   # SAME id on both hosts
+            '    <TimeCreated SystemTime="2026-03-02T10:00:00Z"/>\n'
+            '  </System>\n</Event>\n</Events>\n')
+        rel = f"data/{host}/windows_event_sysmon.xml"
+        for o, (rec, _w, nid) in enumerate(ing.parse_evtx(f)):
+            assert nid and nid.endswith(":4730231"), nid
+            assert host in nid, f"native id not host-qualified: {nid}"
+            ids.add(ing.doc_id(rec, rel, o, nid))
+    assert len(ids) == 2, "the same EventRecordID on two hosts collapsed to one _id"
+
+
+def test_evtx_falls_back_to_the_hash_when_host_is_missing(tmp_path):
+    """A partially-qualified id is worse than none — it looks native."""
+    ing = _ingest_module("_t_evtx2")
+    f = tmp_path / "windows_event_sysmon.xml"
+    f.write_text('<?xml version="1.0" encoding="utf-8"?>\n<Events>\n'
+                 '<Event ' + _EVTX_NS + '>\n  <System>\n'
+                 '    <EventRecordID>7</EventRecordID>\n'
+                 '    <TimeCreated SystemTime="2026-03-02T10:00:00Z"/>\n'
+                 '  </System>\n</Event>\n</Events>\n')
+    _rec, _w, nid = next(iter(ing.parse_evtx(f)))
+    assert nid is None

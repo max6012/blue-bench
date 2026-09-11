@@ -12,7 +12,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.guardrails import truncate_result_list, truncate_results
+from blue_bench_mcp.guardrails import json_dump_within, truncate_result_list, truncate_results
 
 
 class WazuhTool:
@@ -120,8 +120,12 @@ class WazuhTool:
             data = await self._api_get(f"/agents/{agent_id}/alerts", params)
             alerts = data.get("data", {}).get("affected_items", [])
             if alerts:
-                result = json.dumps(alerts, indent=2, default=str)
-                return truncate_results(f"[source: Wazuh API]\n{result}", self.max_chars)
+                # Drop whole alerts rather than slicing the serialized string
+                # (issue #41). The `[source: ...]` prefix is part of this tool's
+                # contract, so budget it out of the JSON allowance.
+                prefix = "[source: Wazuh API]\n"
+                body, _ = json_dump_within(alerts, self.max_chars - len(prefix))
+                return prefix + body
         except (httpx.HTTPError, KeyError) as api_err:
             api_error = str(api_err)
         else:
@@ -136,7 +140,6 @@ class WazuhTool:
         alerts, _ = truncate_result_list(alerts, limit)
         if not alerts:
             return f"No alerts found for agent {agent_id} (Wazuh API: {api_error}; ES fallback empty)."
-        result = json.dumps(alerts, indent=2, default=str)
-        return truncate_results(
-            f"[source: ES fallback — Wazuh API was {api_error}]\n{result}", self.max_chars
-        )
+        prefix = f"[source: ES fallback — Wazuh API was {api_error}]\n"
+        body, _ = json_dump_within(alerts, self.max_chars - len(prefix))
+        return prefix + body

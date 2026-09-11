@@ -125,6 +125,25 @@ _KEYWORD_FIELDS = ("id.orig_p", "id.resp_p", "proto", "service", "uid")
 
 
 def _index_mappings(sample_keys: Iterable[str]) -> dict:
+    """Index mapping derived from a sample document.
+
+    ``ignore_malformed`` is the load-bearing setting. Every field not named
+    below is dynamically mapped from the FIRST document that carries it, and the
+    telemetry formats here are not type-consistent: Zeek writes ``"-"`` for an
+    absent numeric and ``"T"``/``"F"`` for booleans, and syslog writes ``pid``
+    as ``"-"`` when there is no pid. Without it ES rejects the whole DOCUMENT on
+    one bad field, with a 400 that `_bulk` only logs.
+
+    Measured on an L build before this was set: 83,730 linux-syslog records
+    (21% of that index) dropped on ``pid: "-"`` after ``pid`` was inferred
+    ``long``, plus a zeek-ssl record on ``established: "T"`` -- and that one was
+    addressed by a ground-truth pointer, so an adversary event the judge expects
+    to find was simply absent from ES.
+
+    With it set, the document is indexed and only the offending FIELD is left
+    unindexed, which is the right trade: a malformed field is recoverable from
+    `_source`, a missing document is not.
+    """
     props: dict[str, dict] = {"@timestamp": {"type": "date"}}
     keys = set(sample_keys)
     for f in _IP_FIELDS:
@@ -133,7 +152,33 @@ def _index_mappings(sample_keys: Iterable[str]) -> dict:
     for f in _KEYWORD_FIELDS:
         if f in keys:
             props[f] = {"type": "keyword"}
-    return {"mappings": {"properties": props}}
+    return {
+        "mappings": {
+            "properties": props,
+            # Applies to dynamically-mapped fields as they are created.
+            #
+            # Deliberately NO string->keyword template: `search_auth_events` runs
+            # `match_phrase` on `message`, which needs a `text` mapping, and
+            # `count_by_field` falls back to the `.keyword` SUBFIELD that ES
+            # auto-creates for text. Mapping strings straight to keyword would
+            # break both. Leave ES's default text+keyword multi-field alone.
+            "dynamic_templates": [
+                {"longs_ignore_malformed": {
+                    "match_mapping_type": "long",
+                    "mapping": {"type": "long", "ignore_malformed": True},
+                }},
+                {"doubles_ignore_malformed": {
+                    "match_mapping_type": "double",
+                    "mapping": {"type": "double", "ignore_malformed": True},
+                }},
+                {"bools_ignore_malformed": {
+                    "match_mapping_type": "boolean",
+                    "mapping": {"type": "boolean", "ignore_malformed": True},
+                }},
+            ],
+        },
+        "settings": {"index.mapping.ignore_malformed": True},
+    }
 
 
 # --- per-format parsers: each yields (record, native_ts, native_id|None) ------
@@ -229,11 +274,32 @@ def _evtx_records(path: Path) -> Iterable[dict]:
 
 
 def parse_evtx(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
-    """Windows Security / Sysmon EventLog XML. TimeCreated ISO, EventRecordID id."""
+    """Windows Security / Sysmon EventLog XML. TimeCreated ISO.
+
+    The native id is ``Computer:EventRecordID``, NOT the bare ``EventRecordID``.
+    An EventRecordID is a per-host sequence number: every Windows machine starts
+    its own log at 1, so across a 31-host L corpus the same number recurs on
+    many hosts. Using it unqualified silently destroyed 250,299 documents in one
+    build -- 110,399 in windows-sysmon and 139,900 in windows-security -- because
+    a bulk index of an existing id is an OVERWRITE reported as success.
+
+    This is the same defect as issue #31, one layer over: #31 fixed the hashed
+    fallback and left the native-id path assuming global uniqueness. Verified
+    against the corpus: id 4730231 appears on 5 different hosts, 1341082 on 6.
+
+    Ground-truth pointers are unaffected either way (they address injected
+    records, which come through ``parse_ot_ndjson``), so qualifying the id here
+    orphans nothing.
+    """
     for rec in _evtx_records(path):
         tc = rec.get("TimeCreated")
         when = _parse_iso(tc) if tc else None
-        yield rec, when, rec.get("EventRecordID")
+        erid = rec.get("EventRecordID")
+        host = rec.get("Computer")
+        # Fall through to the position-scoped hash when either part is missing:
+        # a partially-qualified id is worse than none, since it looks native.
+        native = f"{host}:{erid}" if (erid and host) else None
+        yield rec, when, native
 
 
 def parse_ecar(path: Path) -> Iterable[tuple[dict, datetime, str | None]]:
@@ -677,7 +743,16 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
             continue
         index, parser = routed
         relpath = str(path.relative_to(walk_root)).replace("\\", "/")
-        sample = ot_sample_rate if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES) else 1
+        # Subsampling is for the BENIGN OT protocol baseline (high-volume noise
+        # that would otherwise make a GB-scale corpus uningestable). Bridge legs
+        # land in ot-conn too (_BRIDGE_INDEX["ot"]), but they are the IT<->OT
+        # crossing evidence -- the RQ1 signal itself -- so keying the decision on
+        # the INDEX alone silently threw away 49 of every 50 of them. Key on the
+        # source tree instead: nothing under bridge/ is ever sampled (issue #36).
+        is_bridge = relpath.startswith("bridge/")
+        sample = (ot_sample_rate
+                  if (ot_sample_rate > 1 and index in _OT_SAMPLE_INDICES and not is_bridge)
+                  else 1)
         for ordinal, (rec, when, native_id) in enumerate(parser(path)):
             if sample > 1:
                 # keep 1 of every `sample` benign OT records; the dropped 49/50
@@ -686,6 +761,16 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
                 ot_seen[index] = seen + 1
                 if seen % sample != 0:
                     continue
+            # Compute the _id from the record EXACTLY as the parser yielded it,
+            # BEFORE any enrichment below. The id is persisted in ground truth at
+            # BUILD time and this ingest is a separate, later pass over an
+            # already-built corpus, so the hash input must stay byte-stable
+            # across versions. Enriching `rec` before hashing (the event-id
+            # backfill did, briefly) silently repoints every injected document
+            # at a NEW id on re-ingest while ground truth still names the old
+            # one -- no collision, no error, just orphaned pointers.
+            _id = doc_id(rec, relpath, ordinal, native_id)
+
             doc = dict(rec)
             eff = (when + delta) if (delta and when) else when
             if eff is not None:
@@ -694,7 +779,15 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
             # with the shifted @timestamp so host<->network correlation holds.
             if delta:
                 _shift_embedded_times(doc, delta)
-            buffers[index].append((doc_id(rec, relpath, ordinal, native_id), doc))
+            # Canonicalise the Sysmon event-id field name on the OUTGOING doc
+            # only. EF's EVTX path emits `EventID` while the NDJSON path emits
+            # lowercase `event_id`, so an index ends up with both and a
+            # `term: {EventID: n}` filter matches ZERO of the NDJSON documents --
+            # which are exactly the injected adversary events (issue #37). Keep
+            # `event_id` too so anything already querying it keeps working.
+            if "event_id" in doc and "EventID" not in doc:
+                doc["EventID"] = doc["event_id"]
+            buffers[index].append((_id, doc))
             if len(buffers[index]) >= batch:
                 _flush(index)
     for index in list(buffers):

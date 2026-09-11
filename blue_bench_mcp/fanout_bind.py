@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -47,10 +48,14 @@ from typing import Any
 from blue_bench_client.fanout.schema import Slice
 
 # Which slice dimension maps to which argument, per tool. A tool absent here
-# (evidence, nmap, sigma, wazuh, openedr, get_agent_alerts) is passed through
-# untouched — it has no argument a slice constrains. Whether the named argument
-# is actually accepted is decided against the tool's input schema, not here:
-# this table says what WOULD bind, the schema says what DOES.
+# (evidence, nmap, sigma, wazuh, get_agent_alerts) is passed through untouched —
+# it has no argument a slice constrains and nothing about it a slice narrows.
+# Whether the named argument is actually accepted is decided against the tool's
+# input schema, not here: this table says what WOULD bind, the schema says what
+# DOES. An entry naming an argument the tool does not take is deliberate, not a
+# mistake — it is how a dimension the tool cannot express reaches
+# ``_unbindable`` instead of vanishing (``detect_beaconing``'s host_ip and
+# ``list_endpoints``'s hostname are both there for that reason).
 #
 # Keys are slice-filter field names; values are the tool's argument names.
 _BINDINGS: dict[str, dict[str, str]] = {
@@ -62,6 +67,17 @@ _BINDINGS: dict[str, dict[str, str]] = {
     "get_connections": {"host_ips": "host_ip"},
     "search_alerts": {"host_ips": "host_ip"},
     "detect_beaconing": {"host_ips": "host_ip"},
+    # The two OpenEDR tools. Their backend is a canned mock, not the corpus, so
+    # nothing they return is slice data in the first place — but the worker
+    # surface offers them, so they bind like everything else rather than being
+    # the one pair of tools that walks out of the slice with no record.
+    # get_detections takes a hostname and a lookback: the slice's hosts bind,
+    # its leading time edge binds as minutes-ago and its trailing edge lands in
+    # _unexpressible (the detect_beaconing tier). list_endpoints takes only
+    # status — it enumerates the whole estate whatever the slice says, so its
+    # host dimension is recorded _unbindable and its time band _unexpressible.
+    "get_detections": {"hosts": "hostname"},
+    "list_endpoints": {"hosts": "hostname"},
 }
 
 # The indices each fixed-index tool reads (repo config defaults). A tool that
@@ -97,6 +113,43 @@ def _accepted(tool_input_schema: dict[str, Any] | None) -> set[str]:
 def _iso_z(dt: datetime) -> str:
     """One slice bound in the form the tools document (ISO-8601 UTC, ``Z``)."""
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+# Argument names that carry a value of the given slice dimension, as a name
+# pattern applied to the tool's own schema. ``host_ips`` reaches host_ip, src_ip
+# and dest_ip; ``hosts`` reaches host and hostname. Patterns rather than a fixed
+# list because the surface moves: a wrapper that starts exposing a new address
+# argument is covered the day it appears, not the day someone remembers to add
+# it here. ``event_ids`` has no pattern — its values are integers and a name
+# sweep over integer arguments would catch counts and ports.
+_DIMENSION_ARG_PATTERNS: dict[str, re.Pattern[str]] = {
+    "hosts": re.compile(r"(?:^|_)hosts?(?:name)?$"),
+    "host_ips": re.compile(r"(?:^|_)ips?$"),
+}
+
+
+def _carrying_args(dim: str, mapped: str, tool_input_schema: dict[str, Any] | None) -> list[str]:
+    """Every argument of this tool that could carry a value of ``dim``.
+
+    The out-of-list refusal runs on all of them, not only the one the slice
+    binds to. A two-IP slice cannot bind ``host_ip``, and checking ``host_ip``
+    alone lets the same model reach the same out-of-slice traffic by passing
+    ``src_ip`` — the slice would hold on the argument nobody used.
+
+    Derived from the schema's own property names and types: ``top_n_hosts``
+    matches the host name pattern but is an integer count, so the type check is
+    what keeps it out. The mapped argument is always included, so a caller that
+    passes no schema still gets the narrow check it had before.
+    """
+    args = {mapped}
+    pattern = _DIMENSION_ARG_PATTERNS.get(dim)
+    props = ((tool_input_schema or {}).get("properties") or {}) if pattern else {}
+    for name, spec in props.items():
+        # An untyped property (hand-written schemas in tests) is taken at its
+        # name; an explicitly non-string one never carries a host or an address.
+        if pattern.search(name) and (spec or {}).get("type", "string") == "string":
+            args.add(name)
+    return sorted(args)
 
 
 def _single(values: list, what: str, unexpressible: dict[str, Any]) -> Any | None:
@@ -169,16 +222,20 @@ def bind_args(
         v = _single(values, dim, unexpressible)
         if v is not None:
             _set(arg, v)
-        elif bound.get(arg) not in _UNSET and bound[arg] not in values:
-            # Several values in the slice and the model asked for one outside
-            # it. Leaving it would leak out of the slice; picking a slice value
-            # for the model would be the harness investigating. Reject the call
-            # instead: the caller returns the reason as the tool result and the
-            # model re-issues with a member of the list.
-            rejected[arg] = {
-                "value": bound[arg],
-                "reason": f"{bound[arg]!r} is outside the slice's {dim}: {values}",
-            }
+            continue
+        # Several values in the slice and the model asked for one outside it.
+        # Leaving it would leak out of the slice; picking a slice value for the
+        # model would be the harness investigating. Reject the call instead: the
+        # caller returns the reason as the tool result and the model re-issues
+        # with a member of the list. Checked on every argument that can carry
+        # this dimension, not just the one it binds to — see _carrying_args.
+        for carrier in _carrying_args(dim, arg, tool_input_schema):
+            asked = bound.get(carrier)
+            if asked not in _UNSET and asked not in values:
+                rejected[carrier] = {
+                    "value": asked,
+                    "reason": f"{carrier}={asked!r} is outside the slice's {dim}: {values}",
+                }
 
     if f.indices:
         if "indices" in table:
@@ -212,9 +269,10 @@ def _bind_time(f, bound, accepted, _set, unexpressible, now) -> None:
     """Bind the slice's absolute time band, the best way this tool allows.
 
     Three tiers, in order of how much of the band survives. The middle tier is
-    why ``_unexpressible['time_end']`` still exists: ``detect_beaconing`` takes
-    a lookback and nothing else, so a slice bound to a two-day band gets its
-    leading edge only and its results run to now.
+    why ``_unexpressible['time_end']`` still exists: ``detect_beaconing`` and
+    ``get_detections`` take a lookback and nothing else, so a slice bound to a
+    two-day band gets its leading edge only and its results run to now. The
+    bottom tier is ``list_endpoints``, which takes no time argument at all.
     """
     if "since" in accepted or "until" in accepted:
         if f.time_start is not None and "since" in accepted:
@@ -245,15 +303,22 @@ def _bind_time(f, bound, accepted, _set, unexpressible, now) -> None:
     }
 
 
-def refusal_text(rejected: dict[str, Any]) -> str:
+def refusal_text(rejected: dict[str, Any], slice_id: str = "") -> str:
     """The tool result a rejected call gets — an explanation, not an exception.
 
     A raised error ends the CLI transport's turn with a stack trace the model
     cannot act on. A string tells it what to do instead: pass a member of the
     slice's list.
+
+    It names the slice, the argument and value that were refused, and the values
+    that would be accepted. A worker that cannot tell which of its arguments was
+    the problem retries the same call with a different one and spends its whole
+    turn budget guessing.
     """
+    which = f" (slice {slice_id})" if slice_id else ""
     reasons = "; ".join(r["reason"] for r in rejected.values())
-    return f"{REFUSAL_PREFIX} — {reasons}. Stay inside your slice."
+    return (f"{REFUSAL_PREFIX}{which} — {reasons}. Re-issue the call with one of "
+            f"the listed values, or leave the argument out. Stay inside your slice.")
 
 
 def slice_footer(slice_id: str, args: dict[str, Any], bound: dict[str, Any],
@@ -350,7 +415,7 @@ class SliceBindingMiddleware:
             # SDK emits for a string-returning tool (probed, not guessed) so
             # every transport reads it the same way — the CLI transport reads
             # structuredContent, the SDK path reads the text block.
-            text = refusal_text(overrides["_rejected"])
+            text = refusal_text(overrides["_rejected"], self.slice.id)
             return {"content": [{"type": "text", "text": text}],
                     "isError": False,
                     "structuredContent": {"result": text}}

@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from blue_bench_client import runner
+from blue_bench_client.fanout.host_resolve import HostResolver, complete_slice_scope
 from blue_bench_client.fanout.schema import (
     Slice,
     WorkerReport,
@@ -37,13 +38,25 @@ from blue_bench_mcp.profiles import ModelProfile
 WORKER_ROLE_FILE = "fan_worker.md"
 
 
+def _harness_added(sl: Slice, dimension: str) -> str:
+    """A trailing note naming the values the harness resolved for ``dimension``.
+
+    The worker is told which half of its scope the lead named and which the
+    harness filled in from the corpus, for the same reason the record exists at
+    all: a worker that reads 'hosts: A, B' cannot tell whether the lead
+    considered B, and its report is read as evidence about the plan.
+    """
+    added = (sl.resolved.get(dimension) or {}).get("resolved") or []
+    return f" (the harness resolved {', '.join(added)} from the corpus)" if added else ""
+
+
 def _render_slice_for_question(sl: Slice, max_turns: int) -> str:
     f = sl.filters
     lines = [f"Slice {sl.id}: {sl.question}", "", "Bound filters (the harness merges these into every tool call):"]
     if f.hosts:
-        lines.append(f"- hosts: {', '.join(f.hosts)}")
+        lines.append(f"- hosts: {', '.join(f.hosts)}{_harness_added(sl, 'hosts')}")
     if f.host_ips:
-        lines.append(f"- host IPs: {', '.join(f.host_ips)}")
+        lines.append(f"- host IPs: {', '.join(f.host_ips)}{_harness_added(sl, 'host_ips')}")
     if f.indices:
         lines.append(f"- indices: {', '.join(f.indices)}")
     if f.time_start or f.time_end:
@@ -132,6 +145,7 @@ async def run_worker(
     config_path: Path | None,
     server_cmd: list[str] | None,
     max_turns_ceiling: int,
+    resolver: HostResolver | None = None,
 ) -> tuple[Trace, WorkerReport | None]:
     """Run one slice as a worker. Returns the trace and the parsed report, or
     ``None`` for the report when the final answer did not parse — the parse
@@ -143,9 +157,16 @@ async def run_worker(
     Every transport is supported, ``anthropic-cli`` included: the slice is
     enforced by the server the transport spawns, not by anything in this
     process.
+
+    With a ``resolver``, the slice's hostname/IP scope is completed from the
+    corpus BEFORE the slice file is written, so the server binds both halves
+    and the worker's prompt names both. Without one (``None``, the default) the
+    slice is used as the lead wrote it -- tests and offline runs need no ES.
     """
     max_turns = min(slice.turn_budget, max_turns_ceiling)
     wprofile = worker_profile(profile)
+    if resolver is not None:
+        slice, _ = await complete_slice_scope(slice, resolver)
     question = _render_slice_for_question(slice, max_turns)
     base_cmd = list(server_cmd) if server_cmd else [sys.executable, "-m", "blue_bench_mcp.server"]
 

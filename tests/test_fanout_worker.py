@@ -302,3 +302,43 @@ def test_runner_default_path_is_unchanged(monkeypatch):
     assert trace.turns == [] and trace.final_answer == "ok"
     for tc in (tc for t in trace.turns for tc in t.tool_calls):
         assert tc.bound_args is None and tc.overrides is None
+
+
+class StubHostResolver:
+    """Answers one host with one address, without ES. Stands in for
+    HostResolver in the completion path; the resolver's own behaviour is
+    tested in tests/test_host_resolve.py."""
+
+    def __init__(self, ip: str) -> None:
+        self.ip = ip
+
+    async def resolve_ips(self, host, *, since="", until=""):
+        from blue_bench_client.fanout.host_resolve import Resolution
+        return Resolution([self.ip], "zeek-dhcp")
+
+    async def resolve_hosts(self, ip, *, since="", until=""):
+        from blue_bench_client.fanout.host_resolve import Resolution
+        return Resolution([], "")
+
+
+def test_run_worker_completes_the_slice_before_writing_it(profile, fake_loop):
+    """With a resolver, the slice the SERVER reads already carries the address
+    half, so the network tools are bound too — and the worker's prompt says
+    which value the harness added rather than passing it off as the lead's."""
+    sl = _slice(hosts=[HOST], event_ids=[1], time_start=T0, time_end=T1)
+    asyncio.run(w.run_worker(profile, sl, depth=0, config_path=None, server_cmd=["srv"],
+                             max_turns_ceiling=20, resolver=StubHostResolver("10.10.0.13")))
+    on_disk = fake_loop["server"].slice
+    assert on_disk.filters.host_ips == ["10.10.0.13"]
+    assert on_disk.filters.hosts == [HOST]
+    assert on_disk.resolved["host_ips"] == {"supplied": [], "resolved": ["10.10.0.13"]}
+    assert "the harness resolved 10.10.0.13 from the corpus" in fake_loop["question"]
+    # The dispatcher's own Slice object is untouched.
+    assert sl.filters.host_ips == [] and sl.resolved == {}
+
+
+def test_run_worker_without_a_resolver_writes_the_slice_as_given(profile, fake_loop):
+    sl = _slice(hosts=[HOST], event_ids=[1], time_start=T0, time_end=T1)
+    asyncio.run(w.run_worker(profile, sl, depth=0, config_path=None, server_cmd=["srv"],
+                             max_turns_ceiling=20))
+    assert fake_loop["server"].slice == sl

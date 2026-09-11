@@ -78,6 +78,15 @@ class Slice(BaseModel):
     is still recorded but the dispatcher does not run it."""
     rationale: str
     """Why this slice exists. Scored: the judge reads it against the survey."""
+    resolved: dict = Field(default_factory=dict)
+    """What the HARNESS added to ``filters``, not the lead — written by
+    ``blue_bench_client.fanout.host_resolve.complete_slice_scope`` when it
+    completes ``hosts`` from ``host_ips`` or the reverse. Holds the supplied and
+    resolved values per dimension, the index that answered for each, and what
+    nothing in the corpus could resolve. Kept out of ``filters`` on purpose:
+    everything in ``SliceFilters`` is a scoping dimension the server binds from,
+    and scoring has to be able to tell the lead's plan from the harness's
+    filling-in."""
 
 
 class PartitionPlan(BaseModel):

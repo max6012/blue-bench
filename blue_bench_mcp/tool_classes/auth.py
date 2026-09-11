@@ -147,9 +147,19 @@ class AuthTool:
                 {"match_phrase": {"message": "Failed password"}},
             ], "minimum_should_match": 1}})
         if host:
+            # Computer (windows-security) and host (linux-syslog) are text-mapped
+            # with a `.keyword` subfield. Exact-match the keyword, and fall back
+            # to match_phrase on the text so a short name ("wkst-13") still
+            # resolves. NEVER a bare `match` here: it analyzes the FQDN into
+            # `wkst 13 corp example invalid` OR'd together, and every host in
+            # the domain shares the last three tokens -- a host-scoped search
+            # came back as the entire windows-security index (issue #46; the
+            # same reasoning is in ElasticTool.count_by_time).
             must.append({"bool": {"should": [
-                {"match": {"Computer": host}},
-                {"match": {"host": host}},
+                {"term": {"Computer.keyword": host}},
+                {"term": {"host.keyword": host}},
+                {"match_phrase": {"Computer": host}},
+                {"match_phrase": {"host": host}},
             ], "minimum_should_match": 1}})
         must.append({"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}})
 

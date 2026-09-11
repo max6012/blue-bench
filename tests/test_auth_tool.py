@@ -147,6 +147,32 @@ async def test_src_ip_matches_windows_ip_and_syslog_message():
     assert "IpAddress" in blob and "match_phrase" in blob
 
 
+async def test_host_filter_never_bare_match_on_text_field():
+    """Issue #46. Computer / host are text-mapped; a bare `match` analyzes an
+    FQDN into `wkst 13 corp example invalid` OR'd together and matches every
+    host in the domain. The host clause must be exact (`term` on the .keyword
+    subfield) with a `match_phrase` fallback for short names -- and it must
+    stay a `should` so either substrate's spelling can satisfy it."""
+    host = "wkst-13.corp.example.invalid"
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(host=host)
+    clause = next(c for c in _musts(seen[0])
+                  if "bool" in c and any("Computer" in str(x) for x in c["bool"].get("should", [])))
+    assert clause["bool"]["minimum_should_match"] == 1
+    should = clause["bool"]["should"]
+    # Structural check, not a substring check: "match_phrase" and
+    # "minimum_should_match" both contain the substring "match".
+    for sub in should:
+        (kind, body), = sub.items()
+        assert kind in ("term", "match_phrase"), f"bare {kind!r} on {list(body)}"
+    assert {"match": {"Computer": host}} not in should
+    assert {"match": {"host": host}} not in should
+    assert {"term": {"Computer.keyword": host}} in should
+    assert {"term": {"host.keyword": host}} in should
+    assert {"match_phrase": {"Computer": host}} in should
+    assert {"match_phrase": {"host": host}} in should
+
+
 # ── live (ES up) ───────────────────────────────────────────────────────────────
 
 @requires_es
@@ -160,3 +186,28 @@ async def test_live_failure_filter_shape():
     out = await _tool().search_auth_events(result="failure", timerange_minutes=60000)
     # Valid JSON array or a well-formed error; must not raise.
     assert out.startswith("[") or out.startswith("Error:")
+
+
+@requires_es
+async def test_live_host_filter_matches_only_that_host():
+    """Issue #46, on the real corpus. The tool's host clause must match
+    exactly the docs whose Computer.keyword is that host -- not every host
+    sharing the `corp example invalid` tokens. Compares counts (the tool caps
+    returned docs at max_results), using the exact query body the tool builds."""
+    import httpx
+    host = "wkst-13.corp.example.invalid"
+    window = 60000
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(host=host, timerange_minutes=window)
+    params = {"ignore_unavailable": "true", "allow_no_indices": "true"}
+    url = f"{ES_URL}/{tool.index}/_count"
+    tool_count = httpx.post(url, json={"query": seen[0]["query"]}, params=params,
+                            timeout=60).json()["count"]
+    exact = {"query": {"bool": {"must": [
+        {"range": {"@timestamp": {"gte": f"now-{window}m", "lte": "now"}}},
+        {"term": {"Computer.keyword": host}},
+    ]}}}
+    exact_count = httpx.post(url, json=exact, params=params, timeout=60).json()["count"]
+    if exact_count == 0:
+        pytest.skip(f"{host} not present in the live corpus; 0 == 0 would prove nothing")
+    assert tool_count == exact_count

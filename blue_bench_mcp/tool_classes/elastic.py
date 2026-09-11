@@ -583,7 +583,8 @@ class ElasticTool:
             child_hits, child_total = await self._search(child_body, index=self.sysmon_index)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
-        fetched = len(self_hits) + len(child_hits)
+        # Page sizes as ES returned them, before the per-list cap rebinds the names.
+        self_fetched, child_fetched = len(self_hits), len(child_hits)
         self_hits, self_trunc = truncate_result_list(self_hits, self.max_results)
         child_hits, child_trunc = truncate_result_list(child_hits, self.max_results)
         tree = {
@@ -598,8 +599,14 @@ class ElasticTool:
         body, dropped = json_dump_within(
             tree, self.max_chars - FOOTER_RESERVE, shrink=("self_and_parent", "children"))
         notes = []
-        if self_total + child_total > fetched:
-            notes.append(f"matched {self_total + child_total:,}; fetched the newest {fetched}")
+        # The self query ORs ``ParentProcessGuid == guid``, so every child is
+        # already inside ``self_total``: it IS the distinct match count, and
+        # ``self_total + child_total`` counts each child twice. Both tree
+        # queries sort ``@timestamp asc`` (parent-first reads as a tree), so the
+        # page is the OLDEST of each list, not the newest.
+        if self_total > self_fetched or child_total > child_fetched:
+            notes.append(f"matched {self_total:,}; fetched the oldest {self_fetched} "
+                         f"(self+parent) and {child_fetched} (children)")
         if self_trunc or child_trunc:
             notes.append(f"result sets capped at first {self.max_results}")
         if dropped:

@@ -65,10 +65,6 @@ class AuthTool:
         total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
         return hits, total
 
-    async def _query(self, body: dict) -> list[dict]:
-        hits, _ = await self._search(body, count=False)
-        return hits
-
     async def search_auth_events(
         self,
         account: str = "",

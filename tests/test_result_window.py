@@ -10,13 +10,21 @@ adversary records) through the real tool code at repo defaults
   seeing 0.003%. ``_query`` discards ``hits.total``. That is **defect A**: the
   footer states something false about the result set.
 
-* Every list tool fetches ``size=max_results`` sorted ``@timestamp desc`` and
-  then keeps the HEAD of that list until ``max_result_chars`` is spent. Injected
+* Every list tool fetches ``size=max_results`` sorted by ``@timestamp``
+  (``desc`` everywhere except ``get_process_tree``, whose two lists are
+  ``asc`` so a tree reads parent-first) and then keeps the HEAD of that list
+  until ``max_result_chars`` is spent. Injected
   adversary records that are inside the fetched set but past the byte boundary
   are dropped, always, because the cut is head-only. That is **defect B**.
   Which records SHOULD survive is a selection-policy decision that #43 leaves
   open (it must not know which records are injected), so that test is xfail
   until the policy is chosen.
+
+* ``get_process_tree`` runs two queries whose result sets overlap: the self
+  query ORs ``ParentProcessGuid == guid``, so every child is also a self hit.
+  Its first footer summed the two totals (8,654 for a guid with 4,481 distinct
+  matches) and said ``newest`` for an ``asc`` page. That is defect A again,
+  on the tool #43 lists as affected, and the third test pins it.
 
 No live ES: both defects are in the response-building path, so the HTTP layer
 is faked and the tests always run.
@@ -45,6 +53,10 @@ MAX_RESULTS = 500
 MAX_CHARS = 8000
 TOTAL_MATCHED = 192_624
 INJECTED_HOST = "wkst-03.corp.example.invalid"
+# get_process_tree, live 2026-09-11, guid {f5d9ec1b-24d8-69a1-9c00-0010167845df}:
+# 4,481 distinct docs match self-or-children; 4,173 of them are children.
+TREE_SELF_TOTAL = 4_481
+TREE_CHILD_TOTAL = 4_173
 
 
 def _cfg() -> ServerConfig:
@@ -61,7 +73,7 @@ def _cfg() -> ServerConfig:
 
 
 def _record(i: int, host: str) -> dict:
-    """A Sysmon process-create shaped like the live corpus (~1.3 KB pretty)."""
+    """A Sysmon process-create shaped like the live corpus (~580 B pretty)."""
     return {
         "EventID": 1,
         "EventRecordID": str(2814000 + i),
@@ -100,13 +112,18 @@ class _FakeResponse:
 
 
 class _FakeClient:
-    """Stands in for ``httpx.AsyncClient`` so the REAL ``_query`` runs."""
+    """Stands in for ``httpx.AsyncClient`` so the REAL ``_search`` runs.
+
+    ``pages`` queues one ``(hits, total)`` per ``post`` for tools that issue
+    several queries (``get_process_tree``: self, then children); the last
+    page repeats once the queue is exhausted.
+    """
 
     last_body: dict | None = None
 
-    def __init__(self, hits: list[dict], total: int) -> None:
-        self._hits = hits
-        self._total = total
+    def __init__(self, hits: list[dict], total: int,
+                 *more: tuple[list[dict], int]) -> None:
+        self._pages = [(hits, total), *more]
 
     def __call__(self, *a, **k):
         return self
@@ -119,6 +136,8 @@ class _FakeClient:
 
     async def post(self, url, json=None, **k):
         _FakeClient.last_body = json
+        hits, total = self._pages.pop(0) if len(self._pages) > 1 else self._pages[0]
+        self._hits, self._total = hits, total
         return _FakeResponse({
             "hits": {
                 # ES 8 reports {value: 10000, relation: "gte"} unless the query
@@ -188,7 +207,7 @@ async def test_true_total_is_not_the_ten_thousand_cap(monkeypatch):
 async def test_injected_records_inside_the_fetched_page_survive_the_cut(monkeypatch):
     """Defect B. Three adversary records sit at positions 40-42 of the 500-record
     page (the live measurement had them at 300-302). At repo defaults the tool
-    shows ~5 records. At least one of the three must be in the response.
+    shows ~12 of these records. At least one of the three must be in the response.
 
     The tool has no way to know these are the injected ones -- and must not.
     The assertion is satisfiable only by a selection that is not head-only.
@@ -203,3 +222,26 @@ async def test_injected_records_inside_the_fetched_page_survive_the_cut(monkeypa
     assert any(r["Computer"] == INJECTED_HOST for r in records), (
         f"{len(records)} records shown, none from {INJECTED_HOST}; "
         "the head-only cut dropped every adversary record")
+
+
+@pytest.mark.asyncio
+async def test_tree_footer_reports_distinct_matches_and_the_oldest_page(monkeypatch):
+    """Defect A on ``get_process_tree``: two overlapping queries, ``asc`` sort.
+
+    Live: self 4,481 / children 4,173 (children are a subset of self). The
+    footer must say 4,481, not the 8,654 sum, and ``oldest`` -- both tree
+    queries sort ``@timestamp asc``, so the fetched page is the oldest 500 of
+    each list, not the newest.
+    """
+    tool = ElasticTool(_cfg())
+    monkeypatch.setattr(elastic_mod.httpx, "AsyncClient",
+                        _FakeClient(_fetched_page(), TREE_SELF_TOTAL,
+                                    (_fetched_page(), TREE_CHILD_TOTAL)))
+    out = await tool.get_process_tree(process_guid="{f5d9ec1b-24d8-69a1-9c00-0010167845df}")
+    tree, footer = _body_and_footer(out)
+    assert tree["self_and_parent"] and tree["children"], "precondition: both lists populated"
+    assert f"{TREE_SELF_TOTAL:,}" in footer, footer
+    assert f"{TREE_SELF_TOTAL + TREE_CHILD_TOTAL:,}" not in footer, (
+        "footer double-counts the children: " + footer)
+    assert "oldest" in footer and "newest" not in footer, footer
+    assert f"{MAX_RESULTS} (self+parent) and {MAX_RESULTS} (children)" in footer, footer

@@ -106,8 +106,13 @@ def json_dump_within(
     return text, dropped
 
 
-FOOTER_RESERVE = 200
-"""Worst-case length of :func:`result_footer`, reserved before serializing."""
+FOOTER_RESERVE = 240
+"""Worst-case footer length, reserved before serializing.
+
+The longest footer is ``get_process_tree``'s, not :func:`result_footer`'s: an
+11-digit comma-formatted total, both per-list fetched counts, the cap note
+and a 5-digit omitted count come to 194 characters with the wrapper.
+"""
 
 
 def result_footer(*, total: int, fetched: int, capped: bool, shown: int,

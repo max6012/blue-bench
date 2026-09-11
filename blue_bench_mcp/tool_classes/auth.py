@@ -105,10 +105,23 @@ class AuthTool:
         """
         must: list[dict[str, Any]] = []
         if account:
+            # SubjectUserName / TargetUserName (windows-security) are text-mapped
+            # with a `.keyword` subfield. Exact-match the keyword, and fall back
+            # to match_phrase on the text so a bare username still resolves
+            # against a domain-qualified value. NEVER a bare `match` here: it
+            # analyzes "srv-files-01$@CORP.EXAMPLE.INVALID" into
+            # `srv files 01 corp example invalid` OR'd together, and every
+            # account in the domain shares the trailing tokens -- the filter
+            # matched 254,282 docs where the account has 14,768, and spellings
+            # absent from the corpus ("CORP\SYSTEM") matched half the index
+            # (issue #46, the same defect as the host filter below). `message`
+            # (linux-syslog) is free text, so a phrase match is the right tool.
             must.append({"bool": {"should": [
-                {"match": {"SubjectUserName": account}},
-                {"match": {"TargetUserName": account}},
-                {"match": {"message": account}},
+                {"term": {"SubjectUserName.keyword": account}},
+                {"term": {"TargetUserName.keyword": account}},
+                {"match_phrase": {"SubjectUserName": account}},
+                {"match_phrase": {"TargetUserName": account}},
+                {"match_phrase": {"message": account}},
             ], "minimum_should_match": 1}})
         if src_ip:
             must.append({"bool": {"should": [

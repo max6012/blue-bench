@@ -98,9 +98,27 @@ async def test_result_success_maps_to_4624_and_accepted():
 
 
 async def test_event_id_restricts_to_windows():
+    """Both spellings, OR'd. apt_inject's parse_evtx writes lowercase
+    `event_id` for every Windows EVTX stream including Security, so a
+    single-field term misses that whole population (issue #37)."""
     tool = _tool(); seen = _capture(tool)
     await tool.search_auth_events(event_id=4625)
-    assert {"term": {"EventID": 4625}} in _musts(seen[0])
+    should = next(c["bool"]["should"] for c in _musts(seen[0])
+                  if "bool" in c and any("EventID" in str(x) for x in c["bool"].get("should", [])))
+    assert {"term": {"EventID": 4625}} in should
+    assert {"term": {"event_id": 4625}} in should
+
+
+async def test_result_filters_match_both_event_id_spellings():
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(result="success")
+    flat = _flat(seen[0])
+    assert '"EventID": 4624' in flat and '"event_id": 4624' in flat
+    tool2 = _tool(); seen2 = _capture(tool2)
+    await tool2.search_auth_events(result="failure")
+    flat2 = _flat(seen2[0])
+    for eid in (4625, 4771):
+        assert f'"EventID": {eid}' in flat2 and f'"event_id": {eid}' in flat2
 
 
 async def test_logon_type_zero_is_filtered_not_ignored():

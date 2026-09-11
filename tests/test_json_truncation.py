@@ -195,32 +195,79 @@ def test_process_events_query_matches_both_event_id_spellings():
     assert '"minimum_should_match": 1' in flat
 
 
-def test_ingest_canonicalises_event_id_to_EventID(tmp_path):
-    """Fix the field name at write time too, so a fresh corpus has one spelling."""
+def _ingest_module(name="_t_ingest"):
     import importlib.util
     spec = importlib.util.spec_from_file_location(
-        "_t_ingest", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
-    ing = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ing)
-
-    path = tmp_path / "apt.sysmon.sysmon.ndjson"
-    path.write_text(json.dumps({"event_id": 1, "Image": "powershell.exe"}) + "\n")
-    rec, _when, _nid = next(iter(ing.parse_ot_ndjson(path)))
-    assert rec["EventID"] == 1, "EventID not backfilled from event_id"
-    assert rec["event_id"] == 1, "original spelling must be kept for compatibility"
+        name, pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def test_ingest_does_not_clobber_an_existing_EventID(tmp_path):
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "_t_ingest2", pathlib.Path(__file__).resolve().parents[1] / "scripts" / "ingest_ef.py")
-    ing = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(ing)
+def _ingested_docs(ing, ef_dir, monkeypatch, **kw):
+    """Drive the real ingest() with a stubbed _bulk; return {index: [(id, doc)]}."""
+    out: dict[str, list] = {}
 
-    path = tmp_path / "x.sysmon.sysmon.ndjson"
-    path.write_text(json.dumps({"event_id": 1, "EventID": 4624}) + "\n")
-    rec, _w, _n = next(iter(ing.parse_ot_ndjson(path)))
-    assert rec["EventID"] == 4624
+    def _fake_bulk(url, index, docs, **k):
+        out.setdefault(index, []).extend(docs)
+        return len(docs)
+
+    monkeypatch.setattr(ing, "_bulk", _fake_bulk)
+    monkeypatch.setattr(ing, "_recreate_index", lambda *a, **k: None)
+    monkeypatch.setattr(ing, "httpx", type("_H", (), {"post": staticmethod(lambda *a, **k: None)})())
+    ing.ingest(ef_dir, "http://es.invalid", anchor_end_to_now=False, **kw)
+    return out
+
+
+def test_ingest_canonicalises_event_id_on_the_written_doc(tmp_path, monkeypatch):
+    """The backfill must land on the OUTGOING doc, not the hashed record."""
+    ing = _ingest_module()
+    inj = tmp_path / "injected"
+    inj.mkdir()
+    (inj / "apt.sysmon.sysmon.ndjson").write_text(
+        json.dumps({"event_id": 1, "Image": "powershell.exe"}) + "\n")
+
+    docs = _ingested_docs(ing, tmp_path, monkeypatch)
+    _id, doc = docs["windows-sysmon"][0]
+    assert doc["EventID"] == 1, "EventID not backfilled onto the written doc"
+    assert doc["event_id"] == 1, "original spelling must be kept for compatibility"
+    # ...and the record the id was computed from must be untouched by it
+    rec, _w, _n = next(iter(ing.parse_ot_ndjson(inj / "apt.sysmon.sysmon.ndjson")))
+    assert "EventID" not in rec, "the backfill leaked back onto the hashed record"
+
+
+def test_ingest_does_not_clobber_an_existing_EventID(tmp_path, monkeypatch):
+    ing = _ingest_module("_t_ingest2")
+    inj = tmp_path / "injected"
+    inj.mkdir()
+    (inj / "x.sysmon.sysmon.ndjson").write_text(
+        json.dumps({"event_id": 1, "EventID": 4624}) + "\n")
+    docs = _ingested_docs(ing, tmp_path, monkeypatch)
+    assert docs["windows-sysmon"][0][1]["EventID"] == 4624
+
+
+def test_doc_id_is_stable_across_ingest_versions(tmp_path):
+    """THE property a persisted ground-truth pointer depends on.
+
+    `where.doc_id` is written to disk at BUILD time; `scripts/ingest_ef.py` is a
+    separate, later pass over an already-built corpus. So the hash input must be
+    the record exactly as the parser yields it, with no enrichment applied first.
+
+    Enriching before hashing does not collide and does not error -- it silently
+    lands every injected document at a NEW id while ground truth still names the
+    old one, and the _OVERWRITTEN guard stays quiet because the ids are new
+    rather than duplicated. This pins the id for one fixed record so any future
+    enrichment that creeps in front of the hash fails here instead of in a
+    graded run.
+    """
+    ing = _ingest_module("_t_ingest3")
+    path = tmp_path / "apt1.sysmon.sysmon.ndjson"
+    path.write_text(json.dumps(
+        {"event_id": 1, "Image": "powershell.exe", "UtcTime": "2026-03-02 10:24:01.141"}) + "\n")
+    rec, _w, nid = next(iter(ing.parse_ot_ndjson(path)))
+    assert nid is None
+    assert ing.doc_id(rec, "injected/apt1.sysmon.sysmon.ndjson", 0, nid) == (
+        "61d3f171aad57f6b8bda4aa36a0b91ca")  # == pre-PR ingest, verified
 
 
 # --- issue #36: OT subsampling must not decimate the IT<->OT bridge -----------
@@ -267,3 +314,29 @@ def test_bridge_legs_are_never_subsampled(tmp_path, monkeypatch):
     ot_kept = sum(1 for u in uids if u.startswith("ot"))
     assert bridge_kept == n, f"bridge legs were sampled: kept {bridge_kept} of {n}"
     assert ot_kept < n, f"benign OT should still be sampled, kept {ot_kept} of {n}"
+
+
+# --- F5: the footer must report what was actually returned -------------------
+
+async def test_footer_reports_the_real_count_when_the_size_limit_truncates(monkeypatch):
+    """The old `if dropped and not truncated` suppressed the accurate count in
+    exactly the case where the response was most truncated: it claimed
+    "Showing first 50 results" while returning 7.
+    """
+    tool = ElasticTool(_cfg())
+    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    out = await tool.search_alerts(timerange_minutes=60)
+    records = json.loads(_json_part(out))
+    footer = out[len(_json_part(out)):]
+    # 60 fetched -> 50 (max_results cap) -> 7 (size cap): BOTH must be reported,
+    # and the count must be what was actually returned.
+    assert "capped at first 50" in footer, footer
+    assert f"showing {len(records)} of those 50" in footer, footer
+
+
+async def test_no_footer_when_nothing_was_dropped(monkeypatch):
+    tool = ElasticTool(_cfg())
+    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records(2)))
+    out = await tool.search_alerts(timerange_minutes=60)
+    assert "---" not in out
+    assert len(json.loads(out)) == 2

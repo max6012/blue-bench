@@ -116,7 +116,15 @@ class AuthTool:
                 {"match_phrase": {"message": src_ip}},
             ], "minimum_should_match": 1}})
         if event_id:
-            must.append({"term": {"EventID": event_id}})
+            # Match either spelling. The lowercase form is NOT Sysmon-only:
+            # apt_inject's parse_evtx writes `event_id` for EVERY Windows EVTX
+            # stream, Security included, and those route to windows-security. A
+            # single-field term silently misses that whole population (issue
+            # #37, same class as the get_process_events fix).
+            must.append({"bool": {"should": [
+                {"term": {"EventID": event_id}},
+                {"term": {"event_id": event_id}},
+            ], "minimum_should_match": 1}})
         if logon_type >= 0:
             # LogonType is stored as a string ("4"); match both forms defensively.
             must.append({"bool": {"should": [
@@ -127,12 +135,15 @@ class AuthTool:
         if r in ("success", "successful", "accepted"):
             must.append({"bool": {"should": [
                 {"term": {"EventID": 4624}},
+                {"term": {"event_id": 4624}},
                 {"match_phrase": {"message": "Accepted"}},
             ], "minimum_should_match": 1}})
         elif r in ("failure", "failed", "fail"):
             must.append({"bool": {"should": [
                 {"term": {"EventID": 4625}},
+                {"term": {"event_id": 4625}},
                 {"term": {"EventID": 4771}},
+                {"term": {"event_id": 4771}},
                 {"match_phrase": {"message": "Failed password"}},
             ], "minimum_should_match": 1}})
         if host:
@@ -155,10 +166,17 @@ class AuthTool:
         # Drop whole records rather than slicing the serialized string:
         # truncate_results would splice a marker through the middle of the JSON
         # and hand the model something unparseable (issue #41).
-        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-                  if truncated else "")
-        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
-        if dropped and not truncated:
-            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
-                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        # Reserve the WORST-CASE footer length, then report what actually
+        # happened. The earlier `if dropped and not truncated` suppressed the
+        # accurate count in exactly the case where the response was most
+        # truncated -- it reported "showing first N" while returning far fewer.
+        reserve = 160
+        body, dropped = json_dump_within(hits, self.max_chars - reserve)
+        shown = len(hits) - dropped
+        notes = []
+        if truncated:
+            notes.append(f"result set capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
         return body + footer

@@ -332,17 +332,6 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
                 when = _parse_iso(str(rec["UtcTime"]).replace(" ", "T"))
             else:
                 when = None
-            # Canonicalise the Sysmon event-id field name. EF's EVTX path emits
-            # `EventID` (826k docs in a built L corpus) while this NDJSON path
-            # emits lowercase `event_id` (868 docs), so windows-sysmon ends up
-            # with BOTH and a `term: {EventID: n}` filter matches ZERO of the
-            # NDJSON documents -- which are exactly the injected adversary
-            # events. get_process_events(event_id=1), the most obvious
-            # process-creation hunt there is, returned no adversary activity at
-            # all (issue #37). Keep `event_id` too so anything already querying
-            # it keeps working.
-            if "event_id" in rec and "EventID" not in rec:
-                rec["EventID"] = rec["event_id"]
             if "id.orig_h" in rec:
                 rec.setdefault("src_ip", rec.get("id.orig_h", ""))
                 rec.setdefault("dest_ip", rec.get("id.resp_h", ""))
@@ -706,6 +695,16 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
                 ot_seen[index] = seen + 1
                 if seen % sample != 0:
                     continue
+            # Compute the _id from the record EXACTLY as the parser yielded it,
+            # BEFORE any enrichment below. The id is persisted in ground truth at
+            # BUILD time and this ingest is a separate, later pass over an
+            # already-built corpus, so the hash input must stay byte-stable
+            # across versions. Enriching `rec` before hashing (the event-id
+            # backfill did, briefly) silently repoints every injected document
+            # at a NEW id on re-ingest while ground truth still names the old
+            # one -- no collision, no error, just orphaned pointers.
+            _id = doc_id(rec, relpath, ordinal, native_id)
+
             doc = dict(rec)
             eff = (when + delta) if (delta and when) else when
             if eff is not None:
@@ -714,7 +713,15 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
             # with the shifted @timestamp so host<->network correlation holds.
             if delta:
                 _shift_embedded_times(doc, delta)
-            buffers[index].append((doc_id(rec, relpath, ordinal, native_id), doc))
+            # Canonicalise the Sysmon event-id field name on the OUTGOING doc
+            # only. EF's EVTX path emits `EventID` while the NDJSON path emits
+            # lowercase `event_id`, so an index ends up with both and a
+            # `term: {EventID: n}` filter matches ZERO of the NDJSON documents --
+            # which are exactly the injected adversary events (issue #37). Keep
+            # `event_id` too so anything already querying it keeps working.
+            if "event_id" in doc and "EventID" not in doc:
+                doc["EventID"] = doc["event_id"]
+            buffers[index].append((_id, doc))
             if len(buffers[index]) >= batch:
                 _flush(index)
     for index in list(buffers):

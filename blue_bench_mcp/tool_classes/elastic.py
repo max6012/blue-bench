@@ -142,12 +142,19 @@ class ElasticTool:
         # RECORDS rather than slicing the serialized string -- truncate_results
         # would splice a marker through the middle of the JSON and hand the model
         # something unparseable (issue #41).
-        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-                  if truncated else "")
-        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
-        if dropped and not truncated:
-            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
-                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        # Reserve the WORST-CASE footer length, then report what actually
+        # happened. The earlier `if dropped and not truncated` suppressed the
+        # accurate count in exactly the case where the response was most
+        # truncated -- it reported "showing first N" while returning far fewer.
+        reserve = 160
+        body, dropped = json_dump_within(hits, self.max_chars - reserve)
+        shown = len(hits) - dropped
+        notes = []
+        if truncated:
+            notes.append(f"result set capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
         return body + footer
 
     async def get_connections(
@@ -197,12 +204,19 @@ class ElasticTool:
         # RECORDS rather than slicing the serialized string -- truncate_results
         # would splice a marker through the middle of the JSON and hand the model
         # something unparseable (issue #41).
-        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-                  if truncated else "")
-        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
-        if dropped and not truncated:
-            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
-                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        # Reserve the WORST-CASE footer length, then report what actually
+        # happened. The earlier `if dropped and not truncated` suppressed the
+        # accurate count in exactly the case where the response was most
+        # truncated -- it reported "showing first N" while returning far fewer.
+        reserve = 160
+        body, dropped = json_dump_within(hits, self.max_chars - reserve)
+        shown = len(hits) - dropped
+        notes = []
+        if truncated:
+            notes.append(f"result set capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
         return body + footer
 
     async def count_by_field(
@@ -501,12 +515,19 @@ class ElasticTool:
         # RECORDS rather than slicing the serialized string -- truncate_results
         # would splice a marker through the middle of the JSON and hand the model
         # something unparseable (issue #41).
-        footer = (f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-                  if truncated else "")
-        body, dropped = json_dump_within(hits, self.max_chars - len(footer))
-        if dropped and not truncated:
-            footer = (f"\n\n--- Response truncated to {len(hits) - dropped} of "
-                      f"{len(hits)} records to fit the size limit. Narrow your query. ---")
+        # Reserve the WORST-CASE footer length, then report what actually
+        # happened. The earlier `if dropped and not truncated` suppressed the
+        # accurate count in exactly the case where the response was most
+        # truncated -- it reported "showing first N" while returning far fewer.
+        reserve = 160
+        body, dropped = json_dump_within(hits, self.max_chars - reserve)
+        shown = len(hits) - dropped
+        notes = []
+        if truncated:
+            notes.append(f"result set capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
         return body + footer
 
     def _build_process_tree_self_query(
@@ -575,12 +596,17 @@ class ElasticTool:
             "self_and_parent": self_hits,
             "children": child_hits,
         }
-        footer = (f"\n\n--- Some result sets truncated to first {self.max_results}. "
-                  f"Narrow your query. ---" if (self_trunc or child_trunc) else "")
         # Shrink the two record lists; process_guid and the object shape survive.
+        # Reserve the worst-case footer, then report what actually happened --
+        # `if dropped and not footer` hid the size-limit truncation whenever the
+        # per-list cap had also fired, which is when it matters most.
+        reserve = 160
         body, dropped = json_dump_within(
-            tree, self.max_chars - len(footer), shrink=("self_and_parent", "children"))
-        if dropped and not footer:
-            footer = ("\n\n--- Response truncated to fit the size limit. "
-                      "Narrow your query. ---")
+            tree, self.max_chars - reserve, shrink=("self_and_parent", "children"))
+        notes = []
+        if self_trunc or child_trunc:
+            notes.append(f"result sets capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"{dropped} further record(s) omitted for the size limit")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
         return body + footer

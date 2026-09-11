@@ -47,7 +47,11 @@ class AuthTool:
         return (self.user, self.password) if self.user and self.password else None
 
     async def _search(self, body: dict, *, count: bool = True) -> tuple[list[dict], int]:
-        """``(hits, total)``, counted exactly when ``count`` -- see ElasticTool._search."""
+        """``(hits, total)``, counted exactly when ``count`` -- see ElasticTool._search.
+
+        No caller here passes ``count=False``; the kwarg is kept so the two
+        ``_search`` signatures stay identical.
+        """
         url = f"{self.url}/{self.index}/_search"
         async with httpx.AsyncClient(
             verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)

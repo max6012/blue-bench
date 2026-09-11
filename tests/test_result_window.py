@@ -245,3 +245,6 @@ async def test_tree_footer_reports_distinct_matches_and_the_oldest_page(monkeypa
         "footer double-counts the children: " + footer)
     assert "oldest" in footer and "newest" not in footer, footer
     assert f"{MAX_RESULTS} (self+parent) and {MAX_RESULTS} (children)" in footer, footer
+    # The reserve is not enforced anywhere else: the body is bounded to
+    # max_chars - FOOTER_RESERVE and the footer appended afterwards.
+    assert len(out) <= MAX_CHARS, (len(out), len(footer))

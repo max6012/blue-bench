@@ -16,6 +16,8 @@ import httpx
 
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.guardrails import (
+    FOOTER_RESERVE,
+    result_footer,
     json_dump_within,
     truncate_result_list,
     truncate_results,
@@ -72,7 +74,20 @@ class ElasticTool:
     def _auth(self) -> tuple[str, str] | None:
         return (self.user, self.password) if self.user and self.password else None
 
-    async def _query(self, body: dict, index: str | None = None) -> list[dict]:
+    async def _search(self, body: dict, index: str | None = None, *,
+                      count: bool = True) -> tuple[list[dict], int]:
+        """Run ``body`` and return ``(hits, total)``.
+
+        With ``count`` on, ``total`` is the TRUE match count. Every list tool
+        fetches a page of ``size=max_results`` off a much larger match, and
+        the footer has to say how much larger (issue #43). ES 8 stops counting
+        at 10,000 unless asked, so ``track_total_hits`` is set -- the
+        alternative is a footer that says 10,000 for a 192,624-record match,
+        which is wrong in a more plausible way than the old page-size number.
+        Callers that never show the total (``_query``) leave ``count`` off:
+        the beaconing analytic issues one fetch per candidate and should not
+        pay for an exact count it discards.
+        """
         idx = index or self.index_pattern
         # tolerate a missing index in a comma-separated pattern (e.g. ot-conn absent
         # in an IT-only deployment) instead of 404-ing the whole query.
@@ -80,10 +95,19 @@ class ElasticTool:
         async with httpx.AsyncClient(
             verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
         ) as client:
-            resp = await client.post(url, json=body)
+            resp = await client.post(
+                url, json={**body, "track_total_hits": True} if count else body)
             resp.raise_for_status()
             data = resp.json()
-        return [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        hits = [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        total = data.get("hits", {}).get("total", {})
+        total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
+        return hits, total
+
+    async def _query(self, body: dict, index: str | None = None) -> list[dict]:
+        """Hits only, uncounted, for callers that page or aggregate themselves."""
+        hits, _ = await self._search(body, index, count=False)
+        return hits
 
     async def _agg(self, body: dict, index: str | None = None) -> dict:
         idx = index or self.index_pattern
@@ -134,28 +158,18 @@ class ElasticTool:
             "size": self.max_results,
         }
         try:
-            hits = await self._query(body)
+            hits, total = await self._search(body)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
-        hits, truncated = truncate_result_list(hits, self.max_results)
-        # Budget the footer so the JSON body plus footer both fit, and drop whole
-        # RECORDS rather than slicing the serialized string -- truncate_results
-        # would splice a marker through the middle of the JSON and hand the model
-        # something unparseable (issue #41).
-        # Reserve the WORST-CASE footer length, then report what actually
-        # happened. The earlier `if dropped and not truncated` suppressed the
-        # accurate count in exactly the case where the response was most
-        # truncated -- it reported "showing first N" while returning far fewer.
-        reserve = 160
-        body, dropped = json_dump_within(hits, self.max_chars - reserve)
-        shown = len(hits) - dropped
-        notes = []
-        if truncated:
-            notes.append(f"result set capped at first {self.max_results}")
-        if dropped:
-            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
-        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
-        return body + footer
+        fetched = len(hits)
+        hits, capped = truncate_result_list(hits, self.max_results)
+        # Drop whole RECORDS rather than slicing the serialized string (issue
+        # #41), reserve the worst-case footer, then say what actually happened:
+        # true match count, page fetched, records shown (issue #43).
+        body, dropped = json_dump_within(hits, self.max_chars - FOOTER_RESERVE)
+        return body + result_footer(
+            total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
+            max_results=self.max_results)
 
     async def get_connections(
         self,
@@ -196,28 +210,18 @@ class ElasticTool:
             "size": self.max_results,
         }
         try:
-            hits = await self._query(body, index=self.zeek_index)
+            hits, total = await self._search(body, index=self.zeek_index)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
-        hits, truncated = truncate_result_list(hits, self.max_results)
-        # Budget the footer so the JSON body plus footer both fit, and drop whole
-        # RECORDS rather than slicing the serialized string -- truncate_results
-        # would splice a marker through the middle of the JSON and hand the model
-        # something unparseable (issue #41).
-        # Reserve the WORST-CASE footer length, then report what actually
-        # happened. The earlier `if dropped and not truncated` suppressed the
-        # accurate count in exactly the case where the response was most
-        # truncated -- it reported "showing first N" while returning far fewer.
-        reserve = 160
-        body, dropped = json_dump_within(hits, self.max_chars - reserve)
-        shown = len(hits) - dropped
-        notes = []
-        if truncated:
-            notes.append(f"result set capped at first {self.max_results}")
-        if dropped:
-            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
-        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
-        return body + footer
+        fetched = len(hits)
+        hits, capped = truncate_result_list(hits, self.max_results)
+        # Drop whole RECORDS rather than slicing the serialized string (issue
+        # #41), reserve the worst-case footer, then say what actually happened:
+        # true match count, page fetched, records shown (issue #43).
+        body, dropped = json_dump_within(hits, self.max_chars - FOOTER_RESERVE)
+        return body + result_footer(
+            total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
+            max_results=self.max_results)
 
     async def count_by_field(
         self,
@@ -507,28 +511,18 @@ class ElasticTool:
             host, image, parent_image, command_line_contains, event_id, timerange_minutes
         )
         try:
-            hits = await self._query(body, index=self.sysmon_index)
+            hits, total = await self._search(body, index=self.sysmon_index)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
-        hits, truncated = truncate_result_list(hits, self.max_results)
-        # Budget the footer so the JSON body plus footer both fit, and drop whole
-        # RECORDS rather than slicing the serialized string -- truncate_results
-        # would splice a marker through the middle of the JSON and hand the model
-        # something unparseable (issue #41).
-        # Reserve the WORST-CASE footer length, then report what actually
-        # happened. The earlier `if dropped and not truncated` suppressed the
-        # accurate count in exactly the case where the response was most
-        # truncated -- it reported "showing first N" while returning far fewer.
-        reserve = 160
-        body, dropped = json_dump_within(hits, self.max_chars - reserve)
-        shown = len(hits) - dropped
-        notes = []
-        if truncated:
-            notes.append(f"result set capped at first {self.max_results}")
-        if dropped:
-            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
-        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
-        return body + footer
+        fetched = len(hits)
+        hits, capped = truncate_result_list(hits, self.max_results)
+        # Drop whole RECORDS rather than slicing the serialized string (issue
+        # #41), reserve the worst-case footer, then say what actually happened:
+        # true match count, page fetched, records shown (issue #43).
+        body, dropped = json_dump_within(hits, self.max_chars - FOOTER_RESERVE)
+        return body + result_footer(
+            total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
+            max_results=self.max_results)
 
     def _build_process_tree_self_query(
         self, process_guid: str, host: str, timerange_minutes: int
@@ -585,10 +579,11 @@ class ElasticTool:
         self_body = self._build_process_tree_self_query(process_guid, host, timerange_minutes)
         child_body = self._build_process_tree_children_query(process_guid, host, timerange_minutes)
         try:
-            self_hits = await self._query(self_body, index=self.sysmon_index)
-            child_hits = await self._query(child_body, index=self.sysmon_index)
+            self_hits, self_total = await self._search(self_body, index=self.sysmon_index)
+            child_hits, child_total = await self._search(child_body, index=self.sysmon_index)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
+        fetched = len(self_hits) + len(child_hits)
         self_hits, self_trunc = truncate_result_list(self_hits, self.max_results)
         child_hits, child_trunc = truncate_result_list(child_hits, self.max_results)
         tree = {
@@ -600,10 +595,11 @@ class ElasticTool:
         # Reserve the worst-case footer, then report what actually happened --
         # `if dropped and not footer` hid the size-limit truncation whenever the
         # per-list cap had also fired, which is when it matters most.
-        reserve = 160
         body, dropped = json_dump_within(
-            tree, self.max_chars - reserve, shrink=("self_and_parent", "children"))
+            tree, self.max_chars - FOOTER_RESERVE, shrink=("self_and_parent", "children"))
         notes = []
+        if self_total + child_total > fetched:
+            notes.append(f"matched {self_total + child_total:,}; fetched the newest {fetched}")
         if self_trunc or child_trunc:
             notes.append(f"result sets capped at first {self.max_results}")
         if dropped:

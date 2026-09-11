@@ -21,9 +21,11 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
+from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE, json_dump_within, result_footer, truncate_result_list,
 )
+from blue_bench_mcp.timerange import TimeRangeError, timestamp_range
 
 
 class AuthTool:
@@ -60,7 +62,9 @@ class AuthTool:
             )
             resp.raise_for_status()
             data = resp.json()
-        hits = [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        # _id first, same reason as ElasticTool._search: ground truth is keyed
+        # on the ES _id, so a citable record has to carry it.
+        hits = [with_identity(hit) for hit in data.get("hits", {}).get("hits", [])]
         total = data.get("hits", {}).get("total", {})
         total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
         return hits, total
@@ -78,6 +82,8 @@ class AuthTool:
         result: str = "",
         host: str = "",
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search authentication events across Windows Security and Linux auth logs.
 
@@ -107,6 +113,10 @@ class AuthTool:
           host: target host — Windows Computer or Linux syslog host. Empty = no filter.
           timerange_minutes: lookback window from now, default 240. Auth abuse is
             often low-and-slow — widen this for spraying / dormant-credential use.
+          since / until: absolute UTC bounds (ISO-8601, e.g. 2026-08-26T00:00:00Z);
+            when either is given they replace timerange_minutes. Use them to bind
+            an investigation to one exact time band (both edges, not just the
+            leading one).
 
         Range-filters on @timestamp (set by ingest for both substrates, so it works
         whether the native clock is TimeCreated, UtcTime, or the syslog timestamp);
@@ -114,6 +124,10 @@ class AuthTool:
         of matching auth records, newest first. Empty [] on no match. Benign logons
         dominate — a match is a lead to triage, not a verdict.
         """
+        try:
+            rng = timestamp_range(timerange_minutes, since, until)
+        except TimeRangeError as e:
+            return str(e)
         must: list[dict[str, Any]] = []
         if account:
             must.append({"bool": {"should": [
@@ -162,7 +176,7 @@ class AuthTool:
                 {"match": {"Computer": host}},
                 {"match": {"host": host}},
             ], "minimum_should_match": 1}})
-        must.append({"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}})
+        must.append(rng.clause)
 
         body = {
             "query": {"bool": {"must": must}},

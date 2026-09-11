@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
+from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE,
     result_footer,
@@ -22,6 +23,7 @@ from blue_bench_mcp.guardrails import (
     truncate_result_list,
     truncate_results,
 )
+from blue_bench_mcp.timerange import TimeRangeError, timestamp_range
 
 # RFC1918 / link-local: a "beacon" is internal-host -> external-dest, so these
 # are excluded from the destination side of the analysis.
@@ -99,7 +101,7 @@ class ElasticTool:
                 url, json={**body, "track_total_hits": True} if count else body)
             resp.raise_for_status()
             data = resp.json()
-        hits = [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        hits = [with_identity(hit) for hit in data.get("hits", {}).get("hits", [])]
         total = data.get("hits", {}).get("total", {})
         total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
         return hits, total
@@ -127,6 +129,8 @@ class ElasticTool:
         severity: int = 0,
         timerange_minutes: int = 60,
         query_text: str = "",
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search security alerts across configured indices.
 
@@ -137,7 +141,12 @@ class ElasticTool:
             severity: Filter by severity (1=critical, 2=medium, 3=low). 0=no filter.
             timerange_minutes: Lookback window in minutes
             query_text: Free-text query across alert fields
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
+        try:
+            rng = timestamp_range(timerange_minutes, since, until)
+        except TimeRangeError as e:
+            return str(e)
         must: list[dict[str, Any]] = []
         if host_ip:
             must.append({"bool": {"should": [{"term": {"src_ip": host_ip}}, {"term": {"dest_ip": host_ip}}], "minimum_should_match": 1}})
@@ -149,9 +158,7 @@ class ElasticTool:
             must.append({"term": {"alert.severity": severity}})
         if query_text:
             must.append({"query_string": {"query": query_text}})
-        must.append(
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}}
-        )
+        must.append(rng.clause)
         body = {
             "query": {"bool": {"must": must}},
             "sort": [{"@timestamp": "desc"}],
@@ -179,6 +186,8 @@ class ElasticTool:
         dest_port: int = 0,
         proto: str = "",
         timerange_minutes: int = 60,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search Zeek conn.log via Elasticsearch for host-to-host traffic.
 
@@ -189,7 +198,12 @@ class ElasticTool:
             dest_port: Filter by destination port
             proto: Filter by protocol (tcp, udp, icmp)
             timerange_minutes: Lookback window in minutes
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
+        try:
+            rng = timestamp_range(timerange_minutes, since, until)
+        except TimeRangeError as e:
+            return str(e)
         must: list[dict[str, Any]] = []
         if host_ip:
             must.append({"bool": {"should": [{"term": {"id.orig_h": host_ip}}, {"term": {"id.resp_h": host_ip}}], "minimum_should_match": 1}})
@@ -201,9 +215,7 @@ class ElasticTool:
             must.append({"term": {"id.resp_p": dest_port}})
         if proto:
             must.append({"term": {"proto": proto.lower()}})
-        must.append(
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}}
-        )
+        must.append(rng.clause)
         body = {
             "query": {"bool": {"must": must}},
             "sort": [{"@timestamp": "desc"}],
@@ -229,6 +241,8 @@ class ElasticTool:
         index: str = "",
         timerange_minutes: int = 60,
         top_n: int = 20,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Aggregate and count values for a field (top talkers, severity distribution, etc).
 
@@ -237,13 +251,18 @@ class ElasticTool:
             index: Index pattern (default: configured pattern)
             timerange_minutes: Lookback window
             top_n: Number of top values to return
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
+        try:
+            rng = timestamp_range(timerange_minutes, since, until)
+        except TimeRangeError as e:
+            return str(e)
         idx = index or self.index_pattern
 
         async def _agg_on(f: str) -> list[dict]:
             body = {
                 "size": 0,
-                "query": {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}},
+                "query": rng.clause,
                 "aggs": {"top_values": {"terms": {"field": f, "size": top_n}}},
             }
             data = await self._agg(body, index=idx)
@@ -274,7 +293,7 @@ class ElasticTool:
         if not succeeded:
             return f"Error: ES aggregation failed for '{field}' (also tried '{field}.keyword'): {last_err}"
         field = used
-        lines = [f"Top {top_n} values for '{field}' (last {timerange_minutes}m):"]
+        lines = [f"Top {top_n} values for '{field}' ({rng.label}):"]
         if not buckets:
             lines.append("  (no results — check field name, index pattern, or timerange)")
         for b in buckets:
@@ -295,6 +314,8 @@ class ElasticTool:
         event_id: int = 0,
         query_text: str = "",
         top_n_hosts: int = 0,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Histogram of document counts over @timestamp (activity over time).
 
@@ -310,10 +331,15 @@ class ElasticTool:
             event_id: Optional Windows EventID filter (matches either spelling)
             query_text: Optional free-text (query_string) filter
             top_n_hosts: If >0, list the top N hosts (Computer.keyword) driving each bucket
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
         if interval not in self._TIME_INTERVALS:
             return (f"Error: interval must be one of {', '.join(self._TIME_INTERVALS)} "
                     f"(got '{interval}')")
+        try:
+            rng = timestamp_range(timerange_minutes, since, until)
+        except TimeRangeError as e:
+            return str(e)
         idx = index or self.index_pattern
 
         must: list[dict[str, Any]] = []
@@ -342,9 +368,7 @@ class ElasticTool:
             ], "minimum_should_match": 1}})
         if query_text:
             must.append({"query_string": {"query": query_text}})
-        must.append(
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}}
-        )
+        must.append(rng.clause)
 
         # date_histogram defaults min_doc_count to 0 (unlike terms), which would
         # emit every empty bucket between first and last match; pin it to 1.
@@ -372,7 +396,7 @@ class ElasticTool:
         filt = " ".join(f for f in filters if f)
         # Header first so truncation (15m over weeks is thousands of lines)
         # drops trailing buckets, never the summary.
-        lines = [f"Docs over time — index {idx}, interval {interval}, last {timerange_minutes}m"
+        lines = [f"Docs over time — index {idx}, interval {interval}, {rng.label}"
                  f"{', ' + filt if filt else ''}: {total} docs in {len(buckets)} buckets"]
         if not buckets:
             lines.append("  (no results — check index pattern, filters, or timerange)")
@@ -551,7 +575,12 @@ class ElasticTool:
         command_line_contains: str,
         event_id: int,
         timerange_minutes: int,
+        since: str = "",
+        until: str = "",
     ) -> dict:
+        # Raises TimeRangeError for a bad bound; the public method turns that
+        # into the Error string before any ES call.
+        rng = timestamp_range(timerange_minutes, since, until)
         must: list[dict[str, Any]] = []
         if host:
             must.append({"term": {"Computer.keyword": host}})
@@ -578,9 +607,7 @@ class ElasticTool:
                     }
                 }
             })
-        must.append(
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}}
-        )
+        must.append(rng.clause)
         return {
             "query": {"bool": {"must": must}},
             "sort": [{"@timestamp": "desc"}],
@@ -595,6 +622,8 @@ class ElasticTool:
         command_line_contains: str = "",
         event_id: int = 0,
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search Sysmon host telemetry (windows-sysmon) for process / host events.
 
@@ -607,10 +636,15 @@ class ElasticTool:
                 7=image-load, 8=create-remote-thread, 10=process-access,
                 11=file-create, 12/13=registry, 22=dns). 0=no filter.
             timerange_minutes: Lookback window in minutes
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
-        body = self._build_process_events_query(
-            host, image, parent_image, command_line_contains, event_id, timerange_minutes
-        )
+        try:
+            body = self._build_process_events_query(
+                host, image, parent_image, command_line_contains, event_id,
+                timerange_minutes, since=since, until=until,
+            )
+        except TimeRangeError as e:
+            return str(e)
         try:
             hits, total = await self._search(body, index=self.sysmon_index)
         except httpx.HTTPError as e:
@@ -626,7 +660,8 @@ class ElasticTool:
             max_results=self.max_results)
 
     def _build_process_tree_self_query(
-        self, process_guid: str, host: str, timerange_minutes: int
+        self, process_guid: str, host: str, timerange_minutes: int,
+        since: str = "", until: str = "",
     ) -> dict:
         # The process itself + its parent: any event carrying this ProcessGuid, or
         # any event whose ChildProcessGuid is this guid (the parent's create event).
@@ -636,7 +671,7 @@ class ElasticTool:
         ]
         must: list[dict[str, Any]] = [
             {"bool": {"should": should, "minimum_should_match": 1}},
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}},
+            timestamp_range(timerange_minutes, since, until).clause,
         ]
         if host:
             must.append({"term": {"Computer.keyword": host}})
@@ -647,12 +682,13 @@ class ElasticTool:
         }
 
     def _build_process_tree_children_query(
-        self, process_guid: str, host: str, timerange_minutes: int
+        self, process_guid: str, host: str, timerange_minutes: int,
+        since: str = "", until: str = "",
     ) -> dict:
         # Children: events whose ParentProcessGuid == this guid.
         must: list[dict[str, Any]] = [
             {"term": {"ParentProcessGuid.keyword": process_guid}},
-            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}},
+            timestamp_range(timerange_minutes, since, until).clause,
         ]
         if host:
             must.append({"term": {"Computer.keyword": host}})
@@ -667,6 +703,8 @@ class ElasticTool:
         process_guid: str = "",
         host: str = "",
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Walk the Sysmon process subtree for a ProcessGuid (self + parent + children).
 
@@ -674,11 +712,17 @@ class ElasticTool:
             process_guid: The Sysmon ProcessGuid to anchor on (required)
             host: Optional Computer (FQDN) filter to scope the walk
             timerange_minutes: Lookback window in minutes
+            since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """
         if not process_guid:
             return "Error: process_guid is required."
-        self_body = self._build_process_tree_self_query(process_guid, host, timerange_minutes)
-        child_body = self._build_process_tree_children_query(process_guid, host, timerange_minutes)
+        try:
+            self_body = self._build_process_tree_self_query(
+                process_guid, host, timerange_minutes, since=since, until=until)
+            child_body = self._build_process_tree_children_query(
+                process_guid, host, timerange_minutes, since=since, until=until)
+        except TimeRangeError as e:
+            return str(e)
         try:
             self_hits, self_total = await self._search(self_body, index=self.sysmon_index)
             child_hits, child_total = await self._search(child_body, index=self.sysmon_index)

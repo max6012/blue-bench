@@ -63,6 +63,15 @@ evidence listing/hashing/metadata.
 - [`blue_bench_mcp/guardrails.py`](../blue_bench_mcp/guardrails.py) — shared
   safety primitives: `truncate_results`, `validate_path_under`,
   `validate_target_in_range`. Every tool applies these consistently.
+- [`blue_bench_mcp/timerange.py`](../blue_bench_mcp/timerange.py) and
+  [`es_records.py`](../blue_bench_mcp/es_records.py) — the two things every
+  Elasticsearch-backed tool shares. `timestamp_range()` builds the
+  `@timestamp` filter: either a `timerange_minutes` lookback from now, or the
+  absolute `since` / `until` UTC bounds that replace it (an investigation
+  scoped to one time band needs its trailing edge bound, which a lookback
+  cannot express). `with_identity()` puts the ES `_id` and `_index` at the
+  front of every returned record, so cited evidence can be joined back to the
+  ground-truth pointers, which are keyed on `_id`.
 
 **How to add one.** Write a class under `tool_classes/`, write a thin
 `register()` under `tools/`, restart the server. That is the whole contract;

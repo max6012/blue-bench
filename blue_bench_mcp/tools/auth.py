@@ -19,6 +19,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         result: str = "",
         host: str = "",
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search authentication events across Windows Security and Linux auth logs
         — the only tool that reads the auth substrate, and the workhorse for
@@ -49,6 +51,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           host: target host — Windows Computer or Linux syslog host.
           timerange_minutes: lookback from now, default 240. Credential abuse is often
             low-and-slow — widen this for spraying / dormant-credential use.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            the search to one exact time band — a lookback can only bound the
+            leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
 
         Returns a JSON array of matching auth records (native fields preserved),
         newest first. Empty [] on no match. Benign logons dominate — a match is a
@@ -62,4 +68,6 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             result=result,
             host=host,
             timerange_minutes=timerange_minutes,
+            since=since,
+            until=until,
         )

@@ -17,6 +17,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         severity: int = 0,
         timerange_minutes: int = 240,
         query_text: str = "",
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search security alerts across all configured index patterns (by default: Suricata alerts + Wazuh HIDS alerts + Zeek connections).
 
@@ -29,6 +31,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           query_text: free-text query (Lucene-style) across all alert fields;
             useful for signature names, rule descriptions, query_text like
             'Cobalt Strike' will match any signature containing that phrase.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns JSON-formatted array of matching alert records. Empty [] on no match.
         """
         return await tool.search_alerts(
@@ -37,6 +43,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             severity=severity,
             timerange_minutes=timerange_minutes,
             query_text=query_text,
+            since=since,
+            until=until,
         )
 
     @server.tool()
@@ -46,6 +54,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         dest_port: int = 0,
         proto: str = "",
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search Zeek conn.log records for host-to-host traffic.
 
@@ -54,6 +64,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           dest_port: integer port number; 0 = no filter.
           proto: 'tcp', 'udp', or 'icmp'; empty for no filter.
           timerange_minutes: lookback window from now, default 240.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns JSON array of Zeek conn records with fields including src_ip,
         dest_ip, dest_port, proto, service, orig_bytes, resp_bytes, duration,
         conn_state. Empty [] on no match.
@@ -64,6 +78,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             dest_port=dest_port,
             proto=proto,
             timerange_minutes=timerange_minutes,
+            since=since,
+            until=until,
         )
 
     @server.tool()
@@ -74,6 +90,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         command_line_contains: str = "",
         event_id: int = 0,
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Search Sysmon host telemetry (windows-sysmon index) for process and
         host events — the workhorse for hunting host-side kill-chain activity.
@@ -96,6 +114,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             10 process-access, 11 file-create, 12/13 registry, 22 dns.
             0 = no filter.
           timerange_minutes: lookback window from now, default 240.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns a JSON array of matching Sysmon records (fields include EventID,
         Computer, UtcTime, Image, CommandLine, ParentImage, ParentCommandLine,
         ProcessGuid, ParentProcessGuid, User, TargetFilename, TargetObject).
@@ -108,6 +130,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             command_line_contains=command_line_contains,
             event_id=event_id,
             timerange_minutes=timerange_minutes,
+            since=since,
+            until=until,
         )
 
     @server.tool()
@@ -115,6 +139,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         process_guid: str = "",
         host: str = "",
         timerange_minutes: int = 240,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Walk the Sysmon process subtree around a ProcessGuid — returns the
         process itself, its parent, and its direct children so you can trace an
@@ -128,6 +154,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             from get_process_events output.
           host: optional Computer FQDN to scope the walk; empty = all hosts.
           timerange_minutes: lookback window from now, default 240.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns a JSON object with keys: 'process_guid' (the anchor),
         'self_and_parent' (events carrying this ProcessGuid plus the parent's
         create event), and 'children' (events whose ParentProcessGuid is this
@@ -137,6 +167,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             process_guid=process_guid,
             host=host,
             timerange_minutes=timerange_minutes,
+            since=since,
+            until=until,
         )
 
     @server.tool()
@@ -145,6 +177,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         index: str = "",
         timerange_minutes: int = 240,
         top_n: int = 20,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Aggregate and count top values for a field — use for 'top-N',
         'distribution', 'most common' style questions.
@@ -164,6 +198,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             (OT/plant connection logs).
           timerange_minutes: lookback window, default 240.
           top_n: max number of top values to return, default 20.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns a human-readable ranked list of (value, count) pairs.
         """
         return await tool.count_by_field(
@@ -171,6 +209,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             index=index,
             timerange_minutes=timerange_minutes,
             top_n=top_n,
+            since=since,
+            until=until,
         )
 
     @server.tool()
@@ -182,6 +222,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         event_id: int = 0,
         query_text: str = "",
         top_n_hosts: int = 0,
+        since: str = "",
+        until: str = "",
     ) -> str:
         """Histogram of document counts over time — use to SURVEY a window
         before digging in: find the hours or days with unusual volume, then
@@ -209,6 +251,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           top_n_hosts: if > 0, list the top N hosts (Computer) inside each
             bucket so you can see which machines drive a spike. Only Windows
             indices carry that field.
+          since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
+            when either is given they replace timerange_minutes. Use them to pin
+            an investigation to one exact time band — a lookback can only bound
+            the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
         Returns a header line (index, interval, window, total docs, bucket
         count) then one line per bucket: '<bucket start ISO>  <count>', with
         an indented 'host: count' list when top_n_hosts is set.
@@ -221,6 +267,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             event_id=event_id,
             query_text=query_text,
             top_n_hosts=top_n_hosts,
+            since=since,
+            until=until,
         )
 
     async def detect_beaconing(

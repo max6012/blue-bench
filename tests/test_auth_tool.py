@@ -147,6 +147,80 @@ async def test_src_ip_matches_windows_ip_and_syslog_message():
     assert "IpAddress" in blob and "match_phrase" in blob
 
 
+# ── absolute since / until ────────────────────────────────────────────────────
+# Credential abuse is investigated one slice at a time; a lookback cannot bound
+# the slice's trailing edge.
+
+async def test_since_and_until_replace_the_lookback():
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(timerange_minutes=99, since="2026-08-26T00:00:00Z",
+                                  until="2026-08-27T00:00:00Z")
+    assert {"range": {"@timestamp": {"gte": "2026-08-26T00:00:00Z",
+                                     "lte": "2026-08-27T00:00:00Z"}}} in _musts(seen[0])
+    assert "now-" not in _flat(seen[0])
+
+
+async def test_since_alone_runs_to_now():
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(since="2026-08-26T00:00:00+00:00")
+    assert {"range": {"@timestamp": {"gte": "2026-08-26T00:00:00Z",
+                                     "lte": "now"}}} in _musts(seen[0])
+
+
+async def test_bad_bound_is_refused_without_calling_es():
+    tool = _tool()
+
+    async def boom(body: dict):
+        raise AssertionError("ES was called for an unparseable since")
+
+    tool._search = boom  # type: ignore[method-assign]
+    out = await tool.search_auth_events(since="last tuesday")
+    assert out.startswith("Error: since/until must be ISO-8601 UTC")
+    assert "2026-08-26T00:00:00Z" in out
+
+
+async def test_since_after_until_is_refused_without_calling_es():
+    tool = _tool()
+
+    async def boom(body: dict):
+        raise AssertionError("ES was called for a reversed range")
+
+    tool._search = boom  # type: ignore[method-assign]
+    out = await tool.search_auth_events(since="2026-08-27T00:00:00Z",
+                                        until="2026-08-26T00:00:00Z")
+    assert out.startswith("Error:") and "after" in out
+
+
+# ── the ES _id every record now carries ───────────────────────────────────────
+
+async def test_auth_records_carry_the_es_id_and_index_first(monkeypatch):
+    """Ground truth is keyed on the ES _id; the auth substrate has to surface it
+    like the others, and at the front of the record."""
+    import json as _json
+
+    from blue_bench_mcp.tool_classes import auth as auth_mod
+
+    class _Resp:
+        def raise_for_status(self): pass
+        def json(self):
+            return {"hits": {"total": {"value": 1, "relation": "eq"}, "hits": [
+                {"_index": "windows-security", "_id": "abc123",
+                 "_source": {"EventID": 4625, "Computer": "dc-01.corp.example.invalid"}},
+            ]}}
+
+    class _Client:
+        def __call__(self, *a, **k): return self
+        async def __aenter__(self): return self
+        async def __aexit__(self, *exc): return False
+        async def post(self, url, json=None, **k): return _Resp()
+
+    monkeypatch.setattr(auth_mod.httpx, "AsyncClient", _Client())
+    out = await _tool().search_auth_events(result="failure")
+    records = _json.loads(out.split("\n\n---")[0])
+    assert list(records[0])[:2] == ["_id", "_index"]
+    assert records[0]["_id"] == "abc123"
+
+
 # ── live (ES up) ───────────────────────────────────────────────────────────────
 
 @requires_es

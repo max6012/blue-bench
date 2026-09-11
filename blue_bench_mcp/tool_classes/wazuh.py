@@ -12,6 +12,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
+from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import json_dump_within, truncate_result_list, truncate_results
 
 
@@ -70,7 +71,9 @@ class WazuhTool:
             )
             resp.raise_for_status()
             data = resp.json()
-        return [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        # _id first, same reason as ElasticTool._search: an alert a worker can
+        # cite is one the scorer can join back to ground truth.
+        return [with_identity(hit) for hit in data.get("hits", {}).get("hits", [])]
 
     async def list_agents(self, status: str = "") -> str:
         """List Wazuh agents with status.

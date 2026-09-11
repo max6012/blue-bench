@@ -40,7 +40,7 @@ class ToolCall(BaseModel):
     ``None`` outside the fan (plain runs never rewrite a call)."""
     overrides: dict[str, Any] | None = None
     """Fan-out only: every model-supplied value the slice replaced, plus the
-    ``_unexpressible`` / ``_unbindable`` notes from ``fanout.worker.bind_slice``.
+    ``_unexpressible`` / ``_unbindable`` notes from ``blue_bench_mcp.fanout_bind.bind_args``.
     The judge scores the model on ``args`` and audits the harness on this."""
 
 

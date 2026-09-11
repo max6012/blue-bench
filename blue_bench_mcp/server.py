@@ -34,10 +34,29 @@ def register_all(server: MCPServer, cfg: ServerConfig) -> list[str]:
     return registered
 
 
-def create_server(cfg: ServerConfig | None = None) -> MCPServer:
+def create_server(
+    cfg: ServerConfig | None = None,
+    *,
+    slice_path: Path | None = None,
+    slice_log: Path | None = None,
+) -> MCPServer:
+    """The registered tool surface, optionally hard-bound to one fan-out slice.
+
+    ``slice_path`` is a serialized ``Slice``; when given, every ``tools/call``
+    runs through :class:`~blue_bench_mcp.fanout_bind.SliceBindingMiddleware`
+    first. Enforcement sits here rather than in the reference client because
+    the ``anthropic-cli`` transport (and OpenCode, and Hermes) reach this
+    server without passing through any of our client code — a client-side
+    proxy would bind one harness and leave the rest unscoped.
+    """
     cfg = cfg or ServerConfig()
     server = MCPServer("blue-bench")
     register_all(server, cfg)
+    if slice_path is not None:
+        # Imported here so a plain server never pays for the fan-out schema.
+        from blue_bench_mcp.fanout_bind import SliceBindingMiddleware, load_slice
+
+        SliceBindingMiddleware(server, load_slice(slice_path), slice_log)
     return server
 
 
@@ -66,10 +85,25 @@ def main() -> None:
         default=None,
         help="SSE bind port (overrides config.transport.sse.port)",
     )
+    parser.add_argument(
+        "--slice",
+        type=Path,
+        default=None,
+        dest="slice_path",
+        help="Path to a serialized fan-out Slice; hard-binds every tool call to it",
+    )
+    parser.add_argument(
+        "--slice-log",
+        type=Path,
+        default=None,
+        help="Path to append one JSONL line per bound tool call (requires --slice)",
+    )
     args = parser.parse_args()
+    if args.slice_log is not None and args.slice_path is None:
+        parser.error("--slice-log requires --slice")
 
     cfg = load_config(args.config) if args.config else ServerConfig()
-    server = create_server(cfg)
+    server = create_server(cfg, slice_path=args.slice_path, slice_log=args.slice_log)
 
     if args.transport == "stdio":
         server.run(transport="stdio")

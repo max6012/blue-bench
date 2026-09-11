@@ -961,12 +961,12 @@ async def run(
 ) -> Trace:
     """One model conversation with MCP tools; returns the Trace.
 
-    ``mcp_factory`` builds the MCP client from the server command — the
-    fan-out worker passes a wrapper that binds every tool call to its slice
-    (blue_bench_client.fanout.worker.BoundMCPClient). Default is the plain
-    stdio client. Note the anthropic-cli transport never touches this client:
-    the ``claude`` subprocess talks to the server directly, so a factory has
-    no effect there.
+    ``mcp_factory`` builds the MCP client from the server command; default is
+    the plain stdio client. It is a seam for a harness that needs to observe or
+    wrap calls in this process. It is NOT how the fan-out worker binds a slice:
+    the anthropic-cli transport never touches this client (the ``claude``
+    subprocess talks to the server directly), so slice enforcement lives in the
+    server instead — see ``blue_bench_mcp.fanout_bind``.
 
     ``extra_prompt_context`` adds placeholders for prompt parts beyond the
     fixed set ``_build_context`` supplies (a role file that embeds a report

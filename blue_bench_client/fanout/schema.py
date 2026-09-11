@@ -32,9 +32,9 @@ class SliceFilters(BaseModel):
 
     ``time_start`` / ``time_end`` are ABSOLUTE timestamps. The corpus is anchored
     to fixed dates, so the lead thinks in calendar time, never "the last N
-    hours". The worker-side binding (``worker.bind_slice``) has to translate
-    this into the tools' lookback-from-now interface and records where that
-    translation is lossy.
+    hours". The server-side binding (``blue_bench_mcp.fanout_bind.bind_args``)
+    sets ``since``/``until`` from this band, and records the cases where a tool
+    cannot express it.
     """
     hosts: list[str] = Field(default_factory=list)
     """Computer FQDNs, e.g. 'wkst-03.corp.example.invalid' (Sysmon / auth tools)."""

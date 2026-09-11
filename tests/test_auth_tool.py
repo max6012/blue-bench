@@ -1,7 +1,7 @@
 """AuthTool unit tests.
 
 Offline: config defaults, signature, and the filter->ES-query-body mapping
-(captured by stubbing _query — no ES needed). Live: real queries when ES is up.
+(captured by stubbing _search — no ES needed). Live: real queries when ES is up.
 """
 import inspect
 
@@ -34,14 +34,14 @@ def _tool() -> AuthTool:
 
 
 def _capture(tool: AuthTool) -> list[dict]:
-    """Stub _query to capture the request body instead of hitting ES."""
+    """Stub _search to capture the request body instead of hitting ES."""
     seen: list[dict] = []
 
-    async def fake_query(body: dict) -> list:
+    async def fake_search(body: dict) -> tuple[list, int]:
         seen.append(body)
-        return []
+        return [], 0
 
-    tool._query = fake_query  # type: ignore[method-assign]
+    tool._search = fake_search  # type: ignore[method-assign]
     return seen
 
 

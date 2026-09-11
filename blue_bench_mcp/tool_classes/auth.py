@@ -21,7 +21,9 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.guardrails import json_dump_within, truncate_result_list
+from blue_bench_mcp.guardrails import (
+    FOOTER_RESERVE, json_dump_within, result_footer, truncate_result_list,
+)
 
 
 class AuthTool:
@@ -44,7 +46,12 @@ class AuthTool:
     def _auth(self) -> tuple[str, str] | None:
         return (self.user, self.password) if self.user and self.password else None
 
-    async def _query(self, body: dict) -> list[dict]:
+    async def _search(self, body: dict, *, count: bool = True) -> tuple[list[dict], int]:
+        """``(hits, total)``, counted exactly when ``count`` -- see ElasticTool._search.
+
+        No caller here passes ``count=False``; the kwarg is kept so the two
+        ``_search`` signatures stay identical.
+        """
         url = f"{self.url}/{self.index}/_search"
         async with httpx.AsyncClient(
             verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
@@ -52,11 +59,15 @@ class AuthTool:
             # ignore_unavailable so a missing auth index degrades to "no data"
             # rather than a 404 that masks the real (empty) answer.
             resp = await client.post(
-                url, json=body, params={"ignore_unavailable": "true", "allow_no_indices": "true"}
+                url, json={**body, "track_total_hits": True} if count else body,
+                params={"ignore_unavailable": "true", "allow_no_indices": "true"},
             )
             resp.raise_for_status()
             data = resp.json()
-        return [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        hits = [hit["_source"] for hit in data.get("hits", {}).get("hits", [])]
+        total = data.get("hits", {}).get("total", {})
+        total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
+        return hits, total
 
     async def search_auth_events(
         self,
@@ -169,24 +180,15 @@ class AuthTool:
             "size": self.max_results,
         }
         try:
-            hits = await self._query(body)
+            hits, total = await self._search(body)
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
-        hits, truncated = truncate_result_list(hits, self.max_results)
-        # Drop whole records rather than slicing the serialized string:
-        # truncate_results would splice a marker through the middle of the JSON
-        # and hand the model something unparseable (issue #41).
-        # Reserve the WORST-CASE footer length, then report what actually
-        # happened. The earlier `if dropped and not truncated` suppressed the
-        # accurate count in exactly the case where the response was most
-        # truncated -- it reported "showing first N" while returning far fewer.
-        reserve = 160
-        body, dropped = json_dump_within(hits, self.max_chars - reserve)
-        shown = len(hits) - dropped
-        notes = []
-        if truncated:
-            notes.append(f"result set capped at first {self.max_results}")
-        if dropped:
-            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
-        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
-        return body + footer
+        fetched = len(hits)
+        hits, capped = truncate_result_list(hits, self.max_results)
+        # Drop whole RECORDS rather than slicing the serialized string (issue
+        # #41), reserve the worst-case footer, then say what actually happened:
+        # true match count, page fetched, records shown (issue #43).
+        body, dropped = json_dump_within(hits, self.max_chars - FOOTER_RESERVE)
+        return body + result_footer(
+            total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
+            max_results=self.max_results)

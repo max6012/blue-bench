@@ -106,6 +106,40 @@ def json_dump_within(
     return text, dropped
 
 
+FOOTER_RESERVE = 240
+"""Worst-case footer length, reserved before serializing.
+
+The longest footer is ``get_process_tree``'s, not :func:`result_footer`'s: an
+11-digit comma-formatted total, both per-list fetched counts, the cap note
+and a 5-digit omitted count come to 194 characters with the wrapper.
+"""
+
+
+def result_footer(*, total: int, fetched: int, capped: bool, shown: int,
+                  max_results: int) -> str:
+    """The honest trailer for a list tool: what matched, what was fetched, what
+    is shown.
+
+    ``total`` is the true match count from ES (``hits.total`` with
+    ``track_total_hits`` on), ``fetched`` the page size ES returned, ``capped``
+    whether :func:`truncate_result_list` bit, ``shown`` how many records made
+    it into the serialized body. Issue #43: the old footer said ``showing 5 of
+    those 500`` for a 192,624-record match -- the page size presented as the
+    result set. Nothing about a query with ``fetched < total`` is complete,
+    so that case is reported even when every fetched record was shown.
+    """
+    notes = []
+    if total > fetched:
+        notes.append(f"matched {total:,}; fetched the newest {fetched}")
+    if capped:
+        notes.append(f"result set capped at first {max_results}")
+    if shown < min(fetched, max_results):
+        notes.append(f"showing {shown} of the {min(fetched, max_results)} fetched (size limit)")
+    if not notes:
+        return ""
+    return f"\n\n--- {'; '.join(notes)}. Narrow your query. ---"
+
+
 def truncate_result_list(items: list, max_results: int) -> tuple[list, bool]:
     """Truncate a list of result records. Returns (items, was_truncated)."""
     if len(items) <= max_results:

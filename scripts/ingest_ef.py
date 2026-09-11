@@ -125,6 +125,25 @@ _KEYWORD_FIELDS = ("id.orig_p", "id.resp_p", "proto", "service", "uid")
 
 
 def _index_mappings(sample_keys: Iterable[str]) -> dict:
+    """Index mapping derived from a sample document.
+
+    ``ignore_malformed`` is the load-bearing setting. Every field not named
+    below is dynamically mapped from the FIRST document that carries it, and the
+    telemetry formats here are not type-consistent: Zeek writes ``"-"`` for an
+    absent numeric and ``"T"``/``"F"`` for booleans, and syslog writes ``pid``
+    as ``"-"`` when there is no pid. Without it ES rejects the whole DOCUMENT on
+    one bad field, with a 400 that `_bulk` only logs.
+
+    Measured on an L build before this was set: 83,730 linux-syslog records
+    (21% of that index) dropped on ``pid: "-"`` after ``pid`` was inferred
+    ``long``, plus a zeek-ssl record on ``established: "T"`` -- and that one was
+    addressed by a ground-truth pointer, so an adversary event the judge expects
+    to find was simply absent from ES.
+
+    With it set, the document is indexed and only the offending FIELD is left
+    unindexed, which is the right trade: a malformed field is recoverable from
+    `_source`, a missing document is not.
+    """
     props: dict[str, dict] = {"@timestamp": {"type": "date"}}
     keys = set(sample_keys)
     for f in _IP_FIELDS:
@@ -133,7 +152,33 @@ def _index_mappings(sample_keys: Iterable[str]) -> dict:
     for f in _KEYWORD_FIELDS:
         if f in keys:
             props[f] = {"type": "keyword"}
-    return {"mappings": {"properties": props}}
+    return {
+        "mappings": {
+            "properties": props,
+            # Applies to dynamically-mapped fields as they are created.
+            #
+            # Deliberately NO string->keyword template: `search_auth_events` runs
+            # `match_phrase` on `message`, which needs a `text` mapping, and
+            # `count_by_field` falls back to the `.keyword` SUBFIELD that ES
+            # auto-creates for text. Mapping strings straight to keyword would
+            # break both. Leave ES's default text+keyword multi-field alone.
+            "dynamic_templates": [
+                {"longs_ignore_malformed": {
+                    "match_mapping_type": "long",
+                    "mapping": {"type": "long", "ignore_malformed": True},
+                }},
+                {"doubles_ignore_malformed": {
+                    "match_mapping_type": "double",
+                    "mapping": {"type": "double", "ignore_malformed": True},
+                }},
+                {"bools_ignore_malformed": {
+                    "match_mapping_type": "boolean",
+                    "mapping": {"type": "boolean", "ignore_malformed": True},
+                }},
+            ],
+        },
+        "settings": {"index.mapping.ignore_malformed": True},
+    }
 
 
 # --- per-format parsers: each yields (record, native_ts, native_id|None) ------

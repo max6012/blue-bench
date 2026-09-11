@@ -425,3 +425,33 @@ def test_evtx_falls_back_to_the_hash_when_host_is_missing(tmp_path):
                  '  </System>\n</Event>\n</Events>\n')
     _rec, _w, nid = next(iter(ing.parse_evtx(f)))
     assert nid is None
+
+
+def test_index_mappings_tolerate_malformed_field_values():
+    """A malformed FIELD must not cost the whole DOCUMENT.
+
+    Zeek writes "-" for an absent numeric and "T"/"F" for booleans; syslog
+    writes pid "-" when there is no pid. Dynamic mapping types off the first
+    document that carries a field, so a later "-" is a 400 that `_bulk` only
+    logs. Measured on an L build before this was set: 83,730 linux-syslog
+    records (21% of the index) dropped on `pid: "-"`, plus a zeek-ssl record on
+    `established: "T"` that a ground-truth pointer addressed -- an adversary
+    event the judge expects to find, simply absent from ES.
+    """
+    ing = _ingest_module("_t_maps")
+    mp = ing._index_mappings(["@timestamp", "pid", "message", "id.orig_h"])
+    assert mp["settings"]["index.mapping.ignore_malformed"] is True
+    names = [next(iter(t)) for t in mp["mappings"]["dynamic_templates"]]
+    for t in ("longs_ignore_malformed", "doubles_ignore_malformed", "bools_ignore_malformed"):
+        assert t in names, names
+    for tpl in mp["mappings"]["dynamic_templates"]:
+        body = next(iter(tpl.values()))
+        assert body["mapping"]["ignore_malformed"] is True
+
+    # ...and NO string->keyword template: search_auth_events runs match_phrase on
+    # `message` (needs `text`), and count_by_field falls back to the `.keyword`
+    # SUBFIELD ES auto-creates for text. A blanket keyword mapping breaks both.
+    assert "strings_as_keyword" not in names
+    assert "message" not in mp["mappings"]["properties"]
+    # explicit typing still applies where it is known-good
+    assert mp["mappings"]["properties"]["id.orig_h"] == {"type": "ip"}

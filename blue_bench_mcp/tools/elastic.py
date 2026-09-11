@@ -173,6 +173,56 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             top_n=top_n,
         )
 
+    @server.tool()
+    async def count_by_time(
+        interval: str = "1h",
+        index: str = "",
+        timerange_minutes: int = 240,
+        host: str = "",
+        event_id: int = 0,
+        query_text: str = "",
+        top_n_hosts: int = 0,
+    ) -> str:
+        """Histogram of document counts over time — use to SURVEY a window
+        before digging in: find the hours or days with unusual volume, then
+        narrow other tools to those bands. Returns only non-empty buckets.
+
+        Arguments:
+          interval: bucket width, one of '15m', '1h', '6h', '1d'. Start wide
+            ('1d' over the whole corpus), then re-run with '1h' or '15m' on
+            the band that stands out.
+          index: optional ES index pattern override. Leave empty to survey the
+            default alert/Zeek pattern (logstash-suricata-alerts,wazuh-alerts,
+            zeek-conn). To survey a source OUTSIDE that default, pass its index
+            explicitly: 'windows-sysmon' (Sysmon host telemetry),
+            'windows-security,linux-syslog' (authentication logs), 'zeek-dns',
+            'zeek-http', or 'ot-conn' (OT/plant connection logs). Comma lists
+            are accepted.
+          timerange_minutes: lookback window, default 240. The corpus spans
+            weeks — pass a large value (e.g. 43200 = 30 days) to see all of it.
+          host: optional host filter, matched against Sysmon 'Computer', Zeek
+            'id.orig_h' / 'id.resp_h', and auth 'Computer' / 'host'. Use the
+            FQDN for Windows sources and the IP for Zeek.
+          event_id: optional Windows EventID filter (Sysmon 1, 3, 11...;
+            Security 4624, 4625, 4688...). 0 = no filter.
+          query_text: optional free-text (Lucene-style) filter.
+          top_n_hosts: if > 0, list the top N hosts (Computer) inside each
+            bucket so you can see which machines drive a spike. Only Windows
+            indices carry that field.
+        Returns a header line (index, interval, window, total docs, bucket
+        count) then one line per bucket: '<bucket start ISO>  <count>', with
+        an indented 'host: count' list when top_n_hosts is set.
+        """
+        return await tool.count_by_time(
+            interval=interval,
+            index=index,
+            timerange_minutes=timerange_minutes,
+            host=host,
+            event_id=event_id,
+            query_text=query_text,
+            top_n_hosts=top_n_hosts,
+        )
+
     async def detect_beaconing(
         timerange_minutes: int = 0,
         min_connections: int = 0,

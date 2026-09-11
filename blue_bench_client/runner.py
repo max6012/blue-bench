@@ -35,7 +35,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import ollama
 
@@ -956,15 +956,34 @@ async def run(
     config_path: Path | None = None,
     max_turns: int = 10,
     disable_tools: bool = False,
+    mcp_factory: Callable[[list[str]], Any] | None = None,
+    extra_prompt_context: dict[str, str] | None = None,
 ) -> Trace:
+    """One model conversation with MCP tools; returns the Trace.
+
+    ``mcp_factory`` builds the MCP client from the server command — the
+    fan-out worker passes a wrapper that binds every tool call to its slice
+    (blue_bench_client.fanout.worker.BoundMCPClient). Default is the plain
+    stdio client. Note the anthropic-cli transport never touches this client:
+    the ``claude`` subprocess talks to the server directly, so a factory has
+    no effect there.
+
+    ``extra_prompt_context`` adds placeholders for prompt parts beyond the
+    fixed set ``_build_context`` supplies (a role file that embeds a report
+    schema, say). Caller values win on collision.
+    """
     cmd = server_cmd or [sys.executable, "-m", "blue_bench_mcp.server"]
     if config_path is not None:
         cmd = [*cmd, "--config", str(config_path)]
 
-    async with MCPStdioClient(cmd) as mcp:
+    factory = mcp_factory or MCPStdioClient
+    async with factory(cmd) as mcp:
         all_tools = await mcp.list_tools()
         tools = [] if disable_tools else all_tools
-        system_prompt = compose(profile, _build_context(profile, all_tools))
+        context = _build_context(profile, all_tools)
+        if extra_prompt_context:
+            context = {**context, **extra_prompt_context}
+        system_prompt = compose(profile, context)
 
         trace = Trace(
             prompt_id=prompt_id,

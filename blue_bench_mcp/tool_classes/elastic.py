@@ -281,6 +281,107 @@ class ElasticTool:
             lines.append(f"  {b['key']}: {b['doc_count']}")
         return truncate_results("\n".join(lines), self.max_chars)
 
+    # date_histogram intervals the survey tool accepts. All are sub-week, so a
+    # uniform `fixed_interval` is correct (ES 8 dropped the bare `interval`
+    # key, and `calendar_interval` rejects multiples such as 6h / 15m).
+    _TIME_INTERVALS = ("15m", "1h", "6h", "1d")
+
+    async def count_by_time(
+        self,
+        interval: str = "1h",
+        index: str = "",
+        timerange_minutes: int = 60,
+        host: str = "",
+        event_id: int = 0,
+        query_text: str = "",
+        top_n_hosts: int = 0,
+    ) -> str:
+        """Histogram of document counts over @timestamp (activity over time).
+
+        The survey instrument for partitioning a large window: find the time
+        bands with unusual volume before slicing. Only non-empty buckets are
+        returned, so a quiet corpus stays a short answer.
+
+        Args:
+            interval: Bucket width — one of 15m, 1h, 6h, 1d
+            index: Index pattern (default: configured pattern); comma lists accepted
+            timerange_minutes: Lookback window
+            host: Optional host filter (Sysmon Computer, Zeek orig/resp IP, auth Computer/host)
+            event_id: Optional Windows EventID filter (matches either spelling)
+            query_text: Optional free-text (query_string) filter
+            top_n_hosts: If >0, list the top N hosts (Computer.keyword) driving each bucket
+        """
+        if interval not in self._TIME_INTERVALS:
+            return (f"Error: interval must be one of {', '.join(self._TIME_INTERVALS)} "
+                    f"(got '{interval}')")
+        idx = index or self.index_pattern
+
+        must: list[dict[str, Any]] = []
+        if host:
+            # One host may be named differently per source: Sysmon writes the
+            # FQDN to Computer (keyword subfield), Zeek/OT conn logs carry IPs in
+            # id.orig_h / id.resp_h, and the auth indices map Computer / host as
+            # text. A should across all of them lets one call survey a host
+            # across a comma-list of indices. The text clauses are match_phrase,
+            # NOT match (auth.py's choice): Computer is text-mapped on
+            # windows-sysmon too, and an OR'd `match` on an FQDN matches every
+            # sibling sharing the `corp example invalid` tokens -- a host-scoped
+            # survey silently came back as the whole index.
+            must.append({"bool": {"should": [
+                {"term": {"Computer.keyword": host}},
+                {"term": {"id.orig_h": host}},
+                {"term": {"id.resp_h": host}},
+                {"match_phrase": {"Computer": host}},
+                {"match_phrase": {"host": host}},
+            ], "minimum_should_match": 1}})
+        if event_id:
+            # Both spellings, same reason as _build_process_events_query (issue #37).
+            must.append({"bool": {"should": [
+                {"term": {"EventID": event_id}},
+                {"term": {"event_id": event_id}},
+            ], "minimum_should_match": 1}})
+        if query_text:
+            must.append({"query_string": {"query": query_text}})
+        must.append(
+            {"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}}
+        )
+
+        # date_histogram defaults min_doc_count to 0 (unlike terms), which would
+        # emit every empty bucket between first and last match; pin it to 1.
+        hist: dict[str, Any] = {
+            "date_histogram": {"field": "@timestamp", "fixed_interval": interval,
+                               "min_doc_count": 1},
+        }
+        if top_n_hosts > 0:
+            # Computer.keyword only exists on the Windows indices; on Zeek/OT
+            # indices the sub-agg simply returns no host buckets (no error).
+            hist["aggs"] = {"hosts": {"terms": {"field": "Computer.keyword", "size": top_n_hosts}}}
+        body = {"size": 0, "query": {"bool": {"must": must}}, "aggs": {"over_time": hist}}
+
+        try:
+            data = await self._agg(body, index=idx)
+        except httpx.HTTPError as e:
+            return f"Error: ES aggregation failed: {e}"
+        buckets = data.get("aggregations", {}).get("over_time", {}).get("buckets", [])
+        # Total is the sum of what is shown, not hits.total: _agg does not ask
+        # for an exact count (ES 8 caps at 10,000), and a doc with no
+        # @timestamp lands in no bucket, so the two can legitimately differ.
+        total = sum(b.get("doc_count", 0) for b in buckets)
+        filters = [f"host={host}" if host else "", f"event_id={event_id}" if event_id else "",
+                   f"query_text={query_text!r}" if query_text else ""]
+        filt = " ".join(f for f in filters if f)
+        # Header first so truncation (15m over weeks is thousands of lines)
+        # drops trailing buckets, never the summary.
+        lines = [f"Docs over time — index {idx}, interval {interval}, last {timerange_minutes}m"
+                 f"{', ' + filt if filt else ''}: {total} docs in {len(buckets)} buckets"]
+        if not buckets:
+            lines.append("  (no results — check index pattern, filters, or timerange)")
+        for b in buckets:
+            lines.append(f"  {b.get('key_as_string', b.get('key'))}  {b.get('doc_count', 0)}")
+            for h in b.get("hosts", {}).get("buckets", []):
+                lines.append(f"      {h['key']}: {h['doc_count']}")
+        return truncate_results("\n".join(lines), self.max_chars)
+
     async def detect_beaconing(
         self,
         timerange_minutes: int = 0,

@@ -34,6 +34,14 @@ EntityType = Literal[
 class ToolCall(BaseModel):
     name: str
     args: dict[str, Any]
+    """The arguments the model asked for — always the model's own."""
+    bound_args: dict[str, Any] | None = None
+    """Fan-out only: the arguments actually sent after the slice was merged in.
+    ``None`` outside the fan (plain runs never rewrite a call)."""
+    overrides: dict[str, Any] | None = None
+    """Fan-out only: every model-supplied value the slice replaced, plus the
+    ``_unexpressible`` / ``_unbindable`` notes from ``fanout.worker.bind_slice``.
+    The judge scores the model on ``args`` and audits the harness on this."""
 
 
 class Turn(BaseModel):

@@ -3,6 +3,9 @@
 Live path exercises search_alerts, get_connections, count_by_field end-to-end
 without needing seeded data: empty indices still return a well-formed response.
 """
+import json
+import re
+
 import pytest
 
 from blue_bench_mcp.config import ElasticConfig, LimitsConfig, ServerConfig, ZeekConfig
@@ -162,3 +165,119 @@ async def test_count_by_field_bad_bound_is_refused_without_calling_es(tool):
     tool._agg = boom
     out = await tool.count_by_field(field="src_ip", until="whenever")
     assert out.startswith("Error: since/until must be ISO-8601 UTC")
+
+
+# --- host_ip: the either-end filter -------------------------------------------
+# The tool classes have always had host_ip (an OR over both ends); the registered
+# wrappers did not expose it, so a fan-out slice's host_ips could not bind on
+# search_alerts / get_connections. These pin the wrapper surface and the OR.
+
+def _registered_server():
+    """A real server with the elastic wrappers registered, as the model sees it."""
+    from mcp.server import MCPServer
+
+    from blue_bench_mcp.tools import elastic as elastic_tools
+    server = MCPServer("test")
+    elastic_tools.register(server, ServerConfig(elastic=ElasticConfig(url=ES_URL)))
+    return server
+
+
+async def test_network_wrappers_expose_host_ip_first():
+    tools = {t.name: t for t in await _registered_server().list_tools()}
+    for name, extra in (("search_alerts", {"severity", "query_text"}),
+                        ("get_connections", {"dest_port", "proto"})):
+        props = tools[name].input_schema["properties"]
+        assert set(props) == {"host_ip", "src_ip", "dest_ip",
+                              "timerange_minutes", "since", "until"} | extra
+        assert props["host_ip"]["default"] == ""
+        # First in the signature: it is the filter a model should reach for by
+        # default, and schema order is what the model reads.
+        assert next(iter(props)) == "host_ip"
+
+
+async def test_host_ip_reaches_the_tool_class(monkeypatch):
+    seen: list[dict] = []
+
+    async def echo(self, **kwargs):
+        seen.append(kwargs)
+        return "[]"
+
+    monkeypatch.setattr(ElasticTool, "search_alerts", echo)
+    monkeypatch.setattr(ElasticTool, "get_connections", echo)
+    server = _registered_server()
+    for name in ("search_alerts", "get_connections"):
+        await server.call_tool(name, {"host_ip": "10.1.20.33"})
+    assert [k["host_ip"] for k in seen] == ["10.1.20.33", "10.1.20.33"]
+
+
+@requires_es
+async def test_live_host_ip_matches_both_ends_and_beats_src_ip_alone():
+    """The OR is doing work: host_ip must match strictly more than src_ip alone.
+
+    Everything is derived from the live corpus — the band from a min/max agg on
+    zeek-conn, the IP from a terms agg on id.orig_h — so the test carries no
+    hard-coded corpus facts that a rebuild would falsify.
+    """
+    import httpx
+    conn = "zeek-conn"
+    band = httpx.post(f"{ES_URL}/{conn}/_search", json={
+        "size": 0,
+        "aggs": {"lo": {"min": {"field": "@timestamp"}},
+                 "hi": {"max": {"field": "@timestamp"}}},
+    }, timeout=30.0).json()["aggregations"]
+    since = band["lo"]["value_as_string"]
+    until = band["hi"]["value_as_string"]
+    rng = {"range": {"@timestamp": {"gte": since, "lte": until}}}
+
+    def _count(clause: dict) -> int:
+        body = {"query": {"bool": {"must": [clause, rng]}}}
+        return httpx.post(f"{ES_URL}/{conn}/_count", json=body, timeout=30.0).json()["count"]
+
+    # id.orig_h is mapped `ip`, so a plain terms agg on the bare field works.
+    buckets = httpx.post(f"{ES_URL}/{conn}/_search", json={
+        "size": 0, "query": rng,
+        "aggs": {"t": {"terms": {"field": "id.orig_h", "size": 10}}},
+    }, timeout=30.0).json()["aggregations"]["t"]["buckets"]
+
+    # A top talker is not automatically a responder: pick the first candidate
+    # that actually appears at both ends, so the inequality below is real.
+    either = {"bool": {"should": [{"term": {"id.orig_h": None}},
+                                  {"term": {"id.resp_h": None}}],
+                       "minimum_should_match": 1}}
+    for b in buckets:
+        ip = b["key"]
+        either["bool"]["should"][0]["term"]["id.orig_h"] = ip
+        either["bool"]["should"][1]["term"]["id.resp_h"] = ip
+        if _count(either) > _count({"term": {"id.orig_h": ip}}):
+            break
+    else:
+        pytest.skip("no top-talker IP in zeek-conn appears as a responder too")
+
+    cfg = ServerConfig(elastic=ElasticConfig(url=ES_URL),
+                       limits=LimitsConfig(max_results=20, max_result_chars=40000,
+                                           query_timeout=30))
+    t = ElasticTool(cfg)
+    both = await t.get_connections(host_ip=ip, since=since, until=until)
+    orig = await t.get_connections(src_ip=ip, since=since, until=until)
+    assert not both.startswith("Error:"), both
+    assert not orig.startswith("Error:"), orig
+
+    # Every record really has the IP at one end or the other.
+    records = json.loads(both.split("\n\n---")[0])
+    assert records
+    assert all(ip in (r.get("id.orig_h"), r.get("id.resp_h")) for r in records)
+
+    # Compare true match counts, not page sizes: max_results caps both bodies.
+    assert _match_total(both) > _match_total(orig)
+
+
+def _match_total(out: str) -> int:
+    """The true match count of a list-tool result.
+
+    The footer only states it when ES matched more than one page (guardrails.
+    result_footer), so fall back to counting the records actually returned.
+    """
+    m = re.search(r"matched ([\d,]+)", out)
+    if m:
+        return int(m.group(1).replace(",", ""))
+    return len(json.loads(out.split("\n\n---")[0]))

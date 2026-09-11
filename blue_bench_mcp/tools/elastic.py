@@ -12,6 +12,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
 
     @server.tool()
     async def search_alerts(
+        host_ip: str = "",
         src_ip: str = "",
         dest_ip: str = "",
         severity: int = 0,
@@ -23,6 +24,10 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         """Search security alerts across all configured index patterns (by default: Suricata alerts + Wazuh HIDS alerts + Zeek connections).
 
         Arguments:
+          host_ip: IPv4/IPv6 string; matches the address at EITHER end of the
+            connection (source or destination). This is the filter to reach for
+            when you are investigating one host — use src_ip/dest_ip only when
+            the direction matters.
           src_ip, dest_ip: IPv4/IPv6 strings; omit for no filter.
           severity: integer 1 (critical) / 2 (medium) / 3 (low); 0 = no filter.
             For Suricata this filters on alert.severity; Wazuh uses a different
@@ -38,6 +43,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         Returns JSON-formatted array of matching alert records. Empty [] on no match.
         """
         return await tool.search_alerts(
+            host_ip=host_ip,
             src_ip=src_ip,
             dest_ip=dest_ip,
             severity=severity,
@@ -49,6 +55,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
 
     @server.tool()
     async def get_connections(
+        host_ip: str = "",
         src_ip: str = "",
         dest_ip: str = "",
         dest_port: int = 0,
@@ -60,6 +67,11 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         """Search Zeek conn.log records for host-to-host traffic.
 
         Arguments:
+          host_ip: IPv4/IPv6 string; matches the address at EITHER end of the
+            connection (id.orig_h or id.resp_h). This is the filter to reach for
+            when you are investigating one host — it catches the traffic it
+            initiated and the traffic it received. Use src_ip/dest_ip only when
+            the direction matters.
           src_ip, dest_ip: IPv4/IPv6 strings; omit for no filter.
           dest_port: integer port number; 0 = no filter.
           proto: 'tcp', 'udp', or 'icmp'; empty for no filter.
@@ -73,6 +85,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         conn_state. Empty [] on no match.
         """
         return await tool.get_connections(
+            host_ip=host_ip,
             src_ip=src_ip,
             dest_ip=dest_ip,
             dest_port=dest_port,

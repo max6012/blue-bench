@@ -25,12 +25,15 @@ rather than a constant:
   results can include events after the slice's end.
 * neither: the time dimension is recorded as unexpressible.
 
-The same rule governs ``host_ip``: the tool *classes* implement it as an OR over
-src/dest, but the registered ``search_alerts`` / ``get_connections`` wrappers
-expose only ``src_ip`` and ``dest_ip``. Binding a slice host to both would AND
-them and match nothing but self-loops — a near-empty result the model reads as
-"clean". So ``host_ip`` binds only where the schema accepts it, and is recorded
-as ``_unbindable`` where it does not.
+The same rule governs ``host_ip``. ``search_alerts`` and ``get_connections``
+take it and bind it whole: it is an OR over both ends of the connection (src OR
+dest, ``id.orig_h`` OR ``id.resp_h``), which is what a slice's host means.
+Binding to ``src_ip`` and ``dest_ip`` instead would AND them and match nothing
+but self-loops — a near-empty result the model reads as "this host is clean" —
+so a tool that does not take ``host_ip`` does not get the slice host under
+another name: ``detect_beaconing`` is the one such tool left (it ranks
+(src,dest) pairs and has no either-end filter at all), and its slice host is
+recorded as ``_unbindable`` rather than guessed at.
 """
 from __future__ import annotations
 

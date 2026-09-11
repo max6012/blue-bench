@@ -159,30 +159,53 @@ def test_auth_and_tree_tools_bind_host(schemas):
     assert "event_id" not in bound  # the tree tool has no event_id argument
 
 
-def test_network_tools_cannot_take_host_ip_today_and_the_drop_is_recorded(schemas):
-    # The tool CLASSES implement host_ip as an OR over src/dest, but the
-    # registered search_alerts / get_connections wrappers expose only src_ip
-    # and dest_ip. Binding the slice host to both would AND them and match
-    # nothing but self-loops, so the bound argument is dropped and recorded
-    # instead. Known gap: the slice's host dimension does not hold on these two.
+def test_network_tools_bind_host_ip_on_the_real_schemas(schemas):
+    # host_ip is an OR over both ends of the connection, which is what a slice's
+    # host means — so it binds whole on the two network tools. Schemas come from
+    # the live server: if a wrapper stopped exposing host_ip this would fail here
+    # rather than as a slice that quietly stopped holding.
     sl = _slice(host_ips=["10.1.20.33"], time_start=T0)
     for name in ("get_connections", "search_alerts"):
-        bound, over = bind_args(name, {"dest_port": 443}, sl, schemas[name])
-        assert "host_ip" not in bound and "src_ip" not in bound and "dest_ip" not in bound
+        bound, over = bind_args(name, {"dest_port": 443, "host_ip": "10.9.9.9"},
+                                sl, schemas[name])
+        assert bound["host_ip"] == "10.1.20.33"
+        assert bound["dest_port"] == 443        # the model's own choice survives
         assert bound["since"] == T0_Z
-        assert over["_unbindable"] == {"host_ip": "10.1.20.33"}
+        assert over["host_ip"] == "10.9.9.9"
+        # Nothing is dropped any more: the slice's host dimension holds here.
+        assert "_unbindable" not in over
+    # Model asked for nothing: the slice host still lands.
+    bound, over = bind_args("get_connections", {}, sl, schemas["get_connections"])
+    assert bound["host_ip"] == "10.1.20.33" and over == {}
 
 
-def test_network_tools_bind_host_ip_when_the_tool_accepts_it():
-    # The shape the binding takes the day the wrappers expose host_ip.
+def test_multi_value_host_ips_are_unexpressible_and_an_outsider_is_refused(schemas):
+    # Same rule as multi-value hosts: an exact-match argument cannot state two
+    # values, so the slice is left open on that dimension and recorded — but a
+    # model value from OUTSIDE the list is refused rather than let through.
+    sl = _slice(host_ips=["10.1.20.33", "10.1.20.44"], time_start=T0)
+    for name in ("get_connections", "search_alerts"):
+        bound, over = bind_args(name, {}, sl, schemas[name])
+        assert "host_ip" not in bound
+        assert over["_unexpressible"]["host_ips"]["values"] == sl.filters.host_ips
+        # A member of the list is the model's own choice: kept, not overridden.
+        bound, over = bind_args(name, {"host_ip": "10.1.20.44"}, sl, schemas[name])
+        assert bound["host_ip"] == "10.1.20.44" and "host_ip" not in over
+        # An outsider is rejected; the contract keeps the value in bound_args.
+        bound, over = bind_args(name, {"host_ip": "10.9.9.9"}, sl, schemas[name])
+        assert "10.9.9.9" in over["_rejected"]["host_ip"]["reason"]
+        assert bound["host_ip"] == "10.9.9.9"
+
+
+def test_the_unbindable_drop_still_fires_for_a_tool_without_host_ip(schemas):
+    # detect_beaconing ranks (src,dest) pairs and has no either-end filter at
+    # all, so a slice host cannot reach it. It is not quietly renamed to src_ip
+    # (which would AND into a direction the slice never meant) — it is dropped
+    # and recorded, which is what the _unbindable mechanism is for.
     sl = _slice(host_ips=["10.1.20.33"], time_start=T0)
-    schema = {"properties": {k: {} for k in
-                             ("host_ip", "src_ip", "dest_ip", "dest_port", "proto",
-                              "timerange_minutes", "since", "until")}}
-    bound, over = bind_args("get_connections", {"dest_port": 443, "host_ip": "10.9.9.9"},
-                            sl, schema)
-    assert bound["host_ip"] == "10.1.20.33" and bound["dest_port"] == 443
-    assert over["host_ip"] == "10.9.9.9"
+    bound, over = bind_args("detect_beaconing", {}, sl, schemas["detect_beaconing"], now=NOW)
+    assert "host_ip" not in bound and "src_ip" not in bound
+    assert over["_unbindable"] == {"host_ip": "10.1.20.33"}
 
 
 def test_count_by_field_binds_a_comma_list_of_indices(schemas):

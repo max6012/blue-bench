@@ -48,7 +48,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           logon_type: exact Windows LogonType; -1 = no filter (0 is a valid value).
           result: 'success' (4624 / Accepted) or 'failure' (4625 / 4771 / Failed
             password); empty = no filter. Use 'failure' for brute-force / spray leads.
-          host: target host — Windows Computer or Linux syslog host.
+          host: target host — Windows Computer or Linux syslog host, FQDN or
+            short name (either matches).
           timerange_minutes: lookback from now, default 240. Credential abuse is often
             low-and-slow — widen this for spraying / dormant-credential use.
           since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');

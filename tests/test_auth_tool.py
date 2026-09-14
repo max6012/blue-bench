@@ -8,6 +8,7 @@ import inspect
 import pytest
 
 from blue_bench_mcp.config import ElasticConfig, LimitsConfig, ServerConfig
+from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.tool_classes.auth import AuthTool
 
 
@@ -145,6 +146,17 @@ async def test_src_ip_matches_windows_ip_and_syslog_message():
     await tool.search_auth_events(src_ip="198.51.100.42")
     blob = _flat(seen[0])
     assert "IpAddress" in blob and "match_phrase" in blob
+
+
+async def test_host_is_the_shared_keyword_clause_never_a_bare_match():
+    # A bare `match` on the text-mapped Computer analyzed the FQDN and matched
+    # every host in the domain (issue #46: the whole windows-security index).
+    # The shared clause is exact on the .keyword subfields in either spelling;
+    # what it matches is tested in test_host_name_filter.py.
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(host="wkst-13.corp.example.invalid")
+    assert host_name_clause("wkst-13.corp.example.invalid", "Computer", "host", "hostname") in _musts(seen[0])
+    assert '"match"' not in _flat(seen[0])
 
 
 # ── absolute since / until ────────────────────────────────────────────────────

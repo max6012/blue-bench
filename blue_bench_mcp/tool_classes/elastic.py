@@ -15,6 +15,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
+from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE,
@@ -429,21 +430,17 @@ class ElasticTool:
         must: list[dict[str, Any]] = []
         if host:
             # One host may be named differently per source: Sysmon writes the
-            # FQDN to Computer (keyword subfield), Zeek/OT conn logs carry IPs in
-            # id.orig_h / id.resp_h, and the auth indices map Computer / host as
-            # text. A should across all of them lets one call survey a host
-            # across a comma-list of indices. The text clauses are match_phrase,
-            # NOT match (auth.py's choice): Computer is text-mapped on
-            # windows-sysmon too, and an OR'd `match` on an FQDN matches every
-            # sibling sharing the `corp example invalid` tokens -- a host-scoped
-            # survey silently came back as the whole index.
-            must.append({"bool": {"should": [
-                {"term": {"Computer.keyword": host}},
+            # FQDN to Computer, linux-syslog the short name to host, and the
+            # Zeek/OT conn logs carry IPs in id.orig_h / id.resp_h. A should
+            # across all of them lets one call survey a host across a
+            # comma-list of indices. The name clauses come from the one shared
+            # definition (es_queries) so this filter cannot drift from the
+            # host tools' -- it is the copy that used to be a bare `match` and
+            # returned the whole index (issue #46).
+            must.append(host_name_clause(host, "Computer", "host", extra=[
                 {"term": {"id.orig_h": host}},
                 {"term": {"id.resp_h": host}},
-                {"match_phrase": {"Computer": host}},
-                {"match_phrase": {"host": host}},
-            ], "minimum_should_match": 1}})
+            ]))
         if event_id:
             # Both spellings, same reason as _build_process_events_query (issue #37).
             must.append({"bool": {"should": [
@@ -650,6 +647,8 @@ class ElasticTool:
     # Sysmon string fields are dynamically mapped (text + a `.keyword` subfield),
     # so exact filters use `<field>.keyword`; EventID is numeric so it takes a
     # plain `term`; CommandLine substring search uses a case-insensitive wildcard.
+    # The host filter is the shared host_name_clause: short name or FQDN, either
+    # way it has to reach the FQDN Sysmon stores.
 
     def _build_process_events_query(
         self,
@@ -667,7 +666,10 @@ class ElasticTool:
         rng = timestamp_range(timerange_minutes, since, until)
         must: list[dict[str, Any]] = []
         if host:
-            must.append({"term": {"Computer.keyword": host}})
+            # Not a bare term on Computer.keyword: that is exact on the stored
+            # FQDN, so a short name matched nothing and read as a clean host
+            # (the mirror image of issue #46; see es_queries).
+            must.append(host_name_clause(host, "Computer"))
         if image:
             must.append({"term": {"Image.keyword": image}})
         if parent_image:
@@ -712,7 +714,7 @@ class ElasticTool:
         """Search Sysmon host telemetry (windows-sysmon) for process / host events.
 
         Args:
-            host: Filter by Computer (FQDN, e.g. wkst-01.corp.example.invalid)
+            host: Filter by Computer (FQDN or short name, e.g. wkst-01.corp.example.invalid or wkst-01)
             image: Filter by Image (full process path, exact match)
             parent_image: Filter by ParentImage (full parent process path, exact match)
             command_line_contains: Case-insensitive substring match on CommandLine
@@ -758,7 +760,7 @@ class ElasticTool:
             timestamp_range(timerange_minutes, since, until).clause,
         ]
         if host:
-            must.append({"term": {"Computer.keyword": host}})
+            must.append(host_name_clause(host, "Computer"))
         return {
             "query": {"bool": {"must": must}},
             "sort": [{"@timestamp": "asc"}],
@@ -775,7 +777,7 @@ class ElasticTool:
             timestamp_range(timerange_minutes, since, until).clause,
         ]
         if host:
-            must.append({"term": {"Computer.keyword": host}})
+            must.append(host_name_clause(host, "Computer"))
         return {
             "query": {"bool": {"must": must}},
             "sort": [{"@timestamp": "asc"}],
@@ -794,7 +796,7 @@ class ElasticTool:
 
         Args:
             process_guid: The Sysmon ProcessGuid to anchor on (required)
-            host: Optional Computer (FQDN) filter to scope the walk
+            host: Optional Computer filter (FQDN or short name) to scope the walk
             timerange_minutes: Lookback window in minutes
             since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
         """

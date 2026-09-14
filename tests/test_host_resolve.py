@@ -234,15 +234,67 @@ def test_hosts_from_sysmon_are_already_fqdns():
     assert _run(r.hosts_for_ip("10.20.0.10")) == ["dc-01.corp.example.invalid"]
 
 
-def test_hosts_from_edr_stay_short_because_no_domain_is_known():
+def test_hosts_from_edr_stay_short_when_no_source_knows_the_fqdn():
+    # EDR names the host by its label only. DHCP and Sysmon are asked for the
+    # label's FQDN (the second DHCP / Sysmon replies) and know nothing, so the
+    # label comes back as-is and is listed as short_only -- not guessed at.
     r = StubResolver({
-        DHCP_INDEX: [_dhcp_names_agg()],
-        SYSMON_INDEX: [_terms_agg()],
+        DHCP_INDEX: [_dhcp_names_agg(), _dhcp_names_agg()],
+        SYSMON_INDEX: [_terms_agg(), _terms_agg()],
         EDR_INDEX: [_terms_agg("srv-app-03")],
     })
     res = _run(r.resolve_hosts("10.20.0.32"))
     assert res.values == ["srv-app-03"]
     assert res.source == EDR_INDEX
+    assert res.short_only == ["srv-app-03"]
+    assert [c[0] for c in r.calls] == [ASSETS_INDEX, DHCP_INDEX, SYSMON_INDEX, EDR_INDEX,
+                                       DHCP_INDEX, SYSMON_INDEX]
+
+
+def test_hosts_from_edr_are_qualified_from_the_dhcp_lease():
+    # The IP is only in EDR inside this window, but the lease record stores
+    # the label with its domain: that FQDN is a recorded fact, so it is used.
+    r = StubResolver({
+        DHCP_INDEX: [_dhcp_names_agg(), _dhcp_names_agg(("wkst-13", "corp.example.invalid"))],
+        SYSMON_INDEX: [_terms_agg()],
+        EDR_INDEX: [_terms_agg("wkst-13")],
+    })
+    res = _run(r.resolve_hosts("10.10.0.23"))
+    assert res.values == ["wkst-13.corp.example.invalid"]
+    assert res.source == EDR_INDEX
+    assert res.short_only == []
+    dhcp_bodies = [b for i, b in r.calls if i == DHCP_INDEX]
+    # The qualifying lookup is keyed on the label and carries no window: the
+    # domain a host belongs to is not a fact that changes inside a band.
+    assert dhcp_bodies[1]["query"]["bool"]["must"] == [{"term": {"host_name.keyword": "wkst-13"}}]
+
+
+def test_hosts_from_edr_are_qualified_from_sysmon_when_dhcp_does_not_know():
+    r = StubResolver({
+        DHCP_INDEX: [_dhcp_names_agg(), _dhcp_names_agg()],
+        SYSMON_INDEX: [_terms_agg(), _terms_agg("dc-01.corp.example.invalid")],
+        EDR_INDEX: [_terms_agg("dc-01")],
+    })
+    res = _run(r.resolve_hosts("10.20.0.10"))
+    assert res.values == ["dc-01.corp.example.invalid"]
+    assert res.short_only == []
+    sysmon_bodies = [b for i, b in r.calls if i == SYSMON_INDEX]
+    # Exact on the label: a prefix on the keyword with the trailing dot, so
+    # `dc-0.` cannot reach dc-01 and no analyzer token is involved.
+    assert sysmon_bodies[1]["query"]["bool"]["must"] == [
+        {"prefix": {"Computer.keyword": {"value": "dc-01.", "case_insensitive": True}}}]
+    assert sysmon_bodies[1]["aggs"]["values"]["terms"]["field"] == "Computer.keyword"
+
+
+def test_a_short_dhcp_name_without_a_domain_is_qualified_too():
+    # A lease record with no domain field falls into the same lookup.
+    r = StubResolver({
+        DHCP_INDEX: [_dhcp_names_agg(("wkst-03", "")), _dhcp_names_agg()],
+        SYSMON_INDEX: [_terms_agg(HOST)],
+    })
+    res = _run(r.resolve_hosts(HOST_IP))
+    assert res.values == [HOST]
+    assert res.short_only == []
 
 
 def test_hosts_multi_and_empty():
@@ -332,6 +384,19 @@ def test_complete_does_not_re_add_a_host_the_lead_already_named():
     assert done.filters.host_ips == [HOST_IP]
     assert record["hosts"]["resolved"] == []
     assert record["host_ips"]["resolved"] == []
+    assert record["short_only"] == []
+
+
+def test_complete_records_a_host_bound_under_its_short_name():
+    # A Linux server: EDR is the only source, no source knows the FQDN. The
+    # label binds (the host tools accept it) and the record says so, so a
+    # scorer comparing the bound scope to FQDN-keyed ground truth can see it.
+    r = StubResolver({EDR_INDEX: [_terms_agg("srv-app-03")]})
+    done, record = _run(complete_slice_scope(_slice(host_ips=["10.20.0.32"]), r))
+    assert done.filters.hosts == ["srv-app-03"]
+    assert record["hosts"]["resolved"] == ["srv-app-03"]
+    assert record["short_only"] == ["srv-app-03"]
+    assert record["sources"] == {"10.20.0.32": EDR_INDEX}
 
 
 def test_complete_records_what_the_corpus_cannot_resolve():
@@ -384,6 +449,19 @@ def test_live_round_trip_wkst_03():
 def test_live_short_name_resolves_the_same():
     r = HostResolver(ES_URL)
     assert _run(r.ips_for_host("wkst-03")) == [HOST_IP]
+
+
+@requires_corpus
+def test_live_linux_server_is_short_only():
+    # srv-app-03 is in neither DHCP nor Sysmon, so nothing in the corpus stores
+    # its FQDN: the EDR label is what comes back, and the record says so.
+    r = HostResolver(ES_URL)
+    ips = _run(r.resolve_ips("srv-app-03"))
+    assert ips.source == EDR_INDEX, ips
+    back = _run(r.resolve_hosts(ips.values[0]))
+    assert back.values == ["srv-app-03"], back
+    assert back.source == EDR_INDEX
+    assert back.short_only == ["srv-app-03"]
 
 
 @requires_corpus

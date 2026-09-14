@@ -17,6 +17,7 @@ from blue_bench_mcp.config import (
     ServerConfig,
     SysmonConfig,
 )
+from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.tool_classes.elastic import ElasticTool
 
 
@@ -80,12 +81,15 @@ def test_process_events_empty_is_range_only(tool):
     assert body["sort"] == [{"@timestamp": "desc"}]
 
 
-def test_process_events_host_uses_keyword(tool):
+def test_process_events_host_uses_the_shared_keyword_clause(tool):
+    # The shared clause is exact on Computer.keyword in either spelling (short
+    # name or FQDN); a bare term matched nothing for a short name. What the
+    # clause matches is tested in test_host_name_filter.py.
     body = tool._build_process_events_query(
         "wkst-01.corp.example.invalid", "", "", "", 0, 240
     )
     must = body["query"]["bool"]["must"]
-    assert {"term": {"Computer.keyword": "wkst-01.corp.example.invalid"}} in must
+    assert host_name_clause("wkst-01.corp.example.invalid", "Computer") in must
 
 
 def test_process_events_image_and_parent_use_keyword(tool):
@@ -160,8 +164,8 @@ def test_tree_children_query_matches_parent_guid(tool):
 def test_tree_host_scopes_both_queries(tool):
     self_b = tool._build_process_tree_self_query("{G}", "h.invalid", 240)
     child_b = tool._build_process_tree_children_query("{G}", "h.invalid", 240)
-    assert {"term": {"Computer.keyword": "h.invalid"}} in self_b["query"]["bool"]["must"]
-    assert {"term": {"Computer.keyword": "h.invalid"}} in child_b["query"]["bool"]["must"]
+    assert host_name_clause("h.invalid", "Computer") in self_b["query"]["bool"]["must"]
+    assert host_name_clause("h.invalid", "Computer") in child_b["query"]["bool"]["must"]
 
 
 async def test_tree_requires_guid(tool):

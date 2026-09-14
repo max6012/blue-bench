@@ -21,6 +21,7 @@ from blue_bench_mcp.config import (
     SysmonConfig,
     ZeekConfig,
 )
+from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.tool_classes.elastic import ElasticTool
 from blue_bench_mcp.tools import elastic as elastic_tools
 
@@ -105,17 +106,16 @@ async def test_host_filter_spans_sysmon_zeek_and_auth_fields(tool):
     seen = _stub_agg(tool, [])
     await tool.count_by_time(host="wkst-01.corp.example.invalid")
     must = seen["body"]["query"]["bool"]["must"]
-    host_clause = must[0]["bool"]
-    assert host_clause["minimum_should_match"] == 1
-    assert host_clause["should"] == [
-        {"term": {"Computer.keyword": "wkst-01.corp.example.invalid"}},
+    # The name clauses are the ONE shared definition (es_queries.host_name_clause;
+    # what it matches is tested in test_host_name_filter.py), plus the Zeek/OT
+    # address fields so a comma-list of indices can be surveyed in one call.
+    # Never a bare `match` on the text field: an analyzed OR over the FQDN
+    # tokens matched every sibling host in the domain (found on the live corpus).
+    assert must[0] == host_name_clause("wkst-01.corp.example.invalid", "Computer", "host", extra=[
         {"term": {"id.orig_h": "wkst-01.corp.example.invalid"}},
         {"term": {"id.resp_h": "wkst-01.corp.example.invalid"}},
-        # match_phrase, not match: an analyzed OR over the FQDN tokens would
-        # match every sibling host in the domain (found on the live corpus).
-        {"match_phrase": {"Computer": "wkst-01.corp.example.invalid"}},
-        {"match_phrase": {"host": "wkst-01.corp.example.invalid"}},
-    ]
+    ])
+    assert must[0]["bool"]["minimum_should_match"] == 1
 
 
 async def test_event_id_matches_both_spellings(tool):

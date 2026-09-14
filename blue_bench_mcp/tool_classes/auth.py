@@ -21,6 +21,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
+from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE, json_dump_within, result_footer, truncate_result_list,
@@ -110,7 +111,8 @@ class AuthTool:
           result: 'success' (4624 / Accepted) or 'failure' (4625 / 4771 / Failed
             password); empty = no filter. Use 'failure' to surface brute-force /
             spray attempts.
-          host: target host — Windows Computer or Linux syslog host. Empty = no filter.
+          host: target host — Windows Computer or Linux syslog host, FQDN or
+            short name. Empty = no filter.
           timerange_minutes: lookback window from now, default 240. Auth abuse is
             often low-and-slow — widen this for spraying / dormant-credential use.
           since / until: absolute UTC bounds (ISO-8601, e.g. 2026-08-26T00:00:00Z);
@@ -172,10 +174,15 @@ class AuthTool:
                 {"match_phrase": {"message": "Failed password"}},
             ], "minimum_should_match": 1}})
         if host:
-            must.append({"bool": {"should": [
-                {"match": {"Computer": host}},
-                {"match": {"host": host}},
-            ], "minimum_should_match": 1}})
+            # Computer (windows-security), host and hostname (linux-syslog;
+            # the sshd records on jump-ot-01 carry hostname and no host) are
+            # text-mapped with a .keyword subfield. NEVER a bare `match` here:
+            # it analyzes the FQDN into `wkst 13 corp.example.invalid` OR'd
+            # together, and every host in the domain shares the last token --
+            # a host-scoped search came back as the entire windows-security
+            # index (issue #46). The shared clause is exact on the stored
+            # value in either spelling; see es_queries.
+            must.append(host_name_clause(host, "Computer", "host", "hostname"))
         must.append(rng.clause)
 
         body = {

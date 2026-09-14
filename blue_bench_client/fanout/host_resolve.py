@@ -29,7 +29,18 @@ Sources, in authority order -- the first that answers wins:
 * ``ecar-edr`` OUTBOUND FLOW records -- ``hostname`` (short) with
   ``properties.src_ip``. The only source that covers the Linux servers
   (``srv-app-*``, ``srv-db-*``); they are in neither DHCP nor Sysmon. It
-  carries no domain, so these resolve to a short name, not an FQDN.
+  carries no domain.
+
+A short name from a source that carries no domain is qualified by a second,
+name-keyed lookup: if the same label is stored as an FQDN in ``zeek-dhcp``
+(``host_name`` + ``domain``) or in Sysmon's ``Computer``, that FQDN is
+returned. That is a lookup of a recorded fact, not a guess -- the resolver
+never assembles a domain by majority vote. Only when no source knows the
+FQDN does the short name come back, and it is then listed under
+``short_only`` in the resolution and in the slice's provenance record, so
+scoring can see that the host tools were bound to a label rather than to the
+FQDN they store. (The host tools' own filter accepts either spelling, so the
+label still binds; the record is there so nobody has to trust that.)
 
 ``ot-hosts`` is deliberately NOT a source. Its ``source_ip`` is the peer that
 connected, not the subject host's address: ``ews-01.plant.example.invalid``'s
@@ -78,9 +89,14 @@ class Resolution:
     ``source`` is the index that answered, or ``""`` when nothing did -- the
     record on the slice needs to say which, because "the DHCP lease says so"
     and "no source in the corpus knows" are different facts for the judge.
+
+    ``short_only`` lists the host names in ``values`` that no source could
+    qualify: the answering source carries no domain and neither DHCP nor
+    Sysmon stores the label as an FQDN. Empty for the IP direction.
     """
     values: list[str] = field(default_factory=list)
     source: str = ""
+    short_only: list[str] = field(default_factory=list)
 
     def __bool__(self) -> bool:
         return bool(self.values)
@@ -318,12 +334,67 @@ class HostResolver:
     ) -> list[str]:
         """Every host that held the address inside the window.
 
-        FQDNs where the source knows the domain (DHCP carries ``domain``,
-        Sysmon's ``Computer`` is already qualified); the short name where it
-        does not (the EDR records carry no domain, and guessing one by majority
-        vote across the corpus would be a fabricated fact in a scoping filter).
+        FQDNs where any source knows the domain (DHCP carries ``domain``,
+        Sysmon's ``Computer`` is already qualified, and a label the EDR
+        records name is looked up in both); the short name only where none
+        does -- guessing a domain by majority vote across the corpus would be
+        a fabricated fact in a scoping filter. :meth:`resolve_hosts` says
+        which names stayed short.
         """
         return (await self.resolve_hosts(ip, since=since, until=until)).values
+
+    async def _fqdn_for_label(self, label: str) -> str:
+        """The FQDN some source stores for a short label, or ``""``.
+
+        Asked without the slice window, deliberately: the window scopes
+        ADDRESSES, which a host can change inside the corpus, but the domain a
+        host belongs to is a standing fact like the asset inventory. A
+        windowed lookup would drop to the short name whenever the host's
+        DHCP or Sysmon records happen to fall outside the band, and the answer
+        would then depend on the band rather than on the corpus.
+
+        DHCP first (the lease names the domain outright), then Sysmon, where
+        the label is matched as ``prefix`` on ``Computer.keyword`` with the
+        trailing dot -- exact on the label, never on a token the analyzer
+        made, so ``wkst-1.`` cannot pick up ``wkst-13``.
+        """
+        body = {
+            "size": 0,
+            "query": {"bool": {"must": [{"term": {"host_name.keyword": label}}]}},
+            "aggs": {"values": {
+                "terms": {"field": "host_name.keyword", "size": 1},
+                "aggs": {"domain": {"terms": {"field": "domain.keyword", "size": 1}}},
+            }},
+        }
+        try:
+            data = await self._agg(self.dhcp_index, body)
+        except httpx.HTTPError:
+            data = {}
+        for b in _buckets(data, "values"):
+            doms = b.get("domain", {}).get("buckets", []) or []
+            if doms:
+                return f"{b['key']}.{doms[0]['key']}"
+
+        must = [{"prefix": {"Computer.keyword": {"value": f"{label}.", "case_insensitive": True}}}]
+        vals = await self._terms(self.sysmon_index, must, "Computer.keyword", size=1)
+        return vals[0] if vals else ""
+
+    async def _qualified(self, names: list[str], source: str) -> Resolution:
+        """A :class:`Resolution` whose short names are qualified where a
+        source knows the FQDN, and listed as ``short_only`` where none does."""
+        out: list[str] = []
+        short_only: list[str] = []
+        for name in names:
+            if "." in name:
+                out.append(name)
+                continue
+            fqdn = await self._fqdn_for_label(name)
+            if fqdn:
+                out.append(fqdn)
+            else:
+                out.append(name)
+                short_only.append(name)
+        return Resolution(list(dict.fromkeys(out)), source, short_only)
 
     async def _lookup_hosts(self, ip: str, since: str, until: str) -> Resolution:
         window = self._window(since, until)
@@ -362,7 +433,7 @@ class HostResolver:
             doms = b.get("domain", {}).get("buckets", []) or []
             names.append(f"{name}.{doms[0]['key']}" if doms and "." not in name else name)
         if names:
-            return Resolution(names, self.dhcp_index)
+            return await self._qualified(names, self.dhcp_index)
 
         must = [{"term": {"EventID": 3}}, {"term": {"SourceIp.keyword": ip}}, *window]
         vals = await self._terms(self.sysmon_index, must, "Computer.keyword")
@@ -377,7 +448,9 @@ class HostResolver:
         ]
         vals = await self._terms(self.edr_index, must, "hostname.keyword")
         if vals:
-            return Resolution(vals, self.edr_index)
+            # EDR carries no domain: qualify each label from the sources that
+            # do, and say which ones stayed short.
+            return await self._qualified(vals, self.edr_index)
 
         return Resolution([], "")
 
@@ -412,6 +485,7 @@ async def complete_slice_scope(slice: Any, resolver: HostResolver | None) -> tup
     supplied_ips = list(f.host_ips)
     sources: dict[str, str] = {}
     unresolved: list[str] = []
+    short_only: list[str] = []
 
     new_ips: list[str] = []
     new_hosts: list[str] = []
@@ -433,6 +507,7 @@ async def complete_slice_scope(slice: Any, resolver: HostResolver | None) -> tup
                 # would bind the host tools to a name that is not in the index.
                 have = {short_name(h) for h in supplied_hosts}
                 new_hosts += [v for v in res.values if short_name(v) not in have]
+                short_only += [v for v in res.short_only if short_name(v) not in have]
             else:
                 unresolved.append(ip)
 
@@ -443,6 +518,10 @@ async def complete_slice_scope(slice: Any, resolver: HostResolver | None) -> tup
         "host_ips": {"supplied": supplied_ips, "resolved": [i for i in ips if i not in supplied_ips]},
         "sources": sources,
         "unresolved": unresolved,
+        # Hosts added to the slice under a short name because no source knows
+        # the FQDN. The host tools accept the label, but a scorer comparing
+        # the bound scope against the FQDN-keyed ground truth needs to know.
+        "short_only": list(dict.fromkeys(short_only)),
         "window": {"since": since, "until": until},
     }
     completed = slice.model_copy(

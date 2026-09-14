@@ -325,6 +325,34 @@ def test_the_unbindable_drop_still_fires_for_a_tool_without_host_ip(schemas):
     assert over["_unbindable"] == {"host_ip": "10.1.20.33"}
 
 
+def test_list_assets_binds_both_halves_of_the_host_scope(schemas):
+    # The asset inventory takes a name and an address, and the two are fields
+    # of ONE record, so a slice's hosts and host_ips both bind and AND safely
+    # (unlike src_ip/dest_ip on a connection, which the module docstring
+    # forbids). `name` accepts a short label or an FQDN. The index carries no
+    # @timestamp, so the band is recorded as unexpressible, not narrowed.
+    sl = _slice(hosts=["hmi-03.plant.example.invalid"], host_ips=["10.40.0.18"],
+                time_start=T0, time_end=T1)
+    bound, over = bind_args("list_assets", {"name": "ews-01", "role": "hmi"}, sl,
+                            schemas["list_assets"], now=NOW)
+    assert bound == {"name": "hmi-03.plant.example.invalid", "ip": "10.40.0.18", "role": "hmi"}
+    assert over["name"] == "ews-01"
+    assert over["_unexpressible"]["time_window"]["start"] == T0.isoformat()
+    assert "_unbindable" not in over
+    # A short name in the slice binds as written; the tool matches either spelling.
+    bound, _ = bind_args("list_assets", {}, _slice(hosts=["hmi-03"]), schemas["list_assets"], now=NOW)
+    assert bound == {"name": "hmi-03"}
+    # Out-of-list values are refused on either half.
+    two = _slice(hosts=["hmi-03", "hmi-04"], host_ips=["10.40.0.18", "10.40.0.19"])
+    _, over = bind_args("list_assets", {"name": "ews-01", "ip": "10.40.0.99"}, two,
+                        schemas["list_assets"], now=NOW)
+    assert set(over["_rejected"]) == {"name", "ip"}
+    # Its native index is on record, so an index-scoped slice sees the escape.
+    _, over = bind_args("list_assets", {}, _slice(indices=["windows-sysmon"]),
+                        schemas["list_assets"], now=NOW)
+    assert over["_unexpressible"]["indices"]["tool_reads"] == ["ot-assets"]
+
+
 def test_count_by_field_binds_a_comma_list_of_indices(schemas):
     sl = _slice(indices=["windows-sysmon", "windows-security"], time_start=T0)
     bound, over = bind_args("count_by_field", {"field": "EventID", "index": "zeek-conn"}, sl,

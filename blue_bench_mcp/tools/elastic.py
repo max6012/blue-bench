@@ -150,8 +150,9 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         and ProcessGuid / ParentProcessGuid.
 
         Arguments:
-          host: Computer FQDN, e.g. 'wkst-01.corp.example.invalid'; exact match,
-            empty = no filter.
+          host: Computer name, FQDN or short, e.g. 'wkst-01.corp.example.invalid'
+            or 'wkst-01'; exact on the host either way (a short name never
+            matches a longer one). Empty = no filter.
           image: full Image path, exact match (e.g. 'C:\\Windows\\System32\\svchost.exe');
             empty = no filter.
           parent_image: full ParentImage path, exact match; empty = no filter.
@@ -201,7 +202,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         Arguments:
           process_guid: the Sysmon ProcessGuid to anchor on (required). Get one
             from get_process_events output.
-          host: optional Computer FQDN to scope the walk; empty = all hosts.
+          host: optional Computer name (FQDN or short) to scope the walk;
+            empty = all hosts.
           timerange_minutes: lookback window from now, default 240.
           since, until: absolute UTC bounds (ISO-8601, e.g. '2026-08-26T00:00:00Z');
             when either is given they replace timerange_minutes. Use them to pin
@@ -292,8 +294,9 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           timerange_minutes: lookback window, default 240. The corpus spans
             weeks — pass a large value (e.g. 43200 = 30 days) to see all of it.
           host: optional host filter, matched against Sysmon 'Computer', Zeek
-            'id.orig_h' / 'id.resp_h', and auth 'Computer' / 'host'. Use the
-            FQDN for Windows sources and the IP for Zeek.
+            'id.orig_h' / 'id.resp_h', and auth 'Computer' / 'host'. A name
+            (FQDN or short, either matches) for the Windows and syslog sources,
+            the IP for Zeek.
           event_id: optional Windows EventID filter (Sysmon 1, 3, 11...;
             Security 4624, 4625, 4688...). 0 = no filter.
           query_text: optional free-text (Lucene-style) filter.

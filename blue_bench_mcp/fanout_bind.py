@@ -78,6 +78,15 @@ _BINDINGS: dict[str, dict[str, str]] = {
     # host dimension is recorded _unbindable and its time band _unexpressible.
     "get_detections": {"hosts": "hostname"},
     "list_endpoints": {"hosts": "hostname"},
+    # The OT asset inventory. Both halves of a slice's host scope bind, and
+    # ANDing them is safe here where it is not for src_ip/dest_ip: name and ip
+    # are two fields of ONE inventory record, so a slice whose hosts and
+    # host_ips describe the same device matches that device's record. (The
+    # resolver fills the missing half from this same index, so the two are
+    # consistent by construction.) `name` already takes a short label or an
+    # FQDN. The inventory carries no @timestamp, so the slice's band lands in
+    # _unexpressible['time_window'] like list_endpoints.
+    "list_assets": {"hosts": "name", "host_ips": "ip"},
 }
 
 # The indices each fixed-index tool reads (repo config defaults). A tool that
@@ -93,6 +102,7 @@ _NATIVE_INDICES: dict[str, set[str]] = {
     "get_connections": {"zeek-conn", "ot-conn"},
     "search_alerts": {"logstash-suricata-alerts", "wazuh-alerts", "zeek-conn"},
     "detect_beaconing": {"zeek-conn"},
+    "list_assets": {"ot-assets"},
 }
 
 REFUSAL_PREFIX = "Error: call refused by the slice binding"

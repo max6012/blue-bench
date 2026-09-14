@@ -233,6 +233,40 @@ async def test_auth_records_carry_the_es_id_and_index_first(monkeypatch):
     assert records[0]["_id"] == "abc123"
 
 
+async def test_account_filter_never_bare_match_on_text_field():
+    """Issue #46, same defect as the host filter. SubjectUserName /
+    TargetUserName are text-mapped; a bare `match` analyzes
+    "srv-files-01$@CORP.EXAMPLE.INVALID" into `srv files 01 corp example
+    invalid` OR'd together, so every account in the domain matches. The
+    account clause must be exact (`term` on the .keyword subfield) with a
+    `match_phrase` fallback on the text fields and on the free-text syslog
+    `message` -- and it must stay a `should` so either substrate matches."""
+    account = "srv-files-01$@CORP.EXAMPLE.INVALID"
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(account=account)
+    # Select on TargetUserName: it is unique to the account clause, whereas
+    # `message` also appears in the result= clause.
+    clause = next(c for c in _musts(seen[0])
+                  if "bool" in c
+                  and any("TargetUserName" in str(x) for x in c["bool"].get("should", [])))
+    assert clause["bool"]["minimum_should_match"] == 1
+    should = clause["bool"]["should"]
+    # Structural check, not a substring check: "match_phrase" and
+    # "minimum_should_match" both contain the substring "match".
+    for sub in should:
+        (kind, body), = sub.items()
+        assert kind in ("term", "match_phrase"), f"bare {kind!r} on {list(body)}"
+    assert {"match": {"SubjectUserName": account}} not in should
+    assert {"match": {"TargetUserName": account}} not in should
+    assert {"match": {"message": account}} not in should
+    assert {"term": {"SubjectUserName.keyword": account}} in should
+    assert {"term": {"TargetUserName.keyword": account}} in should
+    assert {"match_phrase": {"SubjectUserName": account}} in should
+    assert {"match_phrase": {"TargetUserName": account}} in should
+    assert {"match_phrase": {"message": account}} in should
+
+
+
 # ── live (ES up) ───────────────────────────────────────────────────────────────
 
 @requires_es
@@ -246,3 +280,53 @@ async def test_live_failure_filter_shape():
     out = await _tool().search_auth_events(result="failure", timerange_minutes=60000)
     # Valid JSON array or a well-formed error; must not raise.
     assert out.startswith("[") or out.startswith("Error:")
+
+
+@requires_es
+async def test_live_host_filter_matches_only_that_host():
+    """Issue #46, on the real corpus. The tool's host clause must match
+    exactly the docs whose Computer.keyword is that host -- not every host
+    sharing the `corp example invalid` tokens. Compares counts (the tool caps
+    returned docs at max_results), using the exact query body the tool builds."""
+    import httpx
+    host = "wkst-13.corp.example.invalid"
+    window = 60000
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(host=host, timerange_minutes=window)
+    params = {"ignore_unavailable": "true", "allow_no_indices": "true"}
+    url = f"{ES_URL}/{tool.index}/_count"
+    tool_count = httpx.post(url, json={"query": seen[0]["query"]}, params=params,
+                            timeout=60).json()["count"]
+    exact = {"query": {"bool": {"must": [
+        {"range": {"@timestamp": {"gte": f"now-{window}m", "lte": "now"}}},
+        {"term": {"Computer.keyword": host}},
+    ]}}}
+    exact_count = httpx.post(url, json=exact, params=params, timeout=60).json()["count"]
+    if exact_count == 0:
+        pytest.skip(f"{host} not present in the live corpus; 0 == 0 would prove nothing")
+    assert tool_count == exact_count
+
+
+@requires_es
+async def test_live_account_filter_matches_only_that_account():
+    """Issue #46, on the real corpus. A domain-qualified account must match
+    exactly the docs whose TargetUserName.keyword is that account -- not every
+    account sharing the `corp example invalid` tokens. Compares counts using
+    the exact query body the tool builds (the tool caps returned docs)."""
+    import httpx
+    account = "srv-files-01$@CORP.EXAMPLE.INVALID"
+    window = 60000
+    tool = _tool(); seen = _capture(tool)
+    await tool.search_auth_events(account=account, timerange_minutes=window)
+    params = {"ignore_unavailable": "true", "allow_no_indices": "true"}
+    url = f"{ES_URL}/{tool.index}/_count"
+    tool_count = httpx.post(url, json={"query": seen[0]["query"]}, params=params,
+                            timeout=60).json()["count"]
+    exact = {"query": {"bool": {"must": [
+        {"range": {"@timestamp": {"gte": f"now-{window}m", "lte": "now"}}},
+        {"term": {"TargetUserName.keyword": account}},
+    ]}}}
+    exact_count = httpx.post(url, json=exact, params=params, timeout=60).json()["count"]
+    if exact_count == 0:
+        pytest.skip(f"{account} not present in the live corpus; 0 == 0 would prove nothing")
+    assert tool_count == exact_count

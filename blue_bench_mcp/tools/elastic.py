@@ -96,6 +96,42 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         )
 
     @server.tool()
+    async def list_assets(
+        segment: str = "",
+        role: str = "",
+        ip: str = "",
+        name: str = "",
+    ) -> str:
+        """Read the OT asset inventory — the plant's record of which device each
+        OT address belongs to, and which address each named device has.
+
+        This is the join the network telemetry does not carry: the OT protocol
+        indices (ot-conn, ot-modbus, ot-dnp3, ot-iec104, ot-s7comm) identify
+        endpoints only by address, while the OT host logs (ot-hosts) name
+        devices only by name. Use this tool to turn an address in an OT
+        connection into a named device with a role, and to tell an OT address
+        from an IT one on evidence rather than by guessing from the subnet.
+        Embedded devices (controllers, RTUs) run no agent and appear in no EDR
+        inventory — this is the only place they are listed.
+
+        Arguments:
+          segment: 'OT' to restrict to the plant segment; empty = no filter.
+          role: one of controller, safety-controller, rtu, hmi, historian,
+            engineering-workstation, ot-firewall; empty = no filter.
+          ip: exact address, e.g. '10.41.0.10' — the "whose address is this?"
+            lookup.
+          name: device name or FQDN, e.g. 'hmi-03' or
+            'hmi-03.plant.example.invalid' — the "what address does it have?"
+            lookup. Either spelling works.
+        Returns a JSON array of asset records: name, fqdn, ip, role, os, vendor,
+        vlan, vlan_id, subnet, segment, and the protocols the device speaks.
+        Empty [] when nothing matches. On a corpus built before the inventory
+        existed the index is absent and this tool says so in plain words — treat
+        that as "this deployment cannot tell you", not as "no such device".
+        """
+        return await tool.list_assets(segment=segment, role=role, ip=ip, name=name)
+
+    @server.tool()
     async def get_process_events(
         host: str = "",
         image: str = "",

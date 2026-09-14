@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 import pytest
 
 from blue_bench_client.fanout.host_resolve import (
+    ASSETS_INDEX,
     DHCP_INDEX,
     EDR_INDEX,
     SYSMON_INDEX,
@@ -91,14 +92,15 @@ def _run(coro):
 def test_ips_from_dhcp_first():
     r = StubResolver({DHCP_INDEX: [_terms_agg(HOST_IP)]})
     assert _run(r.ips_for_host(HOST)) == [HOST_IP]
-    # The lease answered, so no other index was asked.
-    assert [c[0] for c in r.calls] == [DHCP_INDEX]
+    # The asset inventory is asked first and holds no IT host, so the lease
+    # answers; once it has, no further index is asked.
+    assert [c[0] for c in r.calls] == [ASSETS_INDEX, DHCP_INDEX]
 
 
 def test_ips_query_uses_keyword_fields_and_both_spellings():
     r = StubResolver({DHCP_INDEX: [_terms_agg(HOST_IP)]})
     _run(r.ips_for_host(HOST))
-    _index, body = r.calls[0]
+    body = [b for i, b in r.calls if i == DHCP_INDEX][0]
     must = body["query"]["bool"]["must"]
     assert must[0] == {"terms": {"host_name.keyword": ["wkst-03", HOST]}}
     assert body["aggs"]["values"]["terms"]["field"] == "assigned_addr.keyword"
@@ -150,6 +152,8 @@ def test_ips_placeholder_addresses_are_dropped():
 
 
 def test_ips_unknown_host_is_empty_not_an_error():
+    # Every source empty -- e.g. an OT device on a corpus built before the
+    # asset inventory existed. Not knowing is an answer, not a failure.
     r = StubResolver({})
     res = _run(r.resolve_ips("hmi-03.plant.example.invalid"))
     assert res.values == []
@@ -164,7 +168,9 @@ def test_short_and_fqdn_share_one_lookup():
 
     a, b = _run(both())
     assert a == b == [HOST_IP]
-    assert len(r.calls) == 1
+    # One resolution: the inventory (no answer) then the lease. The second call
+    # is served from the cache and issues nothing.
+    assert len(r.calls) == 2
 
 
 def test_cache_is_per_window():
@@ -177,10 +183,38 @@ def test_cache_is_per_window():
 
     first, second = _run(two_windows())
     assert (first, second) == (["10.10.0.13"], ["10.10.0.99"])
-    assert len(r.calls) == 2
-    assert r.calls[0][1]["query"]["bool"]["must"][1] == {
+    # Two resolutions, each asking the inventory and then the lease.
+    assert len(r.calls) == 4
+    dhcp = [b for i, b in r.calls if i == DHCP_INDEX]
+    assert dhcp[0]["query"]["bool"]["must"][1] == {
         "range": {"@timestamp": {"gte": "2026-08-25T00:00:00Z"}}
     }
+
+
+def test_ips_come_from_the_asset_inventory_first():
+    # The inventory is a declared mapping; the sources below it infer one from
+    # traffic. hmi-03 emits host logs but ot-hosts carries the PEER address, so
+    # without the inventory this host has no source at all.
+    r = StubResolver({ASSETS_INDEX: [_terms_agg("10.40.0.18")]})
+    res = _run(r.resolve_ips("hmi-03.plant.example.invalid"))
+    assert res.values == ["10.40.0.18"]
+    assert res.source == ASSETS_INDEX
+    assert [c[0] for c in r.calls] == [ASSETS_INDEX]
+    body = r.calls[0][1]
+    should = body["query"]["bool"]["must"][0]["bool"]["should"]
+    assert {"terms": {"name.keyword": ["hmi-03", "hmi-03.plant.example.invalid"]}} in should
+    assert {"terms": {"fqdn.keyword": ["hmi-03", "hmi-03.plant.example.invalid"]}} in should
+    assert body["aggs"]["values"]["terms"]["field"] == "ip.keyword"
+
+
+def test_inventory_query_carries_no_time_window():
+    # Asset records have no @timestamp. A range clause would match zero of them
+    # and the resolution would silently fall through to the guesswork sources,
+    # which is exactly the bug this assertion exists to catch.
+    r = StubResolver({ASSETS_INDEX: [_terms_agg("10.40.0.18")]})
+    _run(r.resolve_ips("hmi-03", since="2026-03-02T05:00:00Z", until="2026-03-20T05:00:00Z"))
+    must = r.calls[0][1]["query"]["bool"]["must"]
+    assert not any("range" in clause for clause in must), must
 
 
 # --- ip -> host ---------------------------------------------------------------
@@ -218,6 +252,28 @@ def test_hosts_multi_and_empty():
     assert _run(StubResolver({}).hosts_for_ip("10.99.0.1")) == []
 
 
+def test_hosts_come_from_the_asset_inventory_first():
+    r = StubResolver({ASSETS_INDEX: [_terms_agg("hmi-03.plant.example.invalid")]})
+    res = _run(r.resolve_hosts("10.40.0.18"))
+    assert res.values == ["hmi-03.plant.example.invalid"]
+    assert res.source == ASSETS_INDEX
+    assert [c[0] for c in r.calls] == [ASSETS_INDEX]
+    body = r.calls[0][1]
+    assert body["query"]["bool"]["must"] == [{"term": {"ip.keyword": "10.40.0.18"}}]
+    assert body["aggs"]["values"]["terms"]["field"] == "fqdn.keyword"
+
+
+def test_inventory_does_not_answer_for_an_it_host():
+    # It holds OT records only, so an IT address falls through to DHCP with no
+    # segment test anywhere in the resolver.
+    r = StubResolver({
+        ASSETS_INDEX: [_terms_agg()],
+        DHCP_INDEX: [_dhcp_names_agg(("wkst-03", "corp.example.invalid"))],
+    })
+    res = _run(r.resolve_hosts(HOST_IP))
+    assert res.values == [HOST] and res.source == DHCP_INDEX
+
+
 def test_hosts_cached():
     r = StubResolver({DHCP_INDEX: [_dhcp_names_agg(("wkst-03", "corp.example.invalid"))]})
 
@@ -226,7 +282,8 @@ def test_hosts_cached():
 
     a, b = _run(twice())
     assert a == b == [HOST]
-    assert len(r.calls) == 1
+    # Inventory then lease on the first call; the second is cached.
+    assert len(r.calls) == 2
 
 
 # --- complete_slice_scope -----------------------------------------------------
@@ -278,6 +335,8 @@ def test_complete_does_not_re_add_a_host_the_lead_already_named():
 
 
 def test_complete_records_what_the_corpus_cannot_resolve():
+    # No source answers (here: no asset inventory in this deployment), so the
+    # host is recorded as unresolved rather than bound to a guess.
     r = StubResolver({})
     ot = "hmi-03.plant.example.invalid"
     done, record = _run(complete_slice_scope(_slice(hosts=[ot]), r))
@@ -295,7 +354,8 @@ def test_complete_uses_the_slice_time_band():
     )
     _done, record = _run(complete_slice_scope(sl, r))
     assert record["window"] == {"since": "2026-08-25T00:00:00Z", "until": "2026-08-27T00:00:00Z"}
-    assert r.calls[0][1]["query"]["bool"]["must"][1] == {"range": {"@timestamp": {
+    dhcp = [b for i, b in r.calls if i == DHCP_INDEX][0]
+    assert dhcp["query"]["bool"]["must"][1] == {"range": {"@timestamp": {
         "gte": "2026-08-25T00:00:00Z", "lte": "2026-08-27T00:00:00Z"}}}
 
 
@@ -334,3 +394,59 @@ def test_live_static_windows_server_comes_from_sysmon():
     res = _run(r.resolve_ips("dc-01.corp.example.invalid"))
     assert res.values == ["10.20.0.10"], res
     assert res.source == SYSMON_INDEX
+
+
+def _assets_populated() -> bool:
+    import httpx
+    try:
+        r = httpx.get(f"{ES_URL}/{ASSETS_INDEX}/_count", timeout=2.0)
+        return r.status_code == 200 and r.json().get("count", 0) > 0
+    except (httpx.HTTPError, ValueError):
+        return False
+
+
+requires_inventory = pytest.mark.skipif(
+    not (_es_reachable() and _assets_populated()),
+    reason="Elasticsearch / ot-assets not available",
+)
+
+OT_HOST = "hmi-03.plant.example.invalid"
+OT_HOST_IP = "10.40.0.18"
+
+
+@requires_inventory
+def test_live_ot_device_round_trip():
+    # The join the whole OT half of the feature rests on: a device name that
+    # appears only in ot-hosts, to an address that appears only in the protocol
+    # indices, and back.
+    r = HostResolver(ES_URL)
+    ips = _run(r.resolve_ips(OT_HOST))
+    assert ips.values == [OT_HOST_IP], ips
+    assert ips.source == ASSETS_INDEX
+    back = _run(r.resolve_hosts(OT_HOST_IP))
+    assert back.values == [OT_HOST], back
+    assert back.source == ASSETS_INDEX
+
+
+@requires_inventory
+def test_live_every_ot_address_in_the_protocol_indices_resolves():
+    """Every OT-subnet address ES holds in ot-conn / ot-modbus names a device.
+
+    Scoped to what is IN ES: the protocol streams are ingested with
+    --ot-sample-rate, and ES is what the resolver reads. Addresses outside the
+    OT VLANs are the IT leg of a bridge session (a jump host is not an OT
+    asset) and are excluded, not counted as failures.
+    """
+    from blue_bench_generators.merge.asset_inventory import _distinct, _ot_subnets
+    import ipaddress
+
+    subnets = _ot_subnets("L", 0)
+    addrs = set()
+    for index in ("ot-conn", "ot-modbus"):
+        for field in ("src_ip", "dest_ip"):
+            addrs.update(_distinct(ES_URL, index, field))
+    ot = sorted(a for a in addrs
+                if any(ipaddress.ip_address(a) in n for n in subnets))
+    r = HostResolver(ES_URL)
+    unresolved = [a for a in ot if not _run(r.hosts_for_ip(a))]
+    assert unresolved == [], f"{len(unresolved)} of {len(ot)} OT addresses resolve to no device"

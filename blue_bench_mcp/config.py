@@ -35,6 +35,10 @@ class ElasticConfig(BaseModel):
     # Multi-index pattern covering Suricata + Wazuh + Zeek. ES accepts comma-separated.
     # Concrete index names set by scripts/seed_es.py; match them verbatim here.
     index_pattern: str = "logstash-suricata-alerts,wazuh-alerts,zeek-conn"
+    # OT asset inventory (one record per OT device, no @timestamp). Read by
+    # list_assets. A corpus built before the inventory existed simply has no
+    # such index, and the tool says so rather than erroring.
+    asset_index: str = "ot-assets"
     verify_ssl: bool = False
     user: str = ""
     password: str = ""

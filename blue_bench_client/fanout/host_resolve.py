@@ -11,6 +11,15 @@ judge scores the lead on the plan it wrote and not on the harness's filling-in.
 
 Sources, in authority order -- the first that answers wins:
 
+* ``ot-assets`` -- the OT asset inventory. Authoritative for the plant segment
+  and consulted first: it is a declared name<->address mapping rather than an
+  inference from traffic, and it covers the embedded devices (controllers,
+  RTUs) that emit no host telemetry at all. It holds only OT records, so an IT
+  host simply does not match and the traffic-derived sources below still
+  answer. It carries no ``@timestamp`` (an inventory is a standing fact, not an
+  observation), so its queries -- alone among these -- do not take the slice
+  window; applying one would match nothing and silently fall through to the
+  guesswork sources.
 * ``zeek-dhcp`` -- the lease record. Authoritative for anything that takes a
   lease, which in this corpus means the workstations (``host_name`` short,
   ``domain`` alongside it, so an FQDN is derivable).
@@ -26,9 +35,11 @@ Sources, in authority order -- the first that answers wins:
 connected, not the subject host's address: ``ews-01.plant.example.invalid``'s
 top ``source_ip`` is ``10.30.0.10``, which Sysmon independently identifies as
 ``jump-ot-01``. Binding a slice from it would scope the network tools to a
-dozen addresses that are not the host. The consequence is that the OT hosts
-(``*.plant.example.invalid``) do not resolve at all -- see the module tests and
-the fan-out design note.
+dozen addresses that are not the host. That used to mean the OT hosts
+(``*.plant.example.invalid``) did not resolve at all; ``ot-assets`` is what
+closes it, and on a corpus built before the inventory existed the old gap is
+still the behaviour -- the index is simply absent and every OT name falls
+through unresolved.
 
 Every query is a terms aggregation, not a document fetch: the answer is the set
 of distinct values, and an aggregation gets it in one round trip regardless of
@@ -46,6 +57,7 @@ from typing import Any
 
 import httpx
 
+ASSETS_INDEX = "ot-assets"
 DHCP_INDEX = "zeek-dhcp"
 SYSMON_INDEX = "windows-sysmon"
 EDR_INDEX = "ecar-edr"
@@ -129,6 +141,7 @@ class HostResolver:
         dhcp_index: str = DHCP_INDEX,
         sysmon_index: str = SYSMON_INDEX,
         edr_index: str = EDR_INDEX,
+        assets_index: str = ASSETS_INDEX,
     ) -> None:
         self.url = es_url.rstrip("/")
         self.verify_ssl = verify_ssl
@@ -138,6 +151,7 @@ class HostResolver:
         self.dhcp_index = dhcp_index
         self.sysmon_index = sysmon_index
         self.edr_index = edr_index
+        self.assets_index = assets_index
         self._cache: dict[tuple[str, str, str, str], Resolution] = {}
 
     @classmethod
@@ -156,6 +170,7 @@ class HostResolver:
             password=cfg.elastic.password,
             timeout=cfg.limits.query_timeout,
             sysmon_index=cfg.sysmon.index,
+            assets_index=getattr(cfg.elastic, "asset_index", ASSETS_INDEX),
         )
 
     # --- ES ------------------------------------------------------------------
@@ -237,6 +252,18 @@ class HostResolver:
         names = _name_spellings(host)
         window = self._window(since, until)
 
+        # The OT asset inventory: a declared mapping, so it outranks everything
+        # below, which infers the mapping from traffic. No window clause -- the
+        # records carry no @timestamp (see the module docstring).
+        must = [{"bool": {"should": [
+            {"terms": {"name.keyword": names}},
+            {"terms": {"fqdn.keyword": names}},
+        ], "minimum_should_match": 1}}]
+        vals = [v for v in await self._terms(self.assets_index, must, "ip.keyword")
+                if v not in _NOT_AN_ADDRESS]
+        if vals:
+            return Resolution(vals, self.assets_index)
+
         # DHCP: the lease record. assigned_addr is what the server handed out;
         # client_addr is what the client asked to keep. Both are the host's.
         for field_name in ("assigned_addr.keyword", "client_addr.keyword"):
@@ -300,6 +327,14 @@ class HostResolver:
 
     async def _lookup_hosts(self, ip: str, since: str, until: str) -> Resolution:
         window = self._window(since, until)
+
+        # Asset inventory first, same reasoning and same no-window rule as the
+        # host -> ip direction. Answers with the FQDN, which is what the host
+        # tools filter on.
+        vals = await self._terms(
+            self.assets_index, [{"term": {"ip.keyword": ip}}], "fqdn.keyword")
+        if vals:
+            return Resolution(vals, self.assets_index)
 
         # DHCP, with the domain pulled alongside each name so the answer can be
         # qualified in the same round trip.

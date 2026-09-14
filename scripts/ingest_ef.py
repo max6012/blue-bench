@@ -110,6 +110,10 @@ WAZUH_INDEX = "wazuh-alerts"
 
 # Merged OT / IT-OT-bridge telemetry (EF-P4 merger output, NDJSON).
 OT_HOSTS_INDEX = "ot-hosts"
+# OT asset inventory: one standing record per OT device, the only place in the
+# corpus that joins an OT device name to its address. Not telemetry -- see
+# blue_bench_generators/merge/asset_inventory.py.
+OT_ASSETS_INDEX = "ot-assets"
 # Bridge events are written per (source, log); route by source so the IT-side
 # of a bridge session lands in the IT index and the OT-side in an OT index.
 _BRIDGE_INDEX = {
@@ -405,6 +409,29 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
             yield rec, when, None
 
 
+def parse_ot_assets(path: Path) -> Iterable[tuple[dict, None, str | None]]:
+    """OT asset inventory NDJSON. No time; ``fqdn`` is the native id.
+
+    No ``@timestamp`` on purpose: an inventory is a standing fact about the
+    plant, not an observation at a moment. A stamp would be shifted by
+    ``--anchor-end-to-now`` and would hide every device from any query whose
+    window does not happen to contain it.
+
+    The FQDN as native id goes through ``doc_id`` like any other native id
+    (Sysmon ``EventRecordID``, Zeek ``uid``) -- it is not a second id scheme.
+    It is the right one here because one record per device is an invariant: if
+    two records ever claim the same FQDN, the ingest's overwrite check fires
+    and says the inventory is wrong, instead of quietly storing both.
+    """
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            yield rec, None, rec.get("fqdn") or None
+
+
 # --- timestamp helpers --------------------------------------------------------
 
 _MONTHS = {m: i for i, m in enumerate(
@@ -515,6 +542,10 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         return f"ot-{name[:-7]}", parse_ot_ndjson            # ot/modbus.ndjson -> ot-modbus
     if top == "ot_hosts" and name.endswith(".ndjson"):
         return OT_HOSTS_INDEX, parse_ot_ndjson
+    # The asset inventory gets its own tree and its own parser: it is not an
+    # event stream (no ts, never subsampled) and its records are keyed by FQDN.
+    if top == "ot_assets" and name.endswith(".ndjson"):
+        return OT_ASSETS_INDEX, parse_ot_assets
     # benign Suricata FP noise wired into the merge (suricata/eve.ndjson)
     if top == "suricata" and name.endswith(".ndjson"):
         return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson

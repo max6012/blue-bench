@@ -235,6 +235,90 @@ class ElasticTool:
             total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
             max_results=self.max_results)
 
+    async def _index_exists(self, index: str) -> bool:
+        """Whether ``index`` is present in the cluster.
+
+        Needed because every query here sets ``ignore_unavailable``, which makes
+        a missing index look exactly like a query that matched nothing. For the
+        asset inventory those are different answers: "this deployment has no
+        inventory" and "no asset matches your filters" lead an analyst to
+        different next steps.
+        """
+        url = f"{self.url}/{index}"
+        try:
+            async with httpx.AsyncClient(
+                verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
+            ) as client:
+                return (await client.head(url)).status_code == 200
+        except httpx.HTTPError:
+            return False
+
+    async def list_assets(
+        self,
+        segment: str = "",
+        role: str = "",
+        ip: str = "",
+        name: str = "",
+    ) -> str:
+        """Read the OT asset inventory: which device a plant address belongs to.
+
+        Args:
+            segment: 'OT' to restrict to the plant segment; empty = every asset
+            role: device role (controller, rtu, hmi, historian,
+                engineering-workstation, safety-controller, ot-firewall)
+            ip: exact address; the "what is this address?" lookup
+            name: device name or FQDN; the "what address does it have?" lookup
+        """
+        index = self.cfg.elastic.asset_index
+        must: list[dict[str, Any]] = []
+        if segment:
+            must.append({"term": {"segment.keyword": segment.strip().upper()}})
+        if role:
+            must.append({"term": {"role.keyword": role.strip().lower()}})
+        if ip:
+            must.append({"term": {"ip.keyword": ip.strip()}})
+        if name:
+            n = name.strip().rstrip(".").lower()
+            # Either spelling: an analyst reading an ot-hosts record has the
+            # FQDN, one reading a diagram has the short label.
+            spellings = list(dict.fromkeys([n, n.split(".")[0]]))
+            must.append({"bool": {"should": [
+                {"terms": {"name.keyword": spellings}},
+                {"terms": {"fqdn.keyword": spellings}},
+            ], "minimum_should_match": 1}})
+        body = {
+            "query": {"bool": {"must": must}} if must else {"match_all": {}},
+            "sort": [{"name.keyword": "asc"}],
+            "size": self.max_results,
+        }
+        try:
+            hits, total = await self._search(body, index=index)
+        except httpx.HTTPError as e:
+            return f"Error: ES query failed: {e}"
+        if not hits:
+            # Say which of the two emptinesses this is. A corpus built before
+            # the inventory existed has no index at all, and the honest answer
+            # there is that this deployment cannot tell you -- not that the
+            # device does not exist.
+            if not await self._index_exists(index):
+                return (
+                    f"No asset inventory in this deployment: the index '{index}' does not "
+                    f"exist, so there is no record of which device an OT address belongs "
+                    f"to. This corpus was built before the inventory was added. Device "
+                    f"names still appear in ot-hosts and addresses in the OT protocol "
+                    f"indices, but nothing joins the two."
+                )
+            return "[]"
+        fetched = len(hits)
+        hits, capped = truncate_result_list(hits, self.max_results)
+        # Drop whole RECORDS rather than slicing the serialized string (issue
+        # #41), reserve the worst-case footer, then say what actually happened:
+        # true match count, page fetched, records shown (issue #43).
+        body_text, dropped = json_dump_within(hits, self.max_chars - FOOTER_RESERVE)
+        return body_text + result_footer(
+            total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
+            max_results=self.max_results)
+
     async def count_by_field(
         self,
         field: str,

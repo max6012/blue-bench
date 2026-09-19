@@ -89,11 +89,21 @@ def _render_slice_for_question(sl: Slice, max_turns: int) -> str:
 
 
 def worker_profile(profile: ModelProfile) -> ModelProfile:
-    """A copy of ``profile`` with the role part swapped for the worker role.
-    The caller's profile is not mutated: the same profile object runs the lead
-    and reducer with their own roles."""
+    """A copy of ``profile`` whose system prompt is the worker role and nothing
+    else: no site, guidelines or coaching parts, and no coaching hints.
+
+    The worker role is written to be the whole prompt (it carries its own data
+    map) because the other parts address a single analyst investigating the
+    whole corpus -- widen the window, query every host -- which inside a slice
+    is either impossible or wrong. Keeping them would put two contradicting
+    instructions in front of the model and make the worker's behaviour depend
+    on which profile the lead happened to run under; every harness composes
+    the same worker prompt from the same one file. The caller's profile is not
+    mutated: the same profile object runs the lead and reducer with their own
+    roles.
+    """
     return profile.model_copy(
-        update={"prompt_parts": {**profile.prompt_parts, "role": WORKER_ROLE_FILE}},
+        update={"prompt_parts": {"role": WORKER_ROLE_FILE}, "coaching_hints": []},
         deep=True,
     )
 

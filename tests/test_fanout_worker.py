@@ -185,8 +185,17 @@ def test_run_worker_composes_fan_worker_role_without_mutating_the_profile(profil
     assert '"slice_id": "s07"' in sp  # the embedded report example
     assert "You have 6 tool-calling turns" in sp
     assert "Set its `depth` to 1" in sp
-    # The caller's profile still carries the analyst role.
+    # Role only: the analyst-facing site/guidelines parts and the coaching
+    # hints are not composed for a worker, whatever the profile carries.
+    assert "Site Context" not in sp
+    assert "## Coaching hints" not in sp
+    assert "Later sections of this prompt" not in sp
+    # The enforcement section states what the server does: both time edges.
+    assert "sets BOTH edges" in sp
+    assert "`_id` and `_index`" in sp
+    # The caller's profile still carries the analyst role and its other parts.
     assert profile.prompt_parts["role"] == "blue_team_analyst.md"
+    assert set(profile.prompt_parts) > {"role"}
     # The slice is rendered into the question, and the window is now enforced
     # on both edges rather than caveated as open-ended.
     assert "Slice s03:" in fake_loop["question"]

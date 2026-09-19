@@ -125,11 +125,11 @@ class Pointer(BaseModel):
     """An evidence pointer — the most specific handle the worker can cite.
 
     ``doc_id`` is the ES ``_id`` and is what ground-truth scoring matches on.
-    It is optional because the list tools return ``_source`` only, so today a
-    worker can only cite the native ids it sees: Sysmon ``EventRecordID`` /
-    ``ProcessGuid``, Zeek ``uid``, or timestamp + host. Scoring on those
-    requires the tools to surface ``_id`` or a native-id map — a prerequisite
-    recorded in the fan-out design, not something this schema can fix.
+    Every record the tools return carries it (``es_records.with_identity``),
+    and the worker prompt tells the model to cite it. It stays optional here so
+    a report that cites only native handles -- Sysmon ``EventRecordID`` /
+    ``ProcessGuid``, Zeek ``uid``, timestamp + host -- still parses and is
+    scored on what it did cite, rather than being thrown away whole.
     """
     index: str
     doc_id: str | None = None

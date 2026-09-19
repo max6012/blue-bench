@@ -356,14 +356,27 @@ requires_ground_truth = pytest.mark.skipif(
 
 @requires_sysmon
 async def test_live_absolute_band_bounds_both_edges(tool):
-    """Every returned @timestamp falls inside the band, trailing edge included."""
-    since, until = "2026-08-26T00:00:00Z", "2026-08-27T00:00:00Z"
+    """Every returned @timestamp falls inside the band, trailing edge included.
+
+    The band is taken from the corpus's own anchor (bb-meta/corpus-anchor), not
+    hard-coded: preflight re-anchors the corpus in place, so a literal date
+    stops matching anything a few days after it was written.
+    """
+    import httpx
+    r = httpx.get(f"{ES_URL}/bb-meta/_doc/corpus-anchor", timeout=2.0)
+    if r.status_code != 200:
+        pytest.skip("no corpus anchor recorded (bb-meta/corpus-anchor)")
+    end = r.json()["_source"]["current_window_end"][:10]
+    # The day before the window's end: fully inside the corpus at any anchor.
+    from datetime import date, timedelta
+    day = date.fromisoformat(end) - timedelta(days=1)
+    since, until = f"{day}T00:00:00Z", f"{day + timedelta(days=1)}T00:00:00Z"
     out = await tool.get_process_events(
         host="wkst-03.corp.example.invalid", since=since, until=until)
     assert not out.startswith("Error:"), out
     records = json.loads(out.split("\n\n---")[0])
     if not records:
-        pytest.skip("no wkst-03 sysmon records in the 2026-08-26 band")
+        pytest.skip(f"no wkst-03 sysmon records in the {day} band")
     for r in records:
         assert since <= r["@timestamp"].replace("+00:00", "Z") <= until, r["@timestamp"]
         assert r["_id"], "every record must carry its ES _id"

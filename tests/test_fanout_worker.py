@@ -62,7 +62,7 @@ class FakeServer:
             "timerange_minutes": {}, "since": {}, "until": {}}}),
         ToolSpec("count_by_field", "agg", {"properties": {
             "field": {}, "index": {}, "timerange_minutes": {}, "top_n": {},
-            "since": {}, "until": {}}}),
+            "since": {}, "until": {}, "host": {}, "host_ip": {}}}),
     ]
 
     def __init__(self, server_cmd):

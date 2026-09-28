@@ -206,9 +206,10 @@ async def test_count_by_time_reaches_the_stored_fqdn_and_short_name(given):
     clause = _host_bool(must)
     assert _bool_matches(clause, "Computer", FQDN)
     assert _bool_matches(clause, "host", SHORT)
-    # The address fields still ride along for the Zeek/OT indices.
-    should = clause["bool"]["should"]
-    assert {"term": {"id.orig_h": given}} in should and {"term": {"id.resp_h": given}} in should
+    # A name never reaches the ip-typed address fields (a 400 on those shards,
+    # which ES reports as a partial result); host_ip is how an address gets in.
+    should = str(clause["bool"]["should"])
+    assert "id.orig_h" not in should and "id.resp_h" not in should
 
 
 @pytest.mark.parametrize("given", [SHORT, FQDN])

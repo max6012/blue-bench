@@ -108,13 +108,11 @@ async def test_host_filter_spans_sysmon_zeek_and_auth_fields(tool):
     must = seen["body"]["query"]["bool"]["must"]
     # The name clauses are the ONE shared definition (es_queries.host_name_clause;
     # what it matches is tested in test_host_name_filter.py), plus the Zeek/OT
-    # address fields so a comma-list of indices can be surveyed in one call.
+    # address fields ONLY for an address: a name on the ip-typed id.orig_h
+    # fails the Zeek shards and ES returns the rest as a partial result.
     # Never a bare `match` on the text field: an analyzed OR over the FQDN
     # tokens matched every sibling host in the domain (found on the live corpus).
-    assert must[0] == host_name_clause("wkst-01.corp.example.invalid", "Computer", "host", extra=[
-        {"term": {"id.orig_h": "wkst-01.corp.example.invalid"}},
-        {"term": {"id.resp_h": "wkst-01.corp.example.invalid"}},
-    ])
+    assert must[0] == host_name_clause("wkst-01.corp.example.invalid", "Computer", "host")
     assert must[0]["bool"]["minimum_should_match"] == 1
 
 
@@ -247,7 +245,7 @@ async def test_count_by_time_registered_on_server():
     assert "count_by_time" in tools
     props = tools["count_by_time"].input_schema["properties"]
     assert set(props) == {"interval", "index", "timerange_minutes", "host",
-                          "event_id", "query_text", "top_n_hosts", "since", "until"}
+                          "event_id", "query_text", "top_n_hosts", "since", "until", "host_ip"}
     assert props["timerange_minutes"]["default"] == 240
     assert props["interval"]["default"] == "1h"
 

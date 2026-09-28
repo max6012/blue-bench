@@ -828,6 +828,10 @@ def _cli_oauth_env() -> dict[str, str]:
         env["CLAUDE_CODE_OAUTH_TOKEN"] = tok
     env.pop("ANTHROPIC_API_KEY", None)
     env.pop("ANTHROPIC_AUTH_TOKEN", None)
+    # By default the CLI answers a retired model id with the LATEST model and a
+    # warning on stderr, so a run labelled with the old id would be graded as
+    # the new one. A benchmark must fail loudly instead.
+    env["CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP"] = "1"
     return env
 
 
@@ -911,6 +915,9 @@ async def _run_anthropic_cli(
             continue
         etype = e.get("type")
         if etype == "assistant":
+            served = (e.get("message") or {}).get("model")
+            if served and served not in trace.served_models:
+                trace.served_models.append(served)
             blocks = (e.get("message") or {}).get("content") or []
             text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text")
             calls: list[ToolCall] = []

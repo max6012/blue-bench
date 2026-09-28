@@ -48,3 +48,38 @@ def test_cli_oauth_env_promotes_oat_key(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_AUTH_TOKEN", "sk-ant-oat-promoted")
     env = _cli_oauth_env()
     assert env["CLAUDE_CODE_OAUTH_TOKEN"] == "sk-ant-oat-promoted"
+
+
+def test_cli_oauth_env_disables_the_silent_legacy_model_remap(monkeypatch):
+    # Without this the CLI answers a retired id with the latest model.
+    monkeypatch.delenv("CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP", raising=False)
+    assert _cli_oauth_env()["CLAUDE_CODE_DISABLE_LEGACY_MODEL_REMAP"] == "1"
+
+
+def test_cli_run_records_the_served_model(monkeypatch):
+    import asyncio
+    import json
+    import subprocess
+
+    from blue_bench_client import runner
+    from blue_bench_client.trace import Trace
+    from blue_bench_mcp.profiles import load_profile
+    from pathlib import Path
+
+    lines = [
+        {"type": "assistant", "message": {"model": "claude-opus-4-5-20251101",
+                                          "content": [{"type": "text", "text": "hi"}]}},
+        {"type": "assistant", "message": {"model": "claude-opus-4-5-20251101",
+                                          "content": [{"type": "text", "text": "done"}]}},
+        {"type": "result", "result": "done"},
+    ]
+    out = "\n".join(json.dumps(x) for x in lines)
+    monkeypatch.setattr(subprocess, "run",
+                        lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=out, stderr=""))
+    profile = load_profile(Path(runner.__file__).parents[1] / "blue_bench_mcp/profiles/claude-opus-4-5.yaml")
+    trace = Trace(prompt_id="p", profile_name=profile.name, model_id=profile.model_id,
+                  tool_protocol="anthropic-cli", question="q", composed_system_prompt="s",
+                  tools_available=[])
+    asyncio.run(runner._run_anthropic_cli(profile, "s", "q", [], ["srv"], 5, trace))
+    assert trace.served_models == ["claude-opus-4-5-20251101"]
+    assert trace.final_answer == "done"

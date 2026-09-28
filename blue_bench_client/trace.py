@@ -122,6 +122,11 @@ class Trace(BaseModel):
     max_turns: int = 10
     total_duration_ms: int = 0
     error: str | None = None
+    served_models: list[str] = Field(default_factory=list)
+    """The model ids the provider reported actually serving this run, in order
+    of first appearance. Filled by transports that expose it (anthropic-cli).
+    A run is only attributable to ``model_id`` when this agrees with it: the
+    CLI has in the past silently remapped a retired id to the latest model."""
     grounding: GroundingResult | None = None
     """Populated when the mechanical grounding pass runs over this trace.
     ``None`` means the pass did not run (e.g., defenses.grounding.mode=off,

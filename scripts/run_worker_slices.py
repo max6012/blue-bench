@@ -39,6 +39,9 @@ async def _run(args) -> None:
     cases = ws.load_cases(Path(args.cases))
     gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
     profile = _profile(args.profile)
+    if args.tool_protocol:
+        # Every Opus runs through the same transport, whatever its profile says.
+        profile = profile.model_copy(update={"tool_protocol": args.tool_protocol})
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     resolver = HostResolver(args.es_url)
@@ -54,6 +57,10 @@ async def _run(args) -> None:
         if report is not None:
             (out / f"{sid}.report.json").write_text(report.model_dump_json(indent=1), encoding="utf-8")
         results = [t.content for t in trace.turns if t.role == "tool"]
+        wrong = [m for m in trace.served_models if not m.startswith(profile.model_id)]
+        if wrong:
+            # Graded as model X but answered by model Y: not X's score.
+            report, trace.error = None, f"served by {wrong}, not {profile.model_id}"
         s = ws.score_case(case, report, results, gt, error=trace.error)
         print(f"{sid}: {'CORRECT' if s.correct else 'wrong'} "
               f"({'clean' if s.clean else 'attack'}; turns {trace.turns_used}; {trace.error or 'ok'})",
@@ -83,6 +90,7 @@ def main() -> None:
     r.add_argument("--es-url", default="http://localhost:9200")
     r.add_argument("--max-turns", type=int, default=20, help="harness ceiling on each slice's budget")
     r.add_argument("--concurrency", type=int, default=4)
+    r.add_argument("--tool-protocol", default=None, help="override the profile's transport, e.g. anthropic-cli")
     t = sub.add_parser("table")
     t.add_argument("dirs", nargs="+")
     t.add_argument("--ceiling", default=None)

@@ -1,0 +1,97 @@
+"""Run a fixed worker slice set against one model, then score it.
+
+    python scripts/run_worker_slices.py run --cases eval/worker_slices.yaml \
+        --profile blue_bench_mcp/profiles/claude-opus-5.yaml \
+        --ground-truth ~/Blue-Bench-work/corpus-l/ground-truth --out results/worker/opus5
+    python scripts/run_worker_slices.py run ... --profile cloud:glm-5.2 ...
+    python scripts/run_worker_slices.py table results/worker/* --ceiling claude-opus-5
+
+Each slice runs as a real fan-out worker (``run_worker``): role-only prompt,
+MCP server launched with ``--slice``. Per slice the trace and parsed report are
+saved; ``score.json`` holds the per-case scores. Every model gets the same
+slices, so the table compares like with like.
+"""
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO))
+
+from blue_bench_client.fanout.host_resolve import HostResolver  # noqa: E402
+from blue_bench_client.fanout.worker import run_worker  # noqa: E402
+from blue_bench_eval import worker_score as ws  # noqa: E402
+
+
+def _profile(spec: str):
+    if spec.startswith("cloud:"):
+        from blue_bench_client.cloud_models import generic_cloud_profile
+        return generic_cloud_profile(spec.removeprefix("cloud:"), coached=False)
+    from blue_bench_mcp.profiles import load_profile
+    return load_profile(Path(spec))
+
+
+async def _run(args) -> None:
+    cases = ws.load_cases(Path(args.cases))
+    gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
+    profile = _profile(args.profile)
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    resolver = HostResolver(args.es_url)
+    sem = asyncio.Semaphore(args.concurrency)
+
+    async def one(case: ws.SliceCase) -> ws.CaseScore:
+        async with sem:
+            trace, report = await run_worker(
+                profile, case.slice, depth=0, config_path=None, server_cmd=None,
+                max_turns_ceiling=args.max_turns, resolver=resolver)
+        sid = case.slice.id
+        (out / f"{sid}.trace.json").write_text(trace.model_dump_json(indent=1), encoding="utf-8")
+        if report is not None:
+            (out / f"{sid}.report.json").write_text(report.model_dump_json(indent=1), encoding="utf-8")
+        results = [t.content for t in trace.turns if t.role == "tool"]
+        s = ws.score_case(case, report, results, gt, error=trace.error)
+        print(f"{sid}: {'CORRECT' if s.correct else 'wrong'} "
+              f"({'clean' if s.clean else 'attack'}; turns {trace.turns_used}; {trace.error or 'ok'})",
+              flush=True)
+        return s
+
+    scores = await asyncio.gather(*(one(c) for c in cases))
+    ms = ws.ModelScore(model=profile.name, cases=list(scores))
+    (out / "score.json").write_text(ms.model_dump_json(indent=1), encoding="utf-8")
+    print(json.dumps(ms.summary(), indent=1))
+
+
+def _table(args) -> None:
+    scores = [ws.ModelScore.model_validate_json((Path(d) / "score.json").read_text())
+              for d in args.dirs if (Path(d) / "score.json").exists()]
+    print(ws.table(scores, ceiling=args.ceiling))
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    r = sub.add_parser("run")
+    r.add_argument("--cases", required=True)
+    r.add_argument("--profile", required=True, help="profile YAML path, or cloud:<ollama-model>")
+    r.add_argument("--ground-truth", required=True)
+    r.add_argument("--out", required=True)
+    r.add_argument("--es-url", default="http://localhost:9200")
+    r.add_argument("--max-turns", type=int, default=20, help="harness ceiling on each slice's budget")
+    r.add_argument("--concurrency", type=int, default=4)
+    t = sub.add_parser("table")
+    t.add_argument("dirs", nargs="+")
+    t.add_argument("--ceiling", default=None)
+    a = ap.parse_args()
+    if a.cmd == "run":
+        asyncio.run(_run(a))
+    else:
+        _table(a)
+
+
+if __name__ == "__main__":
+    main()

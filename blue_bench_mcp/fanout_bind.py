@@ -62,8 +62,10 @@ _BINDINGS: dict[str, dict[str, str]] = {
     "get_process_events": {"hosts": "host", "event_ids": "event_id"},
     "get_process_tree": {"hosts": "host"},
     "search_auth_events": {"hosts": "host", "event_ids": "event_id"},
-    "count_by_field": {"indices": "index"},
-    "count_by_time": {"hosts": "host", "event_ids": "event_id", "indices": "index"},
+    # host and host_ip are ORed inside the tool (one host, two spellings), so
+    # binding both is safe here where it is not for src_ip AND dest_ip.
+    "count_by_field": {"hosts": "host", "host_ips": "host_ip", "indices": "index"},
+    "count_by_time": {"hosts": "host", "host_ips": "host_ip", "event_ids": "event_id", "indices": "index"},
     "get_connections": {"host_ips": "host_ip"},
     "search_alerts": {"host_ips": "host_ip"},
     "detect_beaconing": {"host_ips": "host_ip"},

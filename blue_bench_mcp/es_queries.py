@@ -86,3 +86,18 @@ def host_name_clause(
     should = [c for f in fields for c in host_name_clauses(host, f)]
     should.extend(extra)
     return {"bool": {"should": should, "minimum_should_match": 1}}
+
+
+def host_ip_clauses(ip: str) -> list[dict[str, Any]]:
+    """The ``should`` clauses that match an address at either end of a record.
+
+    Zeek and OT conn logs map ``id.orig_h`` / ``id.resp_h`` as ``ip``; Zeek,
+    OT and Suricata also carry ``src_ip`` / ``dest_ip`` as text with a keyword
+    subfield. A non-address never reaches the ``ip``-typed fields: a term
+    query there with a hostname is a 400, not an empty result.
+    """
+    a = ip.strip()
+    out: list[dict[str, Any]] = [{"term": {f"{f}.keyword": a}} for f in ("src_ip", "dest_ip")]
+    if _is_ip(a):
+        out = [{"term": {"id.orig_h": a}}, {"term": {"id.resp_h": a}}, *out]
+    return out

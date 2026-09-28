@@ -230,6 +230,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         top_n: int = 20,
         since: str = "",
         until: str = "",
+        host: str = "",
+        host_ip: str = "",
     ) -> str:
         """Aggregate and count top values for a field — use for 'top-N',
         'distribution', 'most common' style questions.
@@ -253,6 +255,12 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             when either is given they replace timerange_minutes. Use them to pin
             an investigation to one exact time band — a lookback can only bound
             the leading edge. 'Z' and '+00:00' both work; no suffix means UTC.
+          host: restrict to one host's records, by name — FQDN or short label,
+            e.g. 'wkst-03' (Sysmon/auth Computer, syslog host).
+          host_ip: restrict to records with this address at either end
+            (Zeek/OT conn, Suricata). Give both to cover one host's host logs
+            and its network records in one call: a record matching either
+            counts.
         Returns a human-readable ranked list of (value, count) pairs.
         """
         return await tool.count_by_field(
@@ -262,6 +270,8 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             top_n=top_n,
             since=since,
             until=until,
+            host=host,
+            host_ip=host_ip,
         )
 
     @server.tool()
@@ -275,6 +285,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
         top_n_hosts: int = 0,
         since: str = "",
         until: str = "",
+        host_ip: str = "",
     ) -> str:
         """Histogram of document counts over time — use to SURVEY a window
         before digging in: find the hours or days with unusual volume, then
@@ -293,10 +304,11 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             are accepted.
           timerange_minutes: lookback window, default 240. The corpus spans
             weeks — pass a large value (e.g. 43200 = 30 days) to see all of it.
-          host: optional host filter, matched against Sysmon 'Computer', Zeek
-            'id.orig_h' / 'id.resp_h', and auth 'Computer' / 'host'. A name
-            (FQDN or short, either matches) for the Windows and syslog sources,
-            the IP for Zeek.
+          host: optional host name filter (FQDN or short, either matches),
+            matched against Sysmon/auth 'Computer' and syslog 'host'.
+          host_ip: optional address filter, either end of a Zeek/OT/Suricata
+            record. Give both host and host_ip to count one host's host logs
+            and network records together: a record matching either counts.
           event_id: optional Windows EventID filter (Sysmon 1, 3, 11...;
             Security 4624, 4625, 4688...). 0 = no filter.
           query_text: optional free-text (Lucene-style) filter.
@@ -321,6 +333,7 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
             top_n_hosts=top_n_hosts,
             since=since,
             until=until,
+            host_ip=host_ip,
         )
 
     async def detect_beaconing(

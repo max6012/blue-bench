@@ -15,7 +15,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.es_queries import host_name_clause
+from blue_bench_mcp.es_queries import _is_ip, host_ip_clauses, host_name_clause, host_name_clauses
 from blue_bench_mcp.es_records import with_identity
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE,
@@ -328,6 +328,8 @@ class ElasticTool:
         top_n: int = 20,
         since: str = "",
         until: str = "",
+        host: str = "",
+        host_ip: str = "",
     ) -> str:
         """Aggregate and count values for a field (top talkers, severity distribution, etc).
 
@@ -337,17 +339,31 @@ class ElasticTool:
             timerange_minutes: Lookback window
             top_n: Number of top values to return
             since, until: absolute UTC bounds (ISO-8601); either replaces timerange_minutes
+            host: host name (FQDN or short label) on the host-log name fields
+            host_ip: address at either end of a network record
+            Given both, a record matching EITHER counts: they name one host,
+            and a Sysmon record carries only the name while a Zeek record
+            carries only the addresses, so ANDing them would match neither.
         """
         try:
             rng = timestamp_range(timerange_minutes, since, until)
         except TimeRangeError as e:
             return str(e)
         idx = index or self.index_pattern
+        query: dict[str, Any] = rng.clause
+        should: list[dict[str, Any]] = []
+        if host:
+            should += [c for f in ("Computer", "host") for c in host_name_clauses(host, f)]
+        if host_ip:
+            should += host_ip_clauses(host_ip)
+        if should:
+            query = {"bool": {"must": [rng.clause],
+                              "filter": [{"bool": {"should": should, "minimum_should_match": 1}}]}}
 
         async def _agg_on(f: str) -> list[dict]:
             body = {
                 "size": 0,
-                "query": rng.clause,
+                "query": query,
                 "aggs": {"top_values": {"terms": {"field": f, "size": top_n}}},
             }
             data = await self._agg(body, index=idx)
@@ -401,6 +417,7 @@ class ElasticTool:
         top_n_hosts: int = 0,
         since: str = "",
         until: str = "",
+        host_ip: str = "",
     ) -> str:
         """Histogram of document counts over @timestamp (activity over time).
 
@@ -437,10 +454,15 @@ class ElasticTool:
             # definition (es_queries) so this filter cannot drift from the
             # host tools' -- it is the copy that used to be a bare `match` and
             # returned the whole index (issue #46).
-            must.append(host_name_clause(host, "Computer", "host", extra=[
-                {"term": {"id.orig_h": host}},
-                {"term": {"id.resp_h": host}},
-            ]))
+            # The address fields get the value only when it IS an address:
+            # id.orig_h / id.resp_h are ip-typed, and a term there with a name
+            # fails that index's shards -- which ES reports as a partial result,
+            # so a name over 'zeek-conn,windows-sysmon' silently counted Sysmon
+            # alone. host_ip (below) is the way to put the address in.
+            must.append(host_name_clause(host, "Computer", "host",
+                                         extra=host_ip_clauses(host_ip or host) if (host_ip or _is_ip(host)) else ()))
+        elif host_ip:
+            must.append({"bool": {"should": host_ip_clauses(host_ip), "minimum_should_match": 1}})
         if event_id:
             # Both spellings, same reason as _build_process_events_query (issue #37).
             must.append({"bool": {"should": [
@@ -472,7 +494,8 @@ class ElasticTool:
         # for an exact count (ES 8 caps at 10,000), and a doc with no
         # @timestamp lands in no bucket, so the two can legitimately differ.
         total = sum(b.get("doc_count", 0) for b in buckets)
-        filters = [f"host={host}" if host else "", f"event_id={event_id}" if event_id else "",
+        filters = [f"host={host}" if host else "", f"host_ip={host_ip}" if host_ip else "",
+                   f"event_id={event_id}" if event_id else "",
                    f"query_text={query_text!r}" if query_text else ""]
         filt = " ".join(f for f in filters if f)
         # Header first so truncation (15m over weeks is thousands of lines)

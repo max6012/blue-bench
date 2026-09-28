@@ -98,9 +98,21 @@ def test_process_events_image_and_parent_use_keyword(tool):
 
 
 def test_process_events_event_id_is_numeric_term(tool):
+    """The event id must be a NUMERIC term (both fields are `long`-mapped).
+
+    Asserts the intent rather than the literal clause shape: since issue #37 the
+    filter is an OR across both spellings (`EventID` from the EVTX ingest path,
+    `event_id` from the NDJSON path), because a single-field term matched ZERO of
+    the injected adversary documents.
+    """
     body = tool._build_process_events_query("", "", "", "", 1, 240)
     must = body["query"]["bool"]["must"]
-    assert {"term": {"EventID": 1}} in must
+    should = next(c["bool"]["should"] for c in must if "bool" in c)
+    assert {"term": {"EventID": 1}} in should
+    assert {"term": {"event_id": 1}} in should
+    # numeric, not "1" -- a string term never matches a long-mapped field
+    for clause in should:
+        assert isinstance(next(iter(clause["term"].values())), int)
 
 
 def test_process_events_event_id_zero_omitted(tool):
@@ -161,14 +173,6 @@ async def test_tree_requires_guid(tool):
 # --- live path ----------------------------------------------------------------
 
 @requires_sysmon
-@pytest.mark.xfail(
-    strict=True,
-    reason="issue #41: guardrails.truncate_results splices head + TRUNC_MARKER + tail "
-           "into the serialized JSON, so any result over max_result_chars is not "
-           "parseable. Real defect across 18 call sites in 7 tool classes, not a "
-           "problem with this test. strict=True so this fails loudly if #41 is fixed "
-           "and the marker is left behind.",
-)
 async def test_process_events_live_process_create(tool):
     out = await tool.get_process_events(event_id=1, timerange_minutes=4000)
     assert isinstance(out, str)

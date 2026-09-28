@@ -212,6 +212,36 @@ treatment.
 before the prompt loop, so runs from here on are self-documenting. Runs before
 that have unrecoverable invocation provenance.
 
+### Tool results surface a small fraction of what they retrieve
+
+`get_process_events`, `search_alerts`, `get_connections` and `search_auth_events`
+fetch `size = max_results` (500 in `config.yaml`) sorted `@timestamp` **desc**,
+then cut the response to `max_result_chars` (8000). Measured on the current
+corpus:
+
+```
+get_process_events(event_id=1, timerange_minutes=4000)
+  max_result_chars=8000   ->  5 records   (5 of 500 retrieved = 1%)
+  max_result_chars=20000  -> 13 records, and only here does the injected
+                             host wkst-03 appear at all
+```
+
+Two consequences for grading:
+
+- **Sparse injected events are structurally last.** Under a `desc` sort the
+  adversary telemetry is older than the benign tail (newest injected
+  `2026-09-01T22:05`, newest benign `2026-09-09T17:35`), so it is the first
+  thing the size cut discards. A model can issue exactly the right query and
+  still not see the evidence.
+- **At the default `timerange_minutes` the same call returns zero records,**
+  because the corpus is not anchored to now. That is the same time-anchoring
+  signature that voided the earlier Phase-3 grades.
+
+#41 fixed parseability of a truncated response; the *effective result window* is
+the other half and is not addressed. Until it is, treat any per-prompt
+`findings` score as bounded by what the tool could physically return, and do not
+compare runs taken under different `max_result_chars`.
+
 ### No CI runs the test suite
 
 `.github/workflows/` contains CodeQL and a sandbox-atomic job only. **No

@@ -920,7 +920,41 @@ def _load_profile(name: str) -> ModelProfile:
     return load_profile(_PROFILES_DIR / f"{name}.yaml")
 
 
+def _ollama_up() -> bool:
+    import os
+    import httpx
+    host = os.environ.get("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
+    if not host.startswith("http"):
+        host = f"http://{host}"
+    try:
+        return httpx.get(f"{host}/api/tags", timeout=1.0).status_code == 200
+    except Exception:
+        return False
+
+
+def _anthropic_key() -> bool:
+    import os
+    return bool(os.environ.get("ANTHROPIC_API_KEY"))
+
+
+# These relay tests need BOTH a live Ollama and an Anthropic key (they swap
+# profiles native <-> anthropic-native mid-session). Guarded the same way
+# test_mcp_sysmon.py guards its live-ES tests, so a bare `pytest` is green on a
+# machine without them AND the tests actually RUN where they can.
+#
+# Deliberately NOT solved with `addopts = "-m 'not integration'"` in
+# pyproject.toml: that would deselect these EVERYWHERE, including where the
+# dependencies exist, so they would rot. It is also silently defeated by any
+# invocation passing its own `-m` (addopts is prepended to argv and the last
+# `-m` wins: `pytest -m "not slow"` re-collects them).
+requires_live_models = pytest.mark.skipif(
+    not (_ollama_up() and _anthropic_key()),
+    reason="needs a live Ollama (OLLAMA_HOST) and ANTHROPIC_API_KEY",
+)
+
+
 @pytest.mark.integration
+@requires_live_models
 class TestLiveMultiModelRelay:
     """End-to-end test: gemma4:e4b → claude-sonnet-4-6 → qwen3.5:9b.
 

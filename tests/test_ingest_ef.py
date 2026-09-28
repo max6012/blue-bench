@@ -55,7 +55,11 @@ def test_parse_evtx_extracts_eventdata_and_recordid(tmp_path: Path):
         '<Data Name="UtcTime">2024-05-14 12:04:54.726</Data></EventData></Event>\n</Events>'
     )
     (rec, when, nid), = list(ingest_ef.parse_evtx(p))
-    assert nid == "446901"          # native id = EventRecordID
+    # Native id is Computer:EventRecordID, not the bare record id. EventRecordID
+    # is a PER-HOST sequence number -- every machine starts at 1 -- so unqualified
+    # it collides across hosts and a bulk index silently overwrites. Measured on
+    # a 31-host L corpus: 250,299 documents destroyed.
+    assert nid == "WS-1:446901"
     assert rec["EventID"] == 1 and rec["Image"] == "C:\\x.exe"
     assert when.year == 2024 and when.month == 5  # 7-digit fraction trimmed, parsed
 

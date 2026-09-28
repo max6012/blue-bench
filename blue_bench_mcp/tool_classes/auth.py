@@ -21,7 +21,7 @@ from typing import Any
 import httpx
 
 from blue_bench_mcp.config import ServerConfig
-from blue_bench_mcp.guardrails import truncate_result_list, truncate_results
+from blue_bench_mcp.guardrails import json_dump_within, truncate_result_list
 
 
 class AuthTool:
@@ -105,10 +105,23 @@ class AuthTool:
         """
         must: list[dict[str, Any]] = []
         if account:
+            # SubjectUserName / TargetUserName (windows-security) are text-mapped
+            # with a `.keyword` subfield. Exact-match the keyword, and fall back
+            # to match_phrase on the text so a bare username still resolves
+            # against a domain-qualified value. NEVER a bare `match` here: it
+            # analyzes "srv-files-01$@CORP.EXAMPLE.INVALID" into
+            # `srv files 01 corp example invalid` OR'd together, and every
+            # account in the domain shares the trailing tokens -- the filter
+            # matched 254,282 docs where the account has 14,768, and spellings
+            # absent from the corpus ("CORP\SYSTEM") matched half the index
+            # (issue #46, the same defect as the host filter below). `message`
+            # (linux-syslog) is free text, so a phrase match is the right tool.
             must.append({"bool": {"should": [
-                {"match": {"SubjectUserName": account}},
-                {"match": {"TargetUserName": account}},
-                {"match": {"message": account}},
+                {"term": {"SubjectUserName.keyword": account}},
+                {"term": {"TargetUserName.keyword": account}},
+                {"match_phrase": {"SubjectUserName": account}},
+                {"match_phrase": {"TargetUserName": account}},
+                {"match_phrase": {"message": account}},
             ], "minimum_should_match": 1}})
         if src_ip:
             must.append({"bool": {"should": [
@@ -116,7 +129,15 @@ class AuthTool:
                 {"match_phrase": {"message": src_ip}},
             ], "minimum_should_match": 1}})
         if event_id:
-            must.append({"term": {"EventID": event_id}})
+            # Match either spelling. The lowercase form is NOT Sysmon-only:
+            # apt_inject's parse_evtx writes `event_id` for EVERY Windows EVTX
+            # stream, Security included, and those route to windows-security. A
+            # single-field term silently misses that whole population (issue
+            # #37, same class as the get_process_events fix).
+            must.append({"bool": {"should": [
+                {"term": {"EventID": event_id}},
+                {"term": {"event_id": event_id}},
+            ], "minimum_should_match": 1}})
         if logon_type >= 0:
             # LogonType is stored as a string ("4"); match both forms defensively.
             must.append({"bool": {"should": [
@@ -127,18 +148,31 @@ class AuthTool:
         if r in ("success", "successful", "accepted"):
             must.append({"bool": {"should": [
                 {"term": {"EventID": 4624}},
+                {"term": {"event_id": 4624}},
                 {"match_phrase": {"message": "Accepted"}},
             ], "minimum_should_match": 1}})
         elif r in ("failure", "failed", "fail"):
             must.append({"bool": {"should": [
                 {"term": {"EventID": 4625}},
+                {"term": {"event_id": 4625}},
                 {"term": {"EventID": 4771}},
+                {"term": {"event_id": 4771}},
                 {"match_phrase": {"message": "Failed password"}},
             ], "minimum_should_match": 1}})
         if host:
+            # Computer (windows-security) and host (linux-syslog) are text-mapped
+            # with a `.keyword` subfield. Exact-match the keyword, and fall back
+            # to match_phrase on the text so a short name ("wkst-13") still
+            # resolves. NEVER a bare `match` here: it analyzes the FQDN into
+            # `wkst 13 corp example invalid` OR'd together, and every host in
+            # the domain shares the last three tokens -- a host-scoped search
+            # came back as the entire windows-security index (issue #46; the
+            # same reasoning is in ElasticTool.count_by_time).
             must.append({"bool": {"should": [
-                {"match": {"Computer": host}},
-                {"match": {"host": host}},
+                {"term": {"Computer.keyword": host}},
+                {"term": {"host.keyword": host}},
+                {"match_phrase": {"Computer": host}},
+                {"match_phrase": {"host": host}},
             ], "minimum_should_match": 1}})
         must.append({"range": {"@timestamp": {"gte": f"now-{timerange_minutes}m", "lte": "now"}}})
 
@@ -152,7 +186,20 @@ class AuthTool:
         except httpx.HTTPError as e:
             return f"Error: ES query failed: {e}"
         hits, truncated = truncate_result_list(hits, self.max_results)
-        out = json.dumps(hits, indent=2, default=str)
+        # Drop whole records rather than slicing the serialized string:
+        # truncate_results would splice a marker through the middle of the JSON
+        # and hand the model something unparseable (issue #41).
+        # Reserve the WORST-CASE footer length, then report what actually
+        # happened. The earlier `if dropped and not truncated` suppressed the
+        # accurate count in exactly the case where the response was most
+        # truncated -- it reported "showing first N" while returning far fewer.
+        reserve = 160
+        body, dropped = json_dump_within(hits, self.max_chars - reserve)
+        shown = len(hits) - dropped
+        notes = []
         if truncated:
-            out += f"\n\n--- Showing first {self.max_results} results. Narrow your query. ---"
-        return truncate_results(out, self.max_chars)
+            notes.append(f"result set capped at first {self.max_results}")
+        if dropped:
+            notes.append(f"showing {shown} of those {len(hits)} (size limit)")
+        footer = f"\n\n--- {'; '.join(notes)}. Narrow your query. ---" if notes else ""
+        return body + footer

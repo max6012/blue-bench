@@ -98,3 +98,19 @@ def test_live_clean_result_has_no_warning(tmp_path):
     body = {"size": 0, "track_total_hits": True, "query": {"term": {"id.orig_h": "10.10.0.15"}}}
     resp = _call(tmp_path, {"command_line_contains": json.dumps(body), "image": "zeek-conn"})
     assert WARNING_PREFIX not in resp.content[-1].text
+
+
+def test_short_circuit_results_carry_resulttype_on_2026_era_connections():
+    """Protocol revision 2026-07-28 requires resultType; the claude CLI rejects
+    a result without it as malformed, so the model saw a schema error instead
+    of the budget/refusal message. Legacy connections get no extra key."""
+    from types import SimpleNamespace
+
+    from mcp_types.version import MODERN_PROTOCOL_VERSIONS
+
+    from blue_bench_mcp.shard_check import text_result
+    modern = text_result(SimpleNamespace(protocol_version=sorted(MODERN_PROTOCOL_VERSIONS)[-1]), "x")
+    assert modern["resultType"] == "complete"
+    assert modern["structuredContent"] == {"result": "x"} and modern["content"][0]["text"] == "x"
+    legacy = text_result(SimpleNamespace(protocol_version="2025-06-18"), "x")
+    assert "resultType" not in legacy

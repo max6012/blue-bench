@@ -75,6 +75,30 @@ def append_to_result(result: Any, text: str) -> Any:
     return result
 
 
+def text_result(ctx: Any, text: str) -> dict[str, Any]:
+    """A complete ``tools/call`` result for a middleware that answers without
+    running the tool (a slice refusal, an exhausted budget).
+
+    The SDK only builds the envelope for results that come back through
+    ``call_next``; a short-circuiting middleware "owns its result, envelope
+    included" (mcp.server.runner). Protocol revision 2026-07-28 requires
+    ``resultType`` on every result: without it the claude CLI rejects the
+    whole result as malformed, and the model reads a schema error instead of
+    the refusal (Opus 5.5 ceiling run, 2026-09-28). The Python SDK client
+    tolerates its absence, which is why only the CLI transport showed it.
+    """
+    out: dict[str, Any] = {"content": [{"type": "text", "text": text}],
+                           "isError": False,
+                           "structuredContent": {"result": text}}
+    try:
+        from mcp_types.version import MODERN_PROTOCOL_VERSIONS
+    except ImportError:  # older SDK: no 2026-era wire, nothing to add
+        return out
+    if getattr(ctx, "protocol_version", None) in MODERN_PROTOCOL_VERSIONS:
+        out["resultType"] = "complete"
+    return out
+
+
 class ShardWarningMiddleware:
     """Open a per-call failure record; append the warning when anything failed."""
 

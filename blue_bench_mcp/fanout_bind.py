@@ -46,7 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from blue_bench_client.fanout.schema import Slice
-from blue_bench_mcp.shard_check import append_to_result
+from blue_bench_mcp.shard_check import append_to_result, text_result
 
 # Which slice dimension maps to which argument, per tool. A tool absent here
 # (evidence, nmap, sigma, wazuh, get_agent_alerts) is passed through untouched —
@@ -432,10 +432,7 @@ class SliceBindingMiddleware:
             self._log({"ts": datetime.now(timezone.utc).isoformat(), "tool": name,
                        "requested_args": args, "bound_args": {}, "overrides": {},
                        "rejected": True, "over_budget": True})
-            text = budget_text(self.slice.id, self.slice.turn_budget)
-            return {"content": [{"type": "text", "text": text}],
-                    "isError": False,
-                    "structuredContent": {"result": text}}
+            return text_result(ctx, budget_text(self.slice.id, self.slice.turn_budget))
         schema = await self._schema_for(name)
         bound, overrides = bind_args(name, args, self.slice, schema, now=self.now)
         record = {
@@ -453,10 +450,7 @@ class SliceBindingMiddleware:
             # SDK emits for a string-returning tool (probed, not guessed) so
             # every transport reads it the same way — the CLI transport reads
             # structuredContent, the SDK path reads the text block.
-            text = refusal_text(overrides["_rejected"], self.slice.id)
-            return {"content": [{"type": "text", "text": text}],
-                    "isError": False,
-                    "structuredContent": {"result": text}}
+            return text_result(ctx, refusal_text(overrides["_rejected"], self.slice.id))
 
         result = await call_next(replace(ctx, params={**params, "arguments": bound}))
         return _append_footer(result, slice_footer(self.slice.id, args, bound, overrides))

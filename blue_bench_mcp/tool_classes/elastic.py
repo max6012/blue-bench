@@ -17,6 +17,7 @@ import httpx
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.es_queries import _is_ip, host_ip_clauses, host_name_clause, host_name_clauses
 from blue_bench_mcp.es_records import with_identity
+from blue_bench_mcp.shard_check import note_shards
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE,
     result_footer,
@@ -102,6 +103,7 @@ class ElasticTool:
                 url, json={**body, "track_total_hits": True} if count else body)
             resp.raise_for_status()
             data = resp.json()
+        note_shards(data, idx)
         hits = [with_identity(hit) for hit in data.get("hits", {}).get("hits", [])]
         total = data.get("hits", {}).get("total", {})
         total = total.get("value", len(hits)) if isinstance(total, dict) else int(total or len(hits))
@@ -120,7 +122,9 @@ class ElasticTool:
         ) as client:
             resp = await client.post(url, json=body)
             resp.raise_for_status()
-            return resp.json()
+            data = resp.json()
+        note_shards(data, idx)
+        return data
 
     async def search_alerts(
         self,

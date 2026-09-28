@@ -46,6 +46,7 @@ from pathlib import Path
 from typing import Any
 
 from blue_bench_client.fanout.schema import Slice
+from blue_bench_mcp.shard_check import append_to_result
 
 # Which slice dimension maps to which argument, per tool. A tool absent here
 # (evidence, nmap, sigma, wazuh, get_agent_alerts) is passed through untouched —
@@ -462,26 +463,8 @@ class SliceBindingMiddleware:
 
 
 def _append_footer(result: Any, footer: str) -> Any:
-    """Append the slice line to a ``tools/call`` wire result.
-
-    Both halves, not just the text block: ``MCPServer`` mirrors a
-    string-returning tool into ``structuredContent['result']``, and the
-    ``anthropic-cli`` transport unwraps that copy (runner._cli_tool_result_text)
-    while the SDK path concatenates text blocks. Patching one would leave the
-    other transport reading a result with no sign a slice was in force.
-    """
-    if not isinstance(result, dict):
-        return result
-    content = result.get("content")
-    if isinstance(content, list):
-        for block in reversed(content):
-            if isinstance(block, dict) and isinstance(block.get("text"), str):
-                block["text"] = block["text"] + footer
-                break
-    structured = result.get("structuredContent")
-    if isinstance(structured, dict) and isinstance(structured.get("result"), str):
-        structured["result"] = structured["result"] + footer
-    return result
+    """Append the slice line to both halves of a ``tools/call`` wire result."""
+    return append_to_result(result, footer)
 
 
 def load_slice(path: Path | str) -> Slice:

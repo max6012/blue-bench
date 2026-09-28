@@ -23,6 +23,7 @@ import httpx
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.es_queries import host_name_clause
 from blue_bench_mcp.es_records import with_identity
+from blue_bench_mcp.shard_check import note_shards
 from blue_bench_mcp.guardrails import (
     FOOTER_RESERVE, json_dump_within, result_footer, truncate_result_list,
 )
@@ -63,6 +64,7 @@ class AuthTool:
             )
             resp.raise_for_status()
             data = resp.json()
+        note_shards(data, self.index)
         # _id first, same reason as ElasticTool._search: ground truth is keyed
         # on the ES _id, so a citable record has to carry it.
         hits = [with_identity(hit) for hit in data.get("hits", {}).get("hits", [])]

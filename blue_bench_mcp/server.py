@@ -18,6 +18,7 @@ from pathlib import Path
 
 from mcp.server import MCPServer
 
+from blue_bench_mcp.shard_check import ShardWarningMiddleware
 from blue_bench_mcp.config import ServerConfig, load_config
 
 
@@ -52,6 +53,7 @@ def create_server(
     cfg = cfg or ServerConfig()
     server = MCPServer("blue-bench")
     register_all(server, cfg)
+    ShardWarningMiddleware(server)
     if slice_path is not None:
         # Imported here so a plain server never pays for the fan-out schema.
         from blue_bench_mcp.fanout_bind import SliceBindingMiddleware, load_slice

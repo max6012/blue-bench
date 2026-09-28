@@ -36,7 +36,10 @@ def _profile(spec: str):
 
 
 async def _run(args) -> None:
-    cases = ws.load_cases(Path(args.cases))
+    import httpx
+    r = httpx.get(f"{args.es_url}/bb-meta/_doc/corpus-anchor", timeout=10)
+    anchor = r.json().get("_source") if r.status_code == 200 else None
+    cases = ws.load_cases(Path(args.cases).expanduser(), anchor)
     gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
     profile = _profile(args.profile)
     if args.tool_protocol:

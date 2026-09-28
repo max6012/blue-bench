@@ -60,11 +60,42 @@ def test_table_reports_percent_of_ceiling():
     b = ws.ModelScore(model="small", cases=[ws.score_case(_case("s1", ["apt-1"]), _report("s1", nothing=True), [], GT),
                                             ws.score_case(_case("s2"), _report("s2", nothing=True), [], GT)])
     t = ws.table([a, b], ceiling="opus")
-    assert "| opus | 1.0 | 100% | 1/1 | 1/1 |" in t
-    assert "| small | 0.5 | 50% | 0/1 | 1/1 |" in t
+    assert "| opus | 1.0 | 100% | 1/1 | 1/1 | 0/0 |" in t
+    assert "| small | 0.5 | 50% | 0/1 | 1/1 | 0/0 |" in t
 
 
 def test_load_ground_truth_reads_where_doc_id(tmp_path):
     (tmp_path / "x.yaml").write_text(
         "incident_id: apt-1\nevents:\n- where: {doc_id: a1}\n- where: {doc_id: a2}\n- where: {fixture_line: {line: 1}}\n")
     assert ws.load_ground_truth(tmp_path) == {"apt-1": {"a1", "a2"}}
+
+
+def test_anomaly_cases_are_reported_but_not_in_accuracy():
+    anom = ws.SliceCase(slice=_case("s9").slice, expect_incidents=["cc-1"], anomaly=True)
+    flagged = ws.score_case(anom, _report("s9", (0.7, ["c1"])), seen("c1"), GT)
+    assert flagged.correct and flagged.anomaly
+    atk = ws.score_case(_case("s1", ["apt-1"]), _report("s1", nothing=True), [], GT)
+    m = ws.ModelScore(model="m", cases=[flagged, atk])
+    assert m.accuracy == 0.0                       # the anomaly did not lift it
+    assert m.summary()["anomalies_flagged"] == "1/1"
+    assert m.summary()["attack_detected"] == "0/1"
+
+
+def test_corpus_original_slices_are_shifted_by_the_anchor_and_hash_checked(tmp_path):
+    import yaml
+    from datetime import datetime, timedelta
+    doc = {"time_basis": "corpus-original", "build_hash": "bf85922f", "cases": [{
+        "slice": {"id": "a", "question": "q", "rationale": "r", "turn_budget": 5,
+                  "filters": {"time_start": "2026-03-19T12:00:00+00:00", "time_end": "2026-03-20T05:00:00+00:00"}},
+        "expect_incidents": []}]}
+    p = tmp_path / "s.yaml"
+    p.write_text(yaml.safe_dump(doc))
+    anchor = {"build_hash": "bf85922f0d75aa", "original_window_end": "2026-03-20T05:00:00+00:00",
+              "current_window_end": "2026-09-28T20:00:00+00:00"}
+    (c,) = ws.load_cases(p, anchor)
+    assert c.slice.filters.time_end == datetime.fromisoformat("2026-09-28T20:00:00+00:00")
+    assert c.slice.filters.time_end - c.slice.filters.time_start == timedelta(hours=17)
+    with pytest.raises(ValueError, match="written for build"):
+        ws.load_cases(p, {**anchor, "build_hash": "efe42d49"})
+    with pytest.raises(ValueError, match="anchor is required"):
+        ws.load_cases(p, None)

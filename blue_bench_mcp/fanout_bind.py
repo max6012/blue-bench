@@ -105,6 +105,16 @@ _NATIVE_INDICES: dict[str, set[str]] = {
     "list_assets": {"ot-assets"},
 }
 
+BUDGET_PREFIX = "Error: tool budget exhausted"
+"""Opening of the tool result every call past the slice's budget gets."""
+
+
+def budget_text(slice_id: str, budget: int) -> str:
+    return (f"{BUDGET_PREFIX} for slice {slice_id}: this slice allows {budget} tool calls "
+            "and all of them are used. No further tool call will run. Write your final "
+            "report now, from what you have already seen.")
+
+
 REFUSAL_PREFIX = "Error: call refused by the slice binding"
 """Opening of the tool result a rejected call gets. Pinned: traces from
 different runs are compared on it."""
@@ -378,6 +388,7 @@ class SliceBindingMiddleware:
         self._server = server
         self._schemas: dict[str, dict[str, Any]] | None = None
         self.records: list[dict[str, Any]] = []
+        self.calls = 0
         server.middleware.append(self)
 
     async def _schema_for(self, name: str) -> dict[str, Any] | None:
@@ -408,6 +419,20 @@ class SliceBindingMiddleware:
         params = dict(ctx.params or {})
         name = str(params.get("name", ""))
         args = dict(params.get("arguments") or {})
+        # The tool-call budget is enforced here, not in the client, for the
+        # same reason the slice is: the anthropic-cli transport runs its own
+        # tool loop and has no turn limit, so a client-side cap would leave the
+        # frontier ceiling unbounded while open-weight workers stop at the
+        # budget. Every call counts, refused ones included.
+        self.calls += 1
+        if self.calls > self.slice.turn_budget:
+            self._log({"ts": datetime.now(timezone.utc).isoformat(), "tool": name,
+                       "requested_args": args, "bound_args": {}, "overrides": {},
+                       "rejected": True, "over_budget": True})
+            text = budget_text(self.slice.id, self.slice.turn_budget)
+            return {"content": [{"type": "text", "text": text}],
+                    "isError": False,
+                    "structuredContent": {"result": text}}
         schema = await self._schema_for(name)
         bound, overrides = bind_args(name, args, self.slice, schema, now=self.now)
         record = {

@@ -36,6 +36,8 @@ from blue_bench_client.trace import Trace
 from blue_bench_mcp.profiles import ModelProfile
 
 WORKER_ROLE_FILE = "fan_worker.md"
+BUDGET_SLACK_TURNS = 3
+"""Client turns allowed beyond the server's tool-call budget."""
 
 
 def _harness_added(sl: Slice, dimension: str) -> str:
@@ -82,7 +84,7 @@ def _render_slice_for_question(sl: Slice, max_turns: int) -> str:
         "",
         f"Why this slice exists: {sl.rationale}",
         "",
-        f"Turn budget: {max_turns} tool-calling turns. Your last message must be the "
+        f"Budget: {max_turns} tool calls, enforced by the server. Your last message must be the "
         f"WorkerReport JSON for slice_id \"{sl.id}\".",
     ]
     return "\n".join(lines)
@@ -161,8 +163,8 @@ async def run_worker(
     ``None`` for the report when the final answer did not parse — the parse
     error is then on ``trace.error`` so the dispatcher records it and moves on.
 
-    ``max_turns`` is ``min(slice.turn_budget, max_turns_ceiling)``: the lead
-    assigns, the harness caps.
+    The budget is ``min(slice.turn_budget, max_turns_ceiling)`` tool calls:
+    the lead assigns, the harness caps, and the server enforces it.
 
     Every transport is supported, ``anthropic-cli`` included: the slice is
     enforced by the server the transport spawns, not by anything in this
@@ -173,16 +175,22 @@ async def run_worker(
     and the worker's prompt names both. Without one (``None``, the default) the
     slice is used as the lead wrote it -- tests and offline runs need no ES.
     """
-    max_turns = min(slice.turn_budget, max_turns_ceiling)
+    budget = min(slice.turn_budget, max_turns_ceiling)
+    # The server enforces the budget as a count of tool calls (fanout_bind),
+    # for every transport. The client's own turn cap sits above it so it never
+    # binds first: after the last allowed call the model still needs a turn to
+    # read the "budget exhausted" result and one to write the report.
+    max_turns = budget + BUDGET_SLACK_TURNS
     wprofile = worker_profile(profile)
     if resolver is not None:
         slice, _ = await complete_slice_scope(slice, resolver)
-    question = _render_slice_for_question(slice, max_turns)
+    question = _render_slice_for_question(slice, budget)
     base_cmd = list(server_cmd) if server_cmd else [sys.executable, "-m", "blue_bench_mcp.server"]
 
     with tempfile.TemporaryDirectory(prefix=f"bb-slice-{slice.id}-") as tmp:
         slice_file = Path(tmp) / "slice.json"
-        slice_file.write_text(slice.model_dump_json(), encoding="utf-8")
+        slice_file.write_text(
+            slice.model_copy(update={"turn_budget": budget}).model_dump_json(), encoding="utf-8")
         log_file = Path(tmp) / "slice-log.jsonl"
         cmd = [*base_cmd, "--slice", str(slice_file), "--slice-log", str(log_file)]
 
@@ -195,7 +203,7 @@ async def run_worker(
             max_turns=max_turns,
             extra_prompt_context={
                 "report_schema": render_report_schema_for_prompt(),
-                "turn_budget": str(max_turns),
+                "turn_budget": str(budget),
                 "slice_id": slice.id,
                 "sub_depth": str(depth + 1),
             },

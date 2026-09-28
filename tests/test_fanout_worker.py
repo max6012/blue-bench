@@ -183,7 +183,7 @@ def test_run_worker_composes_fan_worker_role_without_mutating_the_profile(profil
     assert "Blue Team security analyst AI assistant" not in sp
     assert "slice `s03`" in sp
     assert '"slice_id": "s07"' in sp  # the embedded report example
-    assert "You have 6 tool-calling turns" in sp
+    assert "You have 6 tool calls" in sp
     assert "Set its `depth` to 1" in sp
     # Role only: the analyst-facing site/guidelines parts and the coaching
     # hints are not composed for a worker, whatever the profile carries.
@@ -208,10 +208,14 @@ def test_run_worker_composes_fan_worker_role_without_mutating_the_profile(profil
 def test_run_worker_budget_is_min_of_slice_and_ceiling(profile, fake_loop):
     sl = _slice(hosts=[HOST])
     asyncio.run(w.run_worker(profile, sl, depth=0, config_path=None, server_cmd=["srv"], max_turns_ceiling=20))
-    assert fake_loop["max_turns"] == 6
+    # The server enforces the budget; the client's turn cap sits above it.
+    assert fake_loop["max_turns"] == 6 + w.BUDGET_SLACK_TURNS
+    assert json.loads(fake_loop["server"].slice.model_dump_json())["turn_budget"] == 6
     asyncio.run(w.run_worker(profile, sl, depth=0, config_path=None, server_cmd=["srv"], max_turns_ceiling=2))
-    assert fake_loop["max_turns"] == 2
-    assert "You have 2 tool-calling turns" in fake_loop["system_prompt"]
+    assert fake_loop["max_turns"] == 2 + w.BUDGET_SLACK_TURNS
+    # The capped budget is what the server is given and what the model is told.
+    assert fake_loop["server"].slice.turn_budget == 2
+    assert "You have 2 tool calls" in fake_loop["system_prompt"]
 
 
 def test_run_worker_reads_the_slice_log_onto_the_trace(profile, fake_loop):
@@ -244,7 +248,9 @@ def test_run_worker_tool_results_carry_the_slice_footer(profile, fake_loop):
     assert "replaced your host" in results[1]
 
 
-def test_run_worker_budget_exhausted_reports_none_with_error(profile, fake_loop):
+def test_run_worker_budget_exhausted_reports_none_with_error(profile, fake_loop, monkeypatch):
+    # A model that never writes its report inside the client's turn cap.
+    monkeypatch.setattr(w, "BUDGET_SLACK_TURNS", 0)
     sl = _slice(hosts=[HOST], turn_budget=1)
     trace, report = asyncio.run(w.run_worker(
         profile, sl, depth=1, config_path=None, server_cmd=["srv"], max_turns_ceiling=20))

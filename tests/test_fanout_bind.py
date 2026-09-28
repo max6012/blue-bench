@@ -16,6 +16,7 @@ from blue_bench_client.fanout.schema import Slice, SliceFilters
 from blue_bench_client.mcp_client import MCPStdioClient
 from blue_bench_mcp.config import ServerConfig
 from blue_bench_mcp.fanout_bind import (
+    BUDGET_PREFIX,
     REFUSAL_PREFIX,
     bind_args,
     load_slice,
@@ -583,3 +584,31 @@ def test_slice_log_requires_a_slice(tmp_path):
         cwd=REPO, capture_output=True, text=True, timeout=60,
     )
     assert r.returncode != 0 and "--slice-log requires --slice" in r.stderr
+
+
+def test_server_refuses_every_call_past_the_budget_on_both_halves(tmp_path):
+    """The budget is the server's, so the CLI transport (no turn limit of its
+    own) stops at the same number of calls as every other harness."""
+    sl = _slice(turn_budget=2, hosts=[HOST])
+    cmd, log = _server_cmd(tmp_path, sl)
+
+    async def go():
+        from contextlib import AsyncExitStack
+
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        async with AsyncExitStack() as stack:
+            read, write = await stack.enter_async_context(
+                stdio_client(StdioServerParameters(command=cmd[0], args=cmd[1:])))
+            session = await stack.enter_async_context(ClientSession(read, write))
+            await session.initialize()
+            return [await session.call_tool("get_process_events", {"image": f"x{i}"}) for i in range(4)]
+
+    resps = asyncio.run(go())
+    texts = [r.content[-1].text for r in resps]
+    assert not texts[0].startswith(BUDGET_PREFIX) and not texts[1].startswith(BUDGET_PREFIX)
+    assert texts[2].startswith(BUDGET_PREFIX) and texts[3].startswith(BUDGET_PREFIX)
+    assert "allows 2 tool calls" in texts[2]
+    assert _structured(resps[2])["result"] == texts[2]
+    recs = [json.loads(line) for line in log.read_text().splitlines()]
+    assert [r.get("over_budget", False) for r in recs] == [False, False, True, True]

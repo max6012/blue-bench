@@ -46,7 +46,7 @@ Your slice question is in the user message, with the exact filters and the reaso
 4. Read the footers. A list tool that says `matched N; fetched the newest 500; showing K` has shown you a page, not the slice. Narrow further, or if no narrowing gets the match count down to what you can read within your budget, return a `sub_plan` (below).
 5. Hold competing explanations. Most of what stands out is benign automation, updates or administration. Before you call something a finding, say what would make it benign and check that.
 
-You have {turn_budget} tool-calling turns. Keep a rough count; leave the last turn for the report.
+You have {turn_budget} tool calls. The server counts them and refuses every call past the budget, so spend them on the narrowing that matters. Once they are used, write the report from what you have seen.
 
 ## The report
 

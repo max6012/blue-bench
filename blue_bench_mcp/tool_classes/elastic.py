@@ -324,6 +324,41 @@ class ElasticTool:
             total=total, fetched=fetched, capped=capped, shown=len(hits) - dropped,
             max_results=self.max_results)
 
+    async def _agg_field_plan(self, field: str, index: str) -> dict[str, list[str]]:
+        """Aggregatable field name -> the concrete indices to aggregate it in.
+
+        Per index: the field itself when it is aggregatable there, else its
+        ``.keyword`` subfield when that is, else the index is left out (the
+        field is not mapped there, so it has nothing to count).
+        """
+        async with httpx.AsyncClient(
+            verify=self.verify_ssl, auth=self._auth(), timeout=float(self.timeout)
+        ) as client:
+            resp = await client.get(
+                f"{self.url}/{index}/_field_caps",
+                params={"fields": f"{field},{field}.keyword", "include_unmapped": "true",
+                        "ignore_unavailable": "true", "allow_no_indices": "true"})
+            resp.raise_for_status()
+            caps = resp.json()
+        all_indices = caps.get("indices") or []
+
+        def agg_indices(name: str) -> set[str]:
+            out: set[str] = set()
+            for _type, c in (caps.get("fields", {}).get(name) or {}).items():
+                if c.get("aggregatable"):
+                    # 'indices' is omitted when the capability holds for all of them.
+                    out |= set(c.get("indices") or all_indices)
+            return out
+
+        raw, kw = agg_indices(field), agg_indices(f"{field}.keyword")
+        plan: dict[str, list[str]] = {}
+        for ix in all_indices:
+            if ix in raw:
+                plan.setdefault(field, []).append(ix)
+            elif ix in kw:
+                plan.setdefault(f"{field}.keyword", []).append(ix)
+        return plan
+
     async def count_by_field(
         self,
         field: str,
@@ -364,45 +399,44 @@ class ElasticTool:
             query = {"bool": {"must": [rng.clause],
                               "filter": [{"bool": {"should": should, "minimum_should_match": 1}}]}}
 
-        async def _agg_on(f: str) -> list[dict]:
+        # A field can be aggregatable in one index and text-only in another
+        # (dest_port is numeric in ot-conn, text in zeek-conn). One terms agg
+        # over both fails the text-mapped index's shards and ES returns the
+        # rest as a partial result -- the survey silently loses that index.
+        # So the field is resolved PER INDEX (the raw field where it is
+        # aggregatable, else its .keyword subfield), one agg runs per resolved
+        # field, and the buckets are merged.
+        try:
+            plan = await self._agg_field_plan(field, idx)
+        except httpx.HTTPError as e:
+            return f"Error: could not read the mapping of '{field}' in {idx}: {e}"
+        if not plan:
+            return (f"Top {top_n} values for '{field}' ({rng.label}):\n"
+                    f"  (no results — '{field}' is not an aggregatable field in {idx}; "
+                    "check the field name as it appears in tool output)")
+        merged: dict[str, int] = {}
+        for agg_field, indices in plan.items():
             body = {
                 "size": 0,
                 "query": query,
-                "aggs": {"top_values": {"terms": {"field": f, "size": top_n}}},
+                # Over-fetch per group so the merged top_n is right when the
+                # groups' top lists interleave.
+                "aggs": {"top_values": {"terms": {"field": agg_field, "size": top_n * 3}}},
             }
-            data = await self._agg(body, index=idx)
-            return data.get("aggregations", {}).get("top_values", {}).get("buckets", [])
-
-        # Dynamic string fields (src_ip, dest_ip, dest_port, …) are text-mapped and
-        # not aggregatable — a raw terms agg 400s. ES auto-creates a `.keyword`
-        # subfield for them, so fall back to it when the raw field errors or is empty.
-        used = field
-        buckets: list[dict] = []
-        last_err: Exception | None = None
-        succeeded = False
-        for cand in (field, f"{field}.keyword"):
             try:
-                buckets = await _agg_on(cand)
+                data = await self._agg(body, index=",".join(indices))
             except httpx.HTTPError as e:
-                last_err = e
-                continue
-            succeeded = True
-            used = cand
-            if buckets:
-                break
-        # Only report an error when BOTH candidates errored. A successful query
-        # that returned zero buckets is a genuine "no results", not a failure —
-        # inverting that distinction would tell the model "aggregation failed"
-        # when the truth is "nothing here", which is exactly what the benchmark
-        # measures.
-        if not succeeded:
-            return f"Error: ES aggregation failed for '{field}' (also tried '{field}.keyword'): {last_err}"
-        field = used
-        lines = [f"Top {top_n} values for '{field}' ({rng.label}):"]
+                return f"Error: ES aggregation failed for '{agg_field}' in {','.join(indices)}: {e}"
+            for b in data.get("aggregations", {}).get("top_values", {}).get("buckets", []):
+                key = str(b.get("key_as_string", b["key"]))
+                merged[key] = merged.get(key, 0) + b["doc_count"]
+        buckets = sorted(merged.items(), key=lambda kv: (-kv[1], kv[0]))[:top_n]
+        used = " / ".join(sorted(plan))
+        lines = [f"Top {top_n} values for '{used}' ({rng.label}):"]
         if not buckets:
             lines.append("  (no results — check field name, index pattern, or timerange)")
-        for b in buckets:
-            lines.append(f"  {b['key']}: {b['doc_count']}")
+        for k, n in buckets:
+            lines.append(f"  {k}: {n}")
         return truncate_results("\n".join(lines), self.max_chars)
 
     # date_histogram intervals the survey tool accepts. All are sub-week, so a

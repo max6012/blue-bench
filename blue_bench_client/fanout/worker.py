@@ -31,6 +31,7 @@ from blue_bench_client.fanout.schema import (
     WorkerReportParseError,
     parse_worker_report,
     render_report_schema_for_prompt,
+    render_sub_plan_example_for_prompt,
 )
 from blue_bench_client.trace import Trace
 from blue_bench_mcp.profiles import ModelProfile
@@ -203,6 +204,7 @@ async def run_worker(
             max_turns=max_turns,
             extra_prompt_context={
                 "report_schema": render_report_schema_for_prompt(),
+                "sub_plan_schema": render_sub_plan_example_for_prompt(depth + 1),
                 "turn_budget": str(budget),
                 "slice_id": slice.id,
                 "sub_depth": str(depth + 1),

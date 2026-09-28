@@ -131,6 +131,11 @@ async def test_get_connections_since_alone_runs_to_now(tool):
 
 async def test_count_by_field_absolute_band_and_header(tool):
     seen = _capture(tool, "_agg")
+
+    async def plan(field, index):
+        return {field: [index]}
+
+    tool._agg_field_plan = plan
     out = await tool.count_by_field(field="src_ip", timerange_minutes=99,
                                     since="2026-08-26T00:00:00Z", until="2026-08-27T00:00:00Z")
     assert seen[0]["query"] == BAND

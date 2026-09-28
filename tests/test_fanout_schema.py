@@ -91,6 +91,7 @@ def test_worker_report_round_trip_with_sub_plan():
                 technique_hints=["T1218.011"],
             )
         ],
+        nothing_found=False,
         advice="split",
         sub_plan=_plan(2, depth=1),
     )
@@ -101,14 +102,14 @@ def test_worker_report_round_trip_with_sub_plan():
 
 def test_report_consistency_rules():
     with pytest.raises(ValidationError, match="nothing_found_reason"):
-        WorkerReport(slice_id="s", nothing_found=True)
+        WorkerReport(slice_id="s", findings=[], nothing_found=True)
     with pytest.raises(ValidationError, match="findings is non-empty"):
         WorkerReport(
             slice_id="s", nothing_found=True, nothing_found_reason="clean",
             findings=[Finding(statement="x", pointers=[Pointer(index="i", doc_id="d")], confidence=0.1)],
         )
     with pytest.raises(ValidationError, match="advice == 'split'"):
-        WorkerReport(slice_id="s", advice="keep", sub_plan=_plan(2, depth=1))
+        WorkerReport(slice_id="s", findings=[], nothing_found=False, advice="keep", sub_plan=_plan(2, depth=1))
 
 
 def test_finding_requires_a_pointer_and_bounded_confidence():
@@ -217,3 +218,28 @@ def test_rendered_schema_example_round_trips_through_the_parser():
     assert r.findings[0].pointers[0].is_citable()
     # Harness-only fields stay out of the example so the model does not fill them.
     assert '"turns_used"' not in example and '"error"' not in example
+
+
+def test_a_sub_slice_can_never_pass_as_the_report():
+    """Regression: with defaults on findings/nothing_found, a sub-slice object
+    ({"slice_id": ..., "filters": ...}) inside a malformed sub_plan validated as
+    an empty report and replaced the model's real one."""
+    from blue_bench_client.fanout.schema import parse_worker_report
+    text = json.dumps({
+        "slice_id": "s01", "nothing_found": False, "advice": "split",
+        "nothing_found_reason": "",
+        "findings": [{"statement": "mimikatz", "confidence": 0.9,
+                      "pointers": [{"index": "windows-sysmon", "doc_id": "abc"}]}],
+        "sub_plan": {"slices": [{"slice_id": "s01-a", "since": "x", "until": "y",
+                                 "question": "q", "turn_budget": 5, "rationale": "r"}]},
+    })
+    r = parse_worker_report(text)
+    assert r.slice_id == "s01" and len(r.findings) == 1 and r.advice == "split"
+    assert r.sub_plan is None and r.error.startswith("sub_plan dropped as invalid")
+
+
+def test_the_prompt_sub_plan_example_is_valid_inside_a_report():
+    from blue_bench_client.fanout.schema import PartitionPlan, render_sub_plan_example_for_prompt
+    plan = PartitionPlan.model_validate(json.loads(render_sub_plan_example_for_prompt(2)))
+    assert plan.depth == 2
+    WorkerReport(slice_id="s", findings=[], nothing_found=False, advice="split", sub_plan=plan)

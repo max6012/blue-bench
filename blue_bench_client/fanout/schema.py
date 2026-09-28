@@ -164,8 +164,12 @@ Advice = Literal["keep", "widen", "narrow", "split"]
 
 class WorkerReport(BaseModel):
     slice_id: str
-    findings: list[Finding] = Field(default_factory=list)
-    nothing_found: bool = False
+    findings: list[Finding]
+    """Required, even when empty: an object without it is not a report. With a
+    default, any nested object carrying an id-like 'slice_id' -- a sub-slice of
+    the model's own sub_plan -- validated as an empty report and replaced the
+    real one (Opus 5.5 ceiling run, 2026-09-28)."""
+    nothing_found: bool
     nothing_found_reason: str = ""
     """Required when nothing_found is true: what was checked and why it looked
     clean. 'Nothing found' with no reason is indistinguishable from 'did not
@@ -229,6 +233,29 @@ def _json_candidates(text: str) -> list[tuple[int, int, dict]]:
     return out
 
 
+def _without_bad_sub_plan(obj: dict, err: Exception) -> WorkerReport | None:
+    """The report with its sub_plan dropped, when the sub_plan is the only
+    thing wrong with it.
+
+    A sub_plan is advice to the dispatcher; the findings are the evidence. A
+    model that got the sub-slice field names wrong still reported what it saw,
+    and throwing the findings away for it scores the model on JSON spelling.
+    The drop is recorded on ``error`` so the dispatcher knows not to run it.
+    """
+    if not isinstance(err, ValidationError) or not isinstance(obj, dict) or not obj.get("sub_plan"):
+        return None
+    if any((e.get("loc") or ("",))[0] != "sub_plan" for e in err.errors()):
+        return None
+    try:
+        rep = WorkerReport.model_validate({**obj, "sub_plan": None})
+    except (ValidationError, ValueError):
+        return None
+    first = err.errors()[0]
+    rep.error = (f"sub_plan dropped as invalid ({len(err.errors())} errors, first: "
+                 f"{'.'.join(str(x) for x in first['loc'])}: {first['msg']})")
+    return rep
+
+
 def parse_worker_report(text: str) -> WorkerReport:
     """Extract the LAST JSON object from a model's final answer and validate it.
 
@@ -263,6 +290,9 @@ def parse_worker_report(text: str) -> WorkerReport:
         except (ValidationError, ValueError) as e:
             if last_err is None:
                 last_err = e
+            salvaged = _without_bad_sub_plan(obj, e)
+            if salvaged is not None:
+                return salvaged
 
     # No outermost object validates. A model that wrapped the report
     # (``{"worker_report": {...}}``) put the real one one level down; try the
@@ -299,6 +329,36 @@ def parse_worker_report(text: str) -> WorkerReport:
     raise WorkerReportParseError(f"invalid WorkerReport: {last_err}") from last_err
 
 
+def render_sub_plan_example_for_prompt(depth: int = 1) -> str:
+    """A valid example ``sub_plan`` value, embedded in the worker prompt.
+
+    Without it models invent the sub-slice shape (``slice_id``, ``since``,
+    ``until``) and the whole report failed to validate. A test round-trips it
+    inside a report.
+    """
+    example = PartitionPlan(
+        plan_id="s07-split",
+        survey_summary="count_by_time shows two dense bands: 08:00-09:00 and 11:40-12:20.",
+        slices=[
+            Slice(
+                id="s07-a",
+                question="What ran in the 08:00-09:00 band?",
+                filters=SliceFilters(
+                    hosts=["wkst-03.corp.example.invalid"],
+                    time_start=datetime.fromisoformat("2026-08-19T08:00:00+00:00"),
+                    time_end=datetime.fromisoformat("2026-08-19T09:00:00+00:00"),
+                ),
+                turn_budget=10,
+                rationale="First dense band; 1,900 Sysmon events.",
+            ),
+        ],
+        coverage_claim="Covers the two dense bands; the quiet hours between are left out.",
+        depth=depth,
+    )
+    return json.dumps(example.model_dump(mode="json", exclude={"slices": {0: {"resolved", "splittable"}}}),
+                      indent=2)
+
+
 def render_report_schema_for_prompt() -> str:
     """A compact, valid example of the report the worker must emit — embedded
     in the role prompt via the ``{report_schema}`` placeholder.
@@ -319,6 +379,7 @@ def render_report_schema_for_prompt() -> str:
                 pointers=[
                     Pointer(
                         index="windows-sysmon",
+                        doc_id="wkst-03.corp.example.invalid:418223",
                         event_record_id=418223,
                         process_guid="{b2c0e5a1-3f2d-66e1-0a00-000000001b00}",
                         timestamp=datetime.fromisoformat("2026-08-19T14:02:11+00:00"),

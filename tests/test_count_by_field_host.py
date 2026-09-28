@@ -25,6 +25,11 @@ def _bodies(**kw):
         return {"aggregations": {"top_values": {"buckets": [{"key": 1, "doc_count": 3}]}}}
 
     tool._agg = fake_agg
+
+    async def plan(field, index):
+        return {field: [index]}
+
+    tool._agg_field_plan = plan
     asyncio.run(tool.count_by_field("EventID", index="windows-sysmon",
                                     since="2026-09-12T00:00:00Z", until="2026-09-13T00:00:00Z", **kw))
     return seen[0]["query"]
@@ -98,3 +103,38 @@ def test_the_slice_binds_count_by_time_host_ip_too():
     schema = {"properties": {k: {"type": "string"} for k in ("interval", "host", "host_ip", "since", "until")}}
     bound, _ = bind_args("count_by_time", {}, sl, schema)
     assert bound["host"] == HOST and bound["host_ip"] == IP
+
+
+def _es_up() -> bool:
+    import httpx
+    try:
+        return httpx.get("http://localhost:9200/zeek-conn/_count", timeout=1.0).status_code == 200
+    except httpx.HTTPError:
+        return False
+
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.skipif(not _es_up(), reason="needs live Elasticsearch")
+def test_live_mixed_mapping_survey_is_complete():
+    """dest_port is numeric in ot-conn and text in zeek-conn; the default
+    alert/Zeek pattern mixes alert.signature text with nothing. Before the
+    per-index field plan, both returned partial results (9 + 4 of the 22 in the
+    Opus 5.5 ceiling run)."""
+    from blue_bench_mcp import shard_check
+    tool = ElasticTool(ServerConfig(elastic=ElasticConfig(url="http://localhost:9200")))
+
+    async def go(field, index):
+        tok = shard_check._FAILURES.set([])
+        try:
+            out = await tool.count_by_field(field, index=index, timerange_minutes=60 * 24 * 30, top_n=5)
+            return out, list(shard_check._FAILURES.get())
+        finally:
+            shard_check._FAILURES.reset(tok)
+
+    for field, index in (("dest_port", "zeek-conn,ot-conn"), ("alert.signature", ""),
+                         ("IpAddress", "windows-security,linux-syslog")):
+        out, failures = asyncio.run(go(field, index))
+        assert failures == [], (field, failures)
+        assert "no results" not in out, (field, out)

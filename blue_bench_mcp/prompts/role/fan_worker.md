@@ -1,5 +1,5 @@
 <!-- Fan-out WORKER role. Composed by blue_bench_client.fanout.worker.run_worker
-     with extra placeholders: report_schema, turn_budget, slice_id, sub_depth.
+     with extra placeholders: report_schema, sub_plan_schema, turn_budget, slice_id, sub_depth.
      This is the worker's WHOLE system prompt: run_worker composes the role part
      only -- no site, guidelines or coaching parts -- so it carries its own data
      map. Shared by every harness (Blue-Bench runner, OpenCode/Hermes) so worker
@@ -69,6 +69,10 @@ Rules for the report:
   - `widen` — the slice cut through something (a process tree or a connection sequence continues past your window, host, or index) and you could not follow it.
   - `narrow` — the slice is mostly noise the lead could have filtered out.
   - `split` — the slice is too large to read within budget even after narrowing; you are returning a `sub_plan`.
-- `sub_plan` is only for `split`. Use it when the footers still say `matched N` far above what you fetched after your best narrowing, not because the slice was hard. A sub-plan is a partition of YOUR slice: two to eight sub-slices, each with a scoped question, filters no wider than your own, a turn budget, and a rationale. Set its `depth` to {sub_depth}. Report anything you did find alongside the sub-plan.
+- `sub_plan` is only for `split`. Use it when the footers still say `matched N` far above what you fetched after your best narrowing, not because the slice was hard. A sub-plan is a partition of YOUR slice: two to eight sub-slices, each with a scoped question, filters no wider than your own, a turn budget, and a rationale. Set its `depth` to {sub_depth}. Report anything you did find alongside the sub-plan. A sub-plan has exactly this shape (field names matter; a malformed sub-plan is dropped and not run):
+
+```json
+{sub_plan_schema}
+```
 
 Prose before the JSON is fine and is not read by the harness; the JSON is.

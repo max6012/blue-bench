@@ -42,6 +42,11 @@ async def _run(args) -> None:
     cases = ws.load_cases(Path(args.cases).expanduser(), anchor)
     gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
     profile = _profile(args.profile)
+    if args.context_size:
+        # The in-memory cloud profiles default to 32k; fifteen tool results can
+        # exceed that and push the earliest ones out of an open-weight worker's
+        # window while Opus keeps them. One uniform size for every candidate.
+        profile = profile.model_copy(update={"context_size": args.context_size})
     if args.tool_protocol:
         # Every Opus runs through the same transport, whatever its profile says.
         profile = profile.model_copy(update={"tool_protocol": args.tool_protocol})
@@ -93,6 +98,7 @@ def main() -> None:
     r.add_argument("--es-url", default="http://localhost:9200")
     r.add_argument("--max-turns", type=int, default=20, help="harness ceiling on each slice's budget")
     r.add_argument("--concurrency", type=int, default=4)
+    r.add_argument("--context-size", type=int, default=None, help="override the profile's context window (tokens)")
     r.add_argument("--tool-protocol", default=None, help="override the profile's transport, e.g. anthropic-cli")
     t = sub.add_parser("table")
     t.add_argument("dirs", nargs="+")

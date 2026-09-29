@@ -60,9 +60,15 @@ async def _run(args) -> None:
 
     async def one(case: ws.SliceCase) -> ws.CaseScore:
         async with sem:
-            trace, report = await run_worker(
-                profile, case.slice, depth=0, config_path=None, server_cmd=None,
-                max_turns_ceiling=args.max_turns, resolver=resolver)
+            if args.harness == "opencode":
+                from blue_bench_client.fanout.opencode_worker import run_worker_opencode
+                trace, report = await run_worker_opencode(
+                    profile, case.slice, model=f"ollama-cloud/{profile.model_id}", depth=0,
+                    max_turns_ceiling=args.max_turns, resolver=resolver)
+            else:
+                trace, report = await run_worker(
+                    profile, case.slice, depth=0, config_path=None, server_cmd=None,
+                    max_turns_ceiling=args.max_turns, resolver=resolver)
         sid = case.slice.id
         (out / f"{sid}.trace.json").write_text(trace.model_dump_json(indent=1), encoding="utf-8")
         if report is not None:
@@ -85,7 +91,8 @@ async def _run(args) -> None:
         old = ws.ModelScore.model_validate_json(prior.read_text())
         redone = {c.slice_id for c in scores}
         scores = [c for c in old.cases if c.slice_id not in redone] + scores
-    ms = ws.ModelScore(model=profile.name, cases=scores)
+    name = f"opencode-{profile.model_id}" if args.harness == "opencode" else profile.name
+    ms = ws.ModelScore(model=name, cases=scores)
     (out / "score.json").write_text(ms.model_dump_json(indent=1), encoding="utf-8")
     print(json.dumps(ms.summary(), indent=1))
 
@@ -148,6 +155,8 @@ def main() -> None:
     r.add_argument("--concurrency", type=int, default=4)
     r.add_argument("--context-size", type=int, default=None, help="override the profile's context window (tokens)")
     r.add_argument("--tool-protocol", default=None, help="override the profile's transport, e.g. anthropic-cli")
+    r.add_argument("--harness", choices=("bluebench", "opencode"), default="bluebench",
+                   help="loop that drives the model; opencode = one `opencode run` per slice (cloud models)")
     r.add_argument("--only", default="", help="comma list of slice ids to (re)run; merges into score.json")
     rs = sub.add_parser("rescore")
     rs.add_argument("dirs", nargs="+")

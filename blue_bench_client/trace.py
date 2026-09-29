@@ -122,6 +122,10 @@ class Trace(BaseModel):
     max_turns: int = 10
     total_duration_ms: int = 0
     error: str | None = None
+    provider_retries: int = 0
+    """Provider calls retried after a transient failure (HTTP 429/5xx, dropped
+    connection). Not the model's doing; recorded so a run that needed many is
+    visible."""
     served_models: list[str] = Field(default_factory=list)
     """The model ids the provider reported actually serving this run, in order
     of first appearance. Filled by transports that expose it (anthropic-cli).

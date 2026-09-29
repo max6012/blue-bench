@@ -346,6 +346,42 @@ def _openai_args(arguments: str | None) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {}
 
 
+PROVIDER_RETRY_DELAYS = (5, 20, 60)
+"""Seconds to wait before each retry of a transient provider failure."""
+_TRANSIENT_STATUS = {429, 500, 502, 503, 504}
+
+
+class _RetryingOllama:
+    """An Ollama client whose ``chat`` retries transient provider failures.
+
+    Ollama cloud returns sporadic HTTP 500s; without a retry one of them ends
+    the worker at turn 2 and the slice is scored as the model's miss. Only
+    transient failures are retried (429, 5xx, a dropped connection); a 4xx is
+    the request's fault and raises at once. Each retry is counted on the trace.
+    """
+
+    def __init__(self, inner: Any, trace: Trace) -> None:
+        self._inner = inner
+        self._trace = trace
+
+    async def chat(self, **kwargs: Any) -> Any:
+        import httpx
+
+        for attempt, delay in enumerate((0, *PROVIDER_RETRY_DELAYS)):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                return await self._inner.chat(**kwargs)
+            except ollama.ResponseError as e:
+                if getattr(e, "status_code", None) not in _TRANSIENT_STATUS or attempt == len(PROVIDER_RETRY_DELAYS):
+                    raise
+            except (httpx.TransportError, ConnectionError):
+                if attempt == len(PROVIDER_RETRY_DELAYS):
+                    raise
+            self._trace.provider_retries += 1
+        raise AssertionError("unreachable")
+
+
 async def _run_native(
     profile: ModelProfile,
     system_prompt: str,
@@ -360,7 +396,7 @@ async def _run_native(
         {"role": "user", "content": question},
     ]
     tool_specs = _tool_specs_to_ollama(tools)
-    client = make_async_client()
+    client = _RetryingOllama(make_async_client(), trace)
 
     for _ in range(max_turns):
         t0 = time.monotonic()
@@ -469,7 +505,7 @@ async def _run_text_embedded(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": question},
     ]
-    client = make_async_client()
+    client = _RetryingOllama(make_async_client(), trace)
 
     for _ in range(max_turns):
         t0 = time.monotonic()

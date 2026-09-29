@@ -102,10 +102,23 @@ def seen_ids(tool_results: Iterable[str]) -> set[str]:
     return {m for text in tool_results for m in pat.findall(text or "")}
 
 
+_INFRA_MARKERS = ("status code: 5", "status code: 429", "ResponseError", "TransportError",
+                  "ConnectError", "ReadTimeout", "RemoteProtocolError")
+
+
+def is_infra_error(error: str | None) -> bool:
+    """True when a case failed because the provider did, not the model:
+    HTTP 429/5xx or a dropped connection that outlived the retries."""
+    return bool(error) and any(m in error for m in _INFRA_MARKERS)
+
+
 class CaseScore(BaseModel):
     slice_id: str
     clean: bool
     anomaly: bool = False
+    infra_error: bool = False
+    """The provider failed; the case says nothing about the model. Kept out of
+    accuracy and listed for a repair run."""
     parsed: bool
     correct: bool
     confident_findings: int = 0
@@ -127,7 +140,8 @@ def score_case(case: SliceCase, report: WorkerReport | None, tool_results: Itera
         raise ValueError(f"slice {sid}: incidents not in ground truth: {missing}")
     if report is None:
         return CaseScore(slice_id=sid, clean=case.is_clean, anomaly=case.anomaly, parsed=False,
-                         correct=False, expected_ids=len(expected), error=error)
+                         correct=False, expected_ids=len(expected), error=error,
+                         infra_error=is_infra_error(error))
     all_gt = set().union(*gt.values()) if gt else set()
     seen = seen_ids(tool_results)
     hits: set[str] = set()
@@ -158,8 +172,9 @@ class ModelScore(BaseModel):
 
     @property
     def scored(self) -> list[CaseScore]:
-        """The cases accuracy is computed over: attacks and clean controls."""
-        return [c for c in self.cases if not c.anomaly]
+        """The cases accuracy is computed over: attacks and clean controls
+        that the provider actually served."""
+        return [c for c in self.cases if not c.anomaly and not c.infra_error]
 
     @property
     def accuracy(self) -> float:
@@ -169,7 +184,7 @@ class ModelScore(BaseModel):
     def summary(self) -> dict:
         atk = [c for c in self.scored if not c.clean]
         cln = [c for c in self.scored if c.clean]
-        anm = [c for c in self.cases if c.anomaly]
+        anm = [c for c in self.cases if c.anomaly and not c.infra_error]
         return {
             "model": self.model,
             "accuracy": round(self.accuracy, 3),
@@ -178,7 +193,8 @@ class ModelScore(BaseModel):
             "anomalies_flagged": f"{sum(c.correct for c in anm)}/{len(anm)}",
             "false_findings": sum(c.false_findings for c in self.cases),
             "ungrounded_citations": sum(c.ungrounded_citations for c in self.cases),
-            "unparsed_reports": sum(not c.parsed for c in self.cases),
+            "unparsed_reports": sum(not c.parsed and not c.infra_error for c in self.cases),
+            "infra_errors": sum(c.infra_error for c in self.cases),
         }
 
 
@@ -186,12 +202,14 @@ def table(scores: list[ModelScore], ceiling: str | None = None) -> str:
     """Markdown table; ``ceiling`` names the model whose accuracy is 100%."""
     ref = next((s.accuracy for s in scores if s.model == ceiling), None)
     head = ["model", "accuracy", "% of ceiling", "attack detected", "clean correct",
-            "anomalies flagged (not scored)", "false findings", "ungrounded cites", "unparsed"]
+            "anomalies flagged (not scored)", "false findings", "ungrounded cites", "unparsed",
+            "provider failures (excluded)"]
     rows = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     for s in sorted(scores, key=lambda s: -s.accuracy):
         m = s.summary()
         pct = f"{100 * s.accuracy / ref:.0f}%" if ref else "—"
         rows.append("| " + " | ".join(str(x) for x in (
             m["model"], m["accuracy"], pct, m["attack_detected"], m["clean_correct"],
-            m["anomalies_flagged"], m["false_findings"], m["ungrounded_citations"], m["unparsed_reports"])) + " |")
+            m["anomalies_flagged"], m["false_findings"], m["ungrounded_citations"], m["unparsed_reports"],
+            m["infra_errors"])) + " |")
     return "\n".join(rows)

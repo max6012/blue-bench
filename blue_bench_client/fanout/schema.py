@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
@@ -133,11 +133,31 @@ class Pointer(BaseModel):
     """
     index: str
     doc_id: str | None = None
-    event_record_id: int | None = None
+    event_record_id: int | str | None = None
+    """Integer in real Sysmon, but the injected capture's records carry hex
+    record ids -- a model that copies one faithfully must not lose its report."""
     process_guid: str | None = None
     conn_uid: str | None = None
     timestamp: datetime | None = None
     host: str | None = None
+
+    @field_validator("timestamp", mode="before")
+    @classmethod
+    def _lenient_timestamp(cls, v: Any) -> Any:
+        """A timestamp the model wrote in a shape pydantic cannot read is a
+        weak handle, not a reason to discard the report: drop it. doc_id is
+        what scoring matches on."""
+        if v is None or isinstance(v, datetime):
+            return v
+        try:
+            return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+    @field_validator("doc_id", "process_guid", "conn_uid", "host", mode="before")
+    @classmethod
+    def _stringify(cls, v: Any) -> Any:
+        return None if v is None else str(v)
 
     def is_citable(self) -> bool:
         """True when at least one concrete handle is present — a pointer with

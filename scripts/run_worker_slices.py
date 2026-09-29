@@ -40,6 +40,9 @@ async def _run(args) -> None:
     r = httpx.get(f"{args.es_url}/bb-meta/_doc/corpus-anchor", timeout=10)
     anchor = r.json().get("_source") if r.status_code == 200 else None
     cases = ws.load_cases(Path(args.cases).expanduser(), anchor)
+    if args.only:
+        wanted = set(args.only.split(","))
+        cases = [c for c in cases if c.slice.id in wanted]
     gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
     profile = _profile(args.profile)
     if args.context_size:
@@ -75,10 +78,55 @@ async def _run(args) -> None:
               flush=True)
         return s
 
-    scores = await asyncio.gather(*(one(c) for c in cases))
-    ms = ws.ModelScore(model=profile.name, cases=list(scores))
+    scores = list(await asyncio.gather(*(one(c) for c in cases)))
+    prior = out / "score.json"
+    if args.only and prior.exists():
+        # A repair run replaces just the cases it re-ran.
+        old = ws.ModelScore.model_validate_json(prior.read_text())
+        redone = {c.slice_id for c in scores}
+        scores = [c for c in old.cases if c.slice_id not in redone] + scores
+    ms = ws.ModelScore(model=profile.name, cases=scores)
     (out / "score.json").write_text(ms.model_dump_json(indent=1), encoding="utf-8")
     print(json.dumps(ms.summary(), indent=1))
+
+
+def _rescore(args) -> None:
+    """Re-parse every saved final answer with the current parser and score it
+    again, so a parser fix reaches runs that already finished. Model output
+    is not re-generated; only how we read it changes."""
+    import httpx
+
+    from blue_bench_client.fanout.schema import WorkerReportParseError, parse_worker_report
+    from blue_bench_client.trace import Trace
+
+    r = httpx.get(f"{args.es_url}/bb-meta/_doc/corpus-anchor", timeout=10)
+    anchor = r.json().get("_source") if r.status_code == 200 else None
+    cases = {c.slice.id: c for c in ws.load_cases(Path(args.cases).expanduser(), anchor)}
+    gt = ws.load_ground_truth(Path(args.ground_truth).expanduser())
+    for d in map(Path, args.dirs):
+        prior = ws.ModelScore.model_validate_json((d / "score.json").read_text())
+        rescored = []
+        for old in prior.cases:
+            tp = d / f"{old.slice_id}.trace.json"
+            if not tp.exists() or old.slice_id not in cases:
+                rescored.append(old)
+                continue
+            trace = Trace.model_validate_json(tp.read_text())
+            wrong = [m for m in trace.served_models if not m.startswith(trace.model_id)]
+            report, err = None, trace.error
+            if trace.final_answer and not wrong:
+                try:
+                    report = parse_worker_report(trace.final_answer)
+                    report.turns_used = trace.turns_used
+                except WorkerReportParseError as e:
+                    err = f"{err + '; ' if err else ''}WorkerReportParseError: {e}"
+            elif wrong:
+                err = f"served by {wrong}, not {trace.model_id}"
+            results = [t.content for t in trace.turns if t.role == "tool"]
+            rescored.append(ws.score_case(cases[old.slice_id], report, results, gt, error=err))
+        ms = ws.ModelScore(model=prior.model, cases=rescored)
+        (d / "score.json").write_text(ms.model_dump_json(indent=1), encoding="utf-8")
+        print(json.dumps(ms.summary()))
 
 
 def _table(args) -> None:
@@ -100,12 +148,20 @@ def main() -> None:
     r.add_argument("--concurrency", type=int, default=4)
     r.add_argument("--context-size", type=int, default=None, help="override the profile's context window (tokens)")
     r.add_argument("--tool-protocol", default=None, help="override the profile's transport, e.g. anthropic-cli")
+    r.add_argument("--only", default="", help="comma list of slice ids to (re)run; merges into score.json")
+    rs = sub.add_parser("rescore")
+    rs.add_argument("dirs", nargs="+")
+    rs.add_argument("--cases", required=True)
+    rs.add_argument("--ground-truth", required=True)
+    rs.add_argument("--es-url", default="http://localhost:9200")
     t = sub.add_parser("table")
     t.add_argument("dirs", nargs="+")
     t.add_argument("--ceiling", default=None)
     a = ap.parse_args()
     if a.cmd == "run":
         asyncio.run(_run(a))
+    elif a.cmd == "rescore":
+        _rescore(a)
     else:
         _table(a)
 

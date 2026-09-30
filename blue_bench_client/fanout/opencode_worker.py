@@ -229,9 +229,14 @@ async def run_worker_opencode(
             reason = _terminal_reason(events)
             if timed_out:
                 trace.error = f"TransportError: opencode run timed out after {RUN_TIMEOUT_S}s"
-            elif reason != "stop" or not trace.final_answer.strip():
+            elif reason != "stop":
                 trace.error = (f"TransportError: opencode run ended without completing "
                                f"(terminal reason {reason!r}, exit {rc}): {stderr_tail.strip()[-200:]}")
+            elif not trace.final_answer.strip():
+                # A clean stop with nothing said is the model's doing, not the
+                # provider's: no retry, and it scores as an unparsed report.
+                trace.error = "ModelError: the run stopped normally with an empty final answer"
+                break
             else:
                 trace.error = None
                 break

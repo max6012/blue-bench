@@ -127,12 +127,50 @@ class CaseScore(BaseModel):
     """Grounded citations of an expected incident's records."""
     expected_ids: int = 0
     ungrounded_citations: int = 0
+    alert_confidence: float = 0.0
+    """The confidence this slice would alert at. Attack slice: the highest
+    confidence among findings that cite an expected incident's record (0 when
+    none does -- a miss). Clean slice: the highest confidence among its
+    findings (0 when it reported nothing). Threshold-free input to
+    :attr:`ModelScore.separation`."""
+    by_threshold: dict[str, bool] = Field(default_factory=dict)
+    """``correct`` recomputed at each cut-off in SWEEP, keyed by str(cut-off)."""
     turns_used: int = 0
     error: str | None = None
 
 
+SWEEP = (0.3, 0.5, 0.7, 0.9)
+"""Confidence cut-offs the accuracy sweep reports. A single cut-off rewards
+models whose calibration happens to match it: at 0.5 Opus 4.7 scored 50%, at
+0.9 it scored 92% on the same reports (2026-09-30)."""
+
+
 def score_case(case: SliceCase, report: WorkerReport | None, tool_results: Iterable[str],
                gt: dict[str, set[str]], *, error: str | None = None) -> CaseScore:
+    """Score one case at CONFIDENT, plus the sweep and the alert confidence."""
+    main = _score_at(case, report, tool_results, gt, CONFIDENT, error=error)
+    tr = list(tool_results)
+    main.by_threshold = {str(t): _score_at(case, report, tr, gt, t, error=error).correct for t in SWEEP}
+    main.alert_confidence = _alert_confidence(case, report, tr, gt)
+    return main
+
+
+def _alert_confidence(case: SliceCase, report: WorkerReport | None, tool_results: list[str],
+                      gt: dict[str, set[str]]) -> float:
+    if report is None:
+        return 0.0
+    seen = seen_ids(tool_results)
+    expected = set().union(*(gt.get(i, set()) for i in case.expect_incidents)) if case.expect_incidents else set()
+    best = 0.0
+    for f in report.findings:
+        grounded = {p.doc_id for p in f.pointers if p.doc_id} & seen
+        if case.is_clean or grounded & expected:
+            best = max(best, f.confidence)
+    return best
+
+
+def _score_at(case: SliceCase, report: WorkerReport | None, tool_results: Iterable[str],
+              gt: dict[str, set[str]], threshold: float, *, error: str | None = None) -> CaseScore:
     sid = case.slice.id
     expected = set().union(*(gt.get(i, set()) for i in case.expect_incidents)) if case.expect_incidents else set()
     missing = [i for i in case.expect_incidents if i not in gt]
@@ -151,7 +189,7 @@ def score_case(case: SliceCase, report: WorkerReport | None, tool_results: Itera
         cited = {p.doc_id for p in f.pointers if p.doc_id}
         ungrounded |= cited - seen
         grounded = cited & seen
-        if f.confidence < CONFIDENT:
+        if f.confidence < threshold:
             continue
         confident += 1
         hits |= grounded & expected
@@ -181,6 +219,22 @@ class ModelScore(BaseModel):
         sc = self.scored
         return sum(c.correct for c in sc) / len(sc) if sc else 0.0
 
+    @property
+    def separation(self) -> float | None:
+        """P(a random attack slice alerts higher than a random clean slice),
+        ties counted half. Threshold-free: 1.0 separates perfectly, 0.5 is a
+        coin flip. None when either class is empty."""
+        atk = [c.alert_confidence for c in self.scored if not c.clean]
+        cln = [c.alert_confidence for c in self.scored if c.clean]
+        if not atk or not cln:
+            return None
+        wins = sum(1.0 if a > b else 0.5 if a == b else 0.0 for a in atk for b in cln)
+        return wins / (len(atk) * len(cln))
+
+    def accuracy_at(self, t: float) -> float:
+        sc = self.scored
+        return sum(c.by_threshold.get(str(t), False) for c in sc) / len(sc) if sc else 0.0
+
     def summary(self) -> dict:
         atk = [c for c in self.scored if not c.clean]
         cln = [c for c in self.scored if c.clean]
@@ -188,6 +242,8 @@ class ModelScore(BaseModel):
         return {
             "model": self.model,
             "accuracy": round(self.accuracy, 3),
+            "separation": None if self.separation is None else round(self.separation, 3),
+            "sweep": {str(t): round(self.accuracy_at(t), 3) for t in SWEEP},
             "attack_detected": f"{sum(c.correct for c in atk)}/{len(atk)}",
             "clean_correct": f"{sum(c.correct for c in cln)}/{len(cln)}",
             "anomalies_flagged": f"{sum(c.correct for c in anm)}/{len(anm)}",
@@ -199,17 +255,22 @@ class ModelScore(BaseModel):
 
 
 def table(scores: list[ModelScore], ceiling: str | None = None) -> str:
-    """Markdown table; ``ceiling`` names the model whose accuracy is 100%."""
-    ref = next((s.accuracy for s in scores if s.model == ceiling), None)
-    head = ["model", "accuracy", "% of ceiling", "attack detected", "clean correct",
-            "anomalies flagged (not scored)", "false findings", "ungrounded cites", "unparsed",
-            "provider failures (excluded)"]
+    """Markdown table. Headline is ``separation`` (threshold-free); accuracy is
+    shown at every cut-off in SWEEP and its worst case. ``ceiling`` names the
+    model whose separation is 100%."""
+    ref = next((s.separation for s in scores if s.model == ceiling), None)
+    head = (["model", "separation", "% of ceiling", "worst acc"] + [f"acc@{t}" for t in SWEEP]
+            + ["attacks @0.5", "clean @0.5", "anomalies flagged (not scored)",
+               "ungrounded cites", "unparsed", "provider failures (excluded)"])
     rows = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
-    for s in sorted(scores, key=lambda s: -s.accuracy):
+    for s in sorted(scores, key=lambda s: -(s.separation or 0)):
         m = s.summary()
-        pct = f"{100 * s.accuracy / ref:.0f}%" if ref else "—"
+        sep = s.separation
+        pct = f"{100 * sep / ref:.0f}%" if ref and sep is not None else "—"
+        accs = [s.accuracy_at(t) for t in SWEEP]
         rows.append("| " + " | ".join(str(x) for x in (
-            m["model"], m["accuracy"], pct, m["attack_detected"], m["clean_correct"],
-            m["anomalies_flagged"], m["false_findings"], m["ungrounded_citations"], m["unparsed_reports"],
-            m["infra_errors"])) + " |")
+            [m["model"], "—" if sep is None else f"{sep:.2f}", pct, f"{min(accs):.0%}"]
+            + [f"{a:.0%}" for a in accs]
+            + [m["attack_detected"], m["clean_correct"], m["anomalies_flagged"],
+               m["ungrounded_citations"], m["unparsed_reports"], m["infra_errors"]])) + " |")
     return "\n".join(rows)

@@ -60,8 +60,10 @@ def test_table_reports_percent_of_ceiling():
     b = ws.ModelScore(model="small", cases=[ws.score_case(_case("s1", ["apt-1"]), _report("s1", nothing=True), [], GT),
                                             ws.score_case(_case("s2"), _report("s2", nothing=True), [], GT)])
     t = ws.table([a, b], ceiling="opus")
-    assert "| opus | 1.0 | 100% | 1/1 | 1/1 | 0/0 |" in t
-    assert "| small | 0.5 | 50% | 0/1 | 1/1 | 0/0 |" in t
+    # opus alerts 0.9 on the attack and 0 on the clean slice: perfect separation.
+    assert "| opus | 1.00 | 100% | 100% |" in t
+    # small reports nothing anywhere: every slice alerts at 0, a coin flip.
+    assert "| small | 0.50 | 50% | 50% |" in t
 
 
 def test_load_ground_truth_reads_where_doc_id(tmp_path):
@@ -99,3 +101,18 @@ def test_corpus_original_slices_are_shifted_by_the_anchor_and_hash_checked(tmp_p
         ws.load_cases(p, {**anchor, "build_hash": "efe42d49"})
     with pytest.raises(ValueError, match="anchor is required"):
         ws.load_cases(p, None)
+
+
+def test_separation_is_threshold_free_and_penalises_misses():
+    """Same ranking whatever the cut-off: a model that rates attacks 0.9 and
+    admin noise 0.6 separates perfectly even though 0.6 is a false alarm at
+    the 0.5 cut-off; a missed attack alerts at 0 and loses its comparisons."""
+    over = ws.ModelScore(model="over", cases=[
+        ws.score_case(_case("s1", ["apt-1"]), _report("s1", (0.9, ["a1"])), seen("a1"), GT),
+        ws.score_case(_case("s2"), _report("s2", (0.6, ["noise"])), seen("noise"), GT)])
+    assert over.separation == 1.0 and over.accuracy == 0.5
+    assert over.accuracy_at(0.7) == 1.0
+    miss = ws.ModelScore(model="miss", cases=[
+        ws.score_case(_case("s1", ["apt-1"]), _report("s1", nothing=True), [], GT),
+        ws.score_case(_case("s2"), _report("s2", (0.2, ["noise"])), seen("noise"), GT)])
+    assert miss.separation == 0.0

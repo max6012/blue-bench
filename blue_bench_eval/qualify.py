@@ -62,7 +62,14 @@ class PreflightError(RuntimeError):
     """
 
 
-def _preflight_gate(config_path: Path | None, prompts_dir: Path, prompts_prefix: str) -> None:
+def _preflight_gate(
+    config_path: Path | None,
+    prompts_dir: Path,
+    prompts_prefix: str,
+    *,
+    reanchor: bool = True,
+    reanchor_dry_run: bool = False,
+) -> None:
     """Fail-closed readiness check, run ONCE at the start of a corpus run.
 
     Prints the full preflight summary and raises ``PreflightError`` if the SIEM
@@ -70,9 +77,19 @@ def _preflight_gate(config_path: Path | None, prompts_dir: Path, prompts_prefix:
     Per-prompt probes are ``critical=True`` in the preflight module — a single
     legitimately-sparse prompt aborts the whole run; that is the deliberate
     fail-closed posture, and ``--skip-preflight`` is the escape hatch.
+
+    ``reanchor`` defaults ON for slate runs: a corpus decays out of the tools'
+    default lookback within hours of ingest, and a guard that has to be
+    remembered is the one that voided a whole set of grades. With it on, a
+    stale corpus is shifted in place to end at now before any model call is
+    spent. ``reanchor_dry_run`` prints the delta it would apply and then fails
+    the gate (the corpus is still stale), so nothing runs on it.
     """
     cfg_path = config_path or (REPO / "config.yaml")
-    report = run_preflight(cfg_path, prompts_dir=prompts_dir, prompts_prefix=prompts_prefix)
+    report = run_preflight(
+        cfg_path, prompts_dir=prompts_dir, prompts_prefix=prompts_prefix,
+        reanchor=reanchor, reanchor_dry_run=reanchor_dry_run,
+    )
     print(report.summary())
     if not report.ok:
         raise PreflightError(
@@ -139,6 +156,8 @@ async def run_corpus(
     phase: str = "2",
     profile_override: "ModelProfile | None" = None,
     skip_preflight: bool = False,
+    reanchor: bool = True,
+    reanchor_dry_run: bool = False,
 ) -> Path:
     """Execute the prompt corpus under `profile_name` and return the run dir.
 
@@ -152,7 +171,10 @@ async def run_corpus(
     # any model calls are spent, scoped to this phase's prompt tier. Aborts the
     # whole run on failure unless the operator explicitly opts out.
     if not skip_preflight:
-        _preflight_gate(config_path, prompts_dir, prefix)
+        _preflight_gate(
+            config_path, prompts_dir, prefix,
+            reanchor=reanchor, reanchor_dry_run=reanchor_dry_run,
+        )
 
     profile = profile_override or load_profile(profiles_dir / f"{profile_name}.yaml")
     specs = _select(load_all(prompts_dir, prefix=prefix), tag=tag, limit=limit)
@@ -247,6 +269,17 @@ def main() -> None:
         action="store_true",
         help="Skip the SIEM-readiness gate (intentional dry runs only)",
     )
+    p.add_argument(
+        "--reanchor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Shift a stale corpus in place to end at now before running (default: on)",
+    )
+    p.add_argument(
+        "--reanchor-dry-run",
+        action="store_true",
+        help="Print the re-anchor delta that would be applied, write nothing, and stop",
+    )
     args = p.parse_args()
     asyncio.run(
         run_corpus(
@@ -256,6 +289,8 @@ def main() -> None:
             config_path=args.config,
             phase=args.phase,
             skip_preflight=args.skip_preflight,
+            reanchor=args.reanchor,
+            reanchor_dry_run=args.reanchor_dry_run,
         )
     )
 

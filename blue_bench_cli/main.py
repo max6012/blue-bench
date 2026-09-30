@@ -6,6 +6,7 @@ Commands:
     blue-bench diff <run-a> <run-b>
     blue-bench analyst  --profile <name> [--tools cat,cat] [--prompt "..."] ...
     blue-bench server [--config PATH]   # shortcut for `python -m blue_bench_mcp.server`
+    blue-bench preflight [--reanchor] [--dry-run]   # SIEM readiness gate, standalone
 
 Keep this file thin — logic lives in blue_bench_eval.qualify, aggregate, and
 blue_bench_cli.analyst; this module just shells commands through typer for
@@ -42,6 +43,8 @@ def qualify(
     openai: bool = typer.Option(False, "--openai", help="Run --profile as a model id served behind an OpenAI-compatible endpoint (vLLM/TGI/SGLang/Ollama /v1, e.g. a Cray) via a generic openai-native profile (needs OPENAI_BASE_URL; OPENAI_API_KEY only where the endpoint authenticates)"),
     no_coaching: bool = typer.Option(False, "--no-coaching", help="Cloud baseline arm: plain investigation guidelines, no analyst-method coaching (for a with/without-coaching A/B)"),
     skip_preflight: bool = typer.Option(False, "--skip-preflight", help="Skip the SIEM-readiness gate that refuses to grade an empty/stale Elasticsearch (intentional dry runs only)"),
+    reanchor: bool = typer.Option(True, "--reanchor/--no-reanchor", help="When the corpus has decayed out of the tools' lookback, shift it in place to end at now before running (default: on)"),
+    reanchor_dry_run: bool = typer.Option(False, "--reanchor-dry-run", help="Print the re-anchor delta that would be applied, write nothing, and stop"),
 ) -> None:
     """Run the prompt corpus under PROFILE and write traces.
 
@@ -71,7 +74,8 @@ def qualify(
     try:
         run_dir = asyncio.run(
             run_corpus(profile, tag=tag, limit=limit, config_path=config, phase=phase,
-                       profile_override=override, skip_preflight=skip_preflight)
+                       profile_override=override, skip_preflight=skip_preflight,
+                       reanchor=reanchor, reanchor_dry_run=reanchor_dry_run)
         )
     except PreflightError as e:
         typer.echo(f"\n{e}", err=True)
@@ -176,6 +180,25 @@ def diff(
         typer.echo(f"Diff written: {out}")
     else:
         typer.echo(md)
+
+
+@app.command()
+def preflight(
+    config: Path = typer.Option(DEFAULT_CONFIG, "--config", "-c", help="MCP server config.yaml"),
+    prompts: Path = typer.Option(None, "--prompts", help="Prompts dir (enables the per-prompt probes)"),
+    phase: str = typer.Option("", "--phase", help="Scope the probes to one phase's prompts (1, 2 or 3)"),
+    reanchor: bool = typer.Option(False, "--reanchor/--no-reanchor", help="Shift a stale corpus in place to end at now (default: off here, on for qualify)"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="With --reanchor: print the delta it would apply, write nothing"),
+) -> None:
+    """Run the fail-closed SIEM readiness checks on their own; exit 1 when not ok."""
+    from blue_bench_eval.preflight import run_preflight
+    report = run_preflight(
+        config, prompts_dir=prompts, prompts_prefix=f"p{phase}-" if phase else "p",
+        reanchor=reanchor, reanchor_dry_run=dry_run,
+    )
+    typer.echo(report.summary())
+    if not report.ok:
+        raise typer.Exit(code=1)
 
 
 app.command("analyst", help="Interactive analyst console — same controls as the browser frontend.")(analyst_cli)

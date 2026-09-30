@@ -35,6 +35,10 @@ class ElasticConfig(BaseModel):
     # Multi-index pattern covering Suricata + Wazuh + Zeek. ES accepts comma-separated.
     # Concrete index names set by scripts/seed_es.py; match them verbatim here.
     index_pattern: str = "logstash-suricata-alerts,wazuh-alerts,zeek-conn"
+    # OT asset inventory (one record per OT device, no @timestamp). Read by
+    # list_assets. A corpus built before the inventory existed simply has no
+    # such index, and the tool says so rather than erroring.
+    asset_index: str = "ot-assets"
     verify_ssl: bool = False
     user: str = ""
     password: str = ""
@@ -150,8 +154,25 @@ class TransportConfig(BaseModel):
     sse: SseTransportConfig = Field(default_factory=SseTransportConfig)
 
 
+class PreflightConfig(BaseModel):
+    """Readiness-gate settings (blue_bench_eval.preflight / .reanchor)."""
+    # Re-anchor the corpus when its window end has fallen more than this far
+    # behind now. The registered MCP surface (blue_bench_mcp/tools/, what a
+    # model calls) looks back 240 minutes by default, so at a 4h gap a
+    # default-window query already sees nothing; 2h keeps at least half of
+    # that window populated at the start of a run. The direct tool_classes/
+    # path defaults some tools to 60 minutes and is blind above a 1h gap --
+    # lower this to 1 if a run drives that path. External agentic tools
+    # (Crogl writes its own queries with 30-180-day lookbacks) tolerate days
+    # of decay; ours do not, so the tolerance is set for ours.
+    reanchor_tolerance_hours: int = 2
+    # Index holding the persisted corpus anchor (bb-meta/corpus-anchor).
+    anchor_index: str = "bb-meta"
+
+
 class ServerConfig(BaseModel):
     limits: LimitsConfig = Field(default_factory=LimitsConfig)
+    preflight: PreflightConfig = Field(default_factory=PreflightConfig)
     evidence: EvidenceConfig = Field(default_factory=EvidenceConfig)
     elastic: ElasticConfig = Field(default_factory=ElasticConfig)
     zeek: ZeekConfig = Field(default_factory=ZeekConfig)

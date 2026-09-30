@@ -64,6 +64,12 @@ from typing import Any, Callable, Iterable
 
 import httpx
 
+# The corpus anchor (bb-meta/corpus-anchor) and the ingest lock live in
+# blue_bench_eval.reanchor, which also re-anchors the corpus in place later.
+# This script is run as a file, so the repo root is not on sys.path by itself.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from blue_bench_eval.reanchor import ESAdmin, ReanchorError, write_ingest_anchor  # noqa: E402
+
 log = logging.getLogger("ingest_ef")
 
 EVTX_NS = "{http://schemas.microsoft.com/win/2004/08/events/event}"
@@ -110,6 +116,10 @@ WAZUH_INDEX = "wazuh-alerts"
 
 # Merged OT / IT-OT-bridge telemetry (EF-P4 merger output, NDJSON).
 OT_HOSTS_INDEX = "ot-hosts"
+# OT asset inventory: one standing record per OT device, the only place in the
+# corpus that joins an OT device name to its address. Not telemetry -- see
+# blue_bench_generators/merge/asset_inventory.py.
+OT_ASSETS_INDEX = "ot-assets"
 # Bridge events are written per (source, log); route by source so the IT-side
 # of a bridge session lands in the IT index and the OT-side in an OT index.
 _BRIDGE_INDEX = {
@@ -405,6 +415,29 @@ def parse_ot_ndjson(path: Path) -> Iterable[tuple[dict, datetime | None, str | N
             yield rec, when, None
 
 
+def parse_ot_assets(path: Path) -> Iterable[tuple[dict, None, str | None]]:
+    """OT asset inventory NDJSON. No time; ``fqdn`` is the native id.
+
+    No ``@timestamp`` on purpose: an inventory is a standing fact about the
+    plant, not an observation at a moment. A stamp would be shifted by
+    ``--anchor-end-to-now`` and would hide every device from any query whose
+    window does not happen to contain it.
+
+    The FQDN as native id goes through ``doc_id`` like any other native id
+    (Sysmon ``EventRecordID``, Zeek ``uid``) -- it is not a second id scheme.
+    It is the right one here because one record per device is an invariant: if
+    two records ever claim the same FQDN, the ingest's overwrite check fires
+    and says the inventory is wrong, instead of quietly storing both.
+    """
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            rec = json.loads(line)
+            yield rec, None, rec.get("fqdn") or None
+
+
 # --- timestamp helpers --------------------------------------------------------
 
 _MONTHS = {m: i for i, m in enumerate(
@@ -515,6 +548,10 @@ def route(relpath: str) -> tuple[str, ParserFn] | None:
         return f"ot-{name[:-7]}", parse_ot_ndjson            # ot/modbus.ndjson -> ot-modbus
     if top == "ot_hosts" and name.endswith(".ndjson"):
         return OT_HOSTS_INDEX, parse_ot_ndjson
+    # The asset inventory gets its own tree and its own parser: it is not an
+    # event stream (no ts, never subsampled) and its records are keyed by FQDN.
+    if top == "ot_assets" and name.endswith(".ndjson"):
+        return OT_ASSETS_INDEX, parse_ot_assets
     # benign Suricata FP noise wired into the merge (suricata/eve.ndjson)
     if top == "suricata" and name.endswith(".ndjson"):
         return LOGSTASH_SURICATA_INDEX, parse_ot_ndjson
@@ -670,6 +707,16 @@ def _bulk(url: str, index: str, docs: list[tuple[str, dict]], *, batch: int = 20
 _OT_SAMPLE_INDICES = {"ot-modbus", "ot-iec104", "ot-dnp3", "ot-s7comm", "ot-conn"}
 
 
+def _corpus_identity(ef_dir: Path) -> tuple[str | None, str | None]:
+    """(build_hash, tier) from corpus-manifest.yaml, or (None, None) for a bare EF dir."""
+    man = ef_dir / "corpus-manifest.yaml"
+    if not man.is_file():
+        return None, None
+    import yaml
+    m = yaml.safe_load(man.read_text()) or {}
+    return m.get("build_hash"), m.get("tier")
+
+
 def _corpus_window(ef_dir: Path) -> tuple[datetime | None, datetime | None]:
     """The corpus collection window (UTC), read from GROUND_TRUTH.json (EF) or
     the merge manifest — NOT by scanning events. Used to anchor timestamps and
@@ -724,6 +771,62 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     buffers: dict[str, list[tuple[str, dict]]] = defaultdict(list)
     created: set[str] = set()
     ot_seen: dict[str, int] = defaultdict(int)
+
+    # Lock: a re-anchor (blue_bench_eval.reanchor) that ran mid-ingest would
+    # shift the half that is in and not the half still coming. It refuses
+    # while this document exists. Cleared in the finally below; a crashed
+    # ingest leaves it, and the re-anchor says so and how to clear it.
+    # Both meta writes are best-effort: if ES cannot take them the bulk
+    # ingest fails a moment later anyway, and a missing anchor is caught by
+    # preflight (fail-closed, with the bootstrap command) rather than here.
+    admin = ESAdmin(es_url)
+    try:
+        admin.write_ingest_lock({
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "ef_dir": str(ef_dir),
+            "pid": __import__("os").getpid(),
+            "anchor_end_to_now": bool(anchor_end_to_now),
+        })
+    except ReanchorError as e:
+        log.error("could not write the ingest lock (%s); a concurrent re-anchor would not be refused", e)
+    try:
+        _ingest_body(ef_dir, walk_root, es_url, batch, ot_sample_rate, delta,
+                     counts, buffers, created, ot_seen)
+    finally:
+        try:
+            admin.clear_ingest_lock()
+        except ReanchorError as e:
+            log.error("could not clear the ingest lock (%s); re-anchor will refuse until it is deleted", e)
+    if _OVERWRITTEN:
+        # Before the anchor is written: a corpus that destroyed events must not
+        # get a valid-looking anchor that lets preflight pass it.
+        total = sum(_OVERWRITTEN.values())
+        raise RuntimeError(
+            f"{total} documents overwrote an existing _id across "
+            f"{len(_OVERWRITTEN)} index(es): {dict(_OVERWRITTEN)}. That many events "
+            f"were silently destroyed and any ground-truth pointer at them is "
+            f"orphaned. This corpus is NOT usable for grading (issue #31)."
+        )
+    if win_end is not None:
+        # The anchor is what preflight measures decay against and what the
+        # re-anchor advances. Written for an un-anchored ingest too (delta
+        # None): the window end is still the truth, and --reanchor can then
+        # bring the corpus to now instead of a re-ingest.
+        build_hash, tier = _corpus_identity(ef_dir)
+        try:
+            doc = write_ingest_anchor(admin, window_start=win_start, window_end=win_end,
+                                      delta=delta, build_hash=build_hash, tier=tier)
+            log.info("corpus anchor written: current_window_end=%s", doc.current_window_end)
+        except ReanchorError as e:
+            log.error("could not write bb-meta/corpus-anchor (%s); preflight will ask for --bootstrap-anchor", e)
+    return dict(counts)
+
+
+def _ingest_body(ef_dir: Path, walk_root: Path, es_url: str, batch: int, ot_sample_rate: int,
+                 delta: timedelta | None, counts: dict, buffers: dict, created: set,
+                 ot_seen: dict) -> None:
+    """The streaming pass itself; split out so ingest() can hold the lock around it."""
+    win_start, win_end = _corpus_window(ef_dir)
 
     def _flush(index: str) -> None:
         docs = buffers[index]
@@ -798,15 +901,6 @@ def ingest(ef_dir: Path, es_url: str, *, anchor_end_to_now: bool, batch: int = 2
     if win_start and win_end:
         log.info("corpus window: %s .. %s (shift=%s)", win_start.isoformat(), win_end.isoformat(),
                  "end->now" if delta else "none")
-    if _OVERWRITTEN:
-        total = sum(_OVERWRITTEN.values())
-        raise RuntimeError(
-            f"{total} documents overwrote an existing _id across "
-            f"{len(_OVERWRITTEN)} index(es): {dict(_OVERWRITTEN)}. That many events "
-            f"were silently destroyed and any ground-truth pointer at them is "
-            f"orphaned. This corpus is NOT usable for grading (issue #31)."
-        )
-    return dict(counts)
 
 
 def main(argv: list[str] | None = None) -> int:

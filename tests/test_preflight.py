@@ -131,6 +131,15 @@ class FakeES:
         # single index passed.
         return self._probe_map.get(indices[0], 0)
 
+    def read_anchor(self):
+        # No bb-meta document: with reanchor off (the default here) that is a
+        # non-critical note, so these scenarios keep testing checks 1-3 and 5.
+        # tests/test_reanchor.py covers the anchor check itself.
+        return None
+
+    def reanchor(self, *, tolerance_hours: float, dry_run: bool):
+        raise AssertionError("reanchor must not be called with no anchor")
+
 
 def _check(report: PreflightReport, name: str):
     for c in report.checks:

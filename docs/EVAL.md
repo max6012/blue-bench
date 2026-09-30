@@ -123,6 +123,67 @@ blue-bench aggregate results/<run-dir>/
 
 The BLUF (`results/<run-dir>/BLUF.md`) summarizes overall%, per-dimension%, pass/fail verdict, and per-prompt breakdown. The `scored/` directory holds the full judge output with per-dimension justifications.
 
+### Preflight: the SIEM-readiness gate, and re-anchoring the corpus
+
+`qualify` runs `blue_bench_eval.preflight` before the first model call and
+refuses to run when it is not ok. It checks that Elasticsearch is reachable,
+that every index the slate reads exists and has documents, that each index's
+max `@timestamp` is within 48h of now, that the corpus anchor is fresh (below),
+and that every prompt's indices have data in a now-relative window.
+
+**The corpus decays.** Ingest (`scripts/ingest_ef.py --anchor-end-to-now`)
+shifts the whole corpus so it ends at ingest time, and the tools look back from
+*now* (240 minutes by default). Hours after ingest the default lookback already
+returns nothing; days after, every prompt does. That is what voided the earlier
+phase-3 grades. Re-ingesting takes hours, so preflight fixes it in place:
+
+```bash
+# what qualify does by default (--reanchor is on for slate runs)
+blue-bench preflight --reanchor            # shift a stale corpus to end at now
+blue-bench preflight --reanchor --dry-run  # print the delta it would apply
+blue-bench qualify --profile X --no-reanchor   # refuse instead of fixing
+python -m blue_bench_eval.reanchor --config config.yaml --show-anchor
+```
+
+The re-anchor adds one whole-second delta to `@timestamp` and to every embedded
+clock (`ts`, `timestamp_ms`, `UtcTime`, `TimeCreated`, `EventTime`,
+`timestamp`) with one `_update_by_query` per index, exactly as ingest shifts
+them; `tests/test_reanchor.py` proves the Painless script and the Python shift
+agree field by field. Document ids do not change, so ground-truth pointers keep
+resolving. On the L corpus (11.9M documents) it takes minutes, not hours.
+
+"Now" is measured against a persisted anchor, `bb-meta/corpus-anchor`, not
+against `max(@timestamp)`: a few benign records sit up to 3h in the future of
+the real tail (generator clock skew), so the max would drift the corpus early on
+every run. Ingest writes the anchor; each re-anchor advances it. A corpus
+ingested before the anchor existed gets one from
+
+```bash
+python -m blue_bench_eval.reanchor --config config.yaml --bootstrap-anchor \
+    --manifest /path/to/corpus-manifest.yaml
+```
+
+which takes the median of the large indices' max `@timestamp` (robust to the
+skewed records), prints the derivation, and refuses if the indices disagree by
+more than a few hours -- that is a partially ingested corpus, not skew.
+
+The tolerance is `preflight.reanchor_tolerance_hours` in `config.yaml`
+(default 2). The registered MCP surface -- what a model calls -- looks back 4h
+by default, so at a 4h gap a default query sees nothing; 2h keeps half the
+window populated at the start of a run. The direct `tool_classes/` path
+defaults some tools to 60 minutes (see "Two tool surfaces" below) and is blind
+above a 1h gap; lower the tolerance if a run drives that path. External agentic
+tools (Crogl writes its own queries with 30-180-day lookbacks) tolerate days of
+decay; ours do not, so the tolerance is set for ours. A re-anchor of the L
+corpus costs about seven minutes, paid by every slate run whose gap exceeds the
+tolerance.
+
+What it will not do: run while an ingest holds `bb-meta/ingest-lock`, while
+another re-anchor is in progress, or while an index reports in-flight writes.
+It is not atomic: if any index reports version conflicts or failures the run
+raises and says so -- the corpus is then mixed, and the remedy is re-ingest,
+not a re-run (which would double-shift the documents that moved).
+
 ## Interpreting results
 
 A low `tool_usage` score usually means a coaching or schema problem — the model either doesn't know the tools exist or misforms arguments. Fix in `prompts/coaching/<model>.md` or check the tool schema.
@@ -233,9 +294,10 @@ Two consequences for grading:
   `2026-09-01T22:05`, newest benign `2026-09-09T17:35`), so it is the first
   thing the size cut discards. A model can issue exactly the right query and
   still not see the evidence.
-- **At the default `timerange_minutes` the same call returns zero records,**
-  because the corpus is not anchored to now. That is the same time-anchoring
-  signature that voided the earlier Phase-3 grades.
+- **At the default `timerange_minutes` the same call returned zero records**
+  when this was measured, because the corpus had decayed out of the lookback.
+  That is the same time-anchoring signature that voided the earlier Phase-3
+  grades; preflight's re-anchor step (above) now closes it before a run.
 
 #41 fixed parseability of a truncated response; the *effective result window* is
 the other half and is not addressed. Until it is, treat any per-prompt

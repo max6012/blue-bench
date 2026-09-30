@@ -9,6 +9,7 @@ shim), writing their events as NDJSON into the corpus tree:
     <ef_dir>/ot/<log>.ndjson          modbus/dnp3/iec104/s7comm/conn (OT protocols)
     <ef_dir>/ot_hosts/<log>.ndjson    hmi/historian/eng-ws/ot-auth host logs
     <ef_dir>/bridge/<source>.<log>.ndjson   IT/OT bridge sessions, by routed source
+    <ef_dir>/ot_assets/assets.ndjson  OT asset inventory (name <-> address join)
 
 A ``corpus-manifest.yaml`` records the build with a content ``build_hash`` over
 every telemetry file (EF + OT + bridge), excluding the EF metadata files whose
@@ -32,6 +33,7 @@ import yaml
 from blue_bench_generators import it_ot_bridge, ot_hosts, ot_protocols
 from blue_bench_generators.it_baseline import suricata_noise
 from blue_bench_generators.it_baseline.composer import _sha256_file
+from blue_bench_generators.merge.asset_inventory import write_inventory
 from blue_bench_generators.merge.scenario_topology import shim_from_scenario
 
 log = logging.getLogger(__name__)
@@ -43,7 +45,7 @@ _EF_META = {"GROUND_TRUTH.json", "GROUND_TRUTH.md", "OUTPUT_TARGET.txt",
 
 # Managed subdirs this merger writes — wiped before write so a re-merge leaves
 # no orphan OT/bridge files.
-_MANAGED = ("ot", "ot_hosts", "bridge", "suricata")
+_MANAGED = ("ot", "ot_hosts", "bridge", "suricata", "ot_assets")
 
 
 class _FPRates:
@@ -235,6 +237,11 @@ def merge_corpus(
          if e.get("event_type") == "alert"),
         ef_dir / "suricata")
 
+    # The OT asset inventory: the only record in the corpus that joins an OT
+    # device name to its address. Written BEFORE the content hash so it is part
+    # of the build the manifest attests to.
+    n_assets = write_inventory(ef_dir, tier, seed)
+
     build_hash, files = _content_hash(ef_dir)
     manifest = {
         "schema_version": 1,
@@ -249,12 +256,14 @@ def merge_corpus(
             "ot_hosts": {"events": n_oth},
             "bridge": {"events": n_bridge, "sources": sorted(bridge_by_source)},
             "suricata_fp": {"events": n_sur},
+            # Not events: one standing record per OT device.
+            "ot_assets": {"devices": n_assets},
         },
         "file_count": len(files),
         "total_bytes": sum(f["bytes"] for f in files),
     }
     (ef_dir / "corpus-manifest.yaml").write_text(
         yaml.safe_dump(manifest, sort_keys=False), encoding="utf-8", newline="")
-    log.info("merge: ot=%d ot_hosts=%d bridge=%d suricata_fp=%d build_hash=%s",
-             n_ot, n_oth, n_bridge, n_sur, build_hash[:12])
+    log.info("merge: ot=%d ot_hosts=%d bridge=%d suricata_fp=%d assets=%d build_hash=%s",
+             n_ot, n_oth, n_bridge, n_sur, n_assets, build_hash[:12])
     return manifest

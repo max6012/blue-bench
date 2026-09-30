@@ -18,7 +18,15 @@ order of how early they bite:
      selected slate reads is within ``now_tolerance_hours`` of now, checked
      per-index. THIS is the check that catches the un-anchored-ingest bug — a
      stale max ``@timestamp`` means lookback-from-now queries miss everything.
-  4. (optional) Per-prompt probe: for each prompt, a cheap now-relative
+  4. Corpus anchor is fresh: the persisted anchor (``bb-meta/corpus-anchor``,
+     see ``blue_bench_eval.reanchor``) is within ``reanchor_tolerance_hours``
+     of now. Check 3 tolerates 48h of decay; the tools' default lookback is
+     4h, so a corpus that passes check 3 can still be invisible to every
+     default-window query. With ``reanchor=True`` a stale anchor is FIXED here
+     -- the whole corpus is shifted in place to end at now, and check 3 is
+     re-run on the shifted corpus. With ``reanchor=False`` the check fails and
+     says which command fixes it.
+  5. (optional) Per-prompt probe: for each prompt, a cheap now-relative
      match-over-time-window count on the indices that prompt's expected_tools
      read, confirming the SIEM is not empty for something the prompt could
      ground on. This is the only coverage for host-only indices (sysmon) that
@@ -45,6 +53,8 @@ from typing import Protocol
 
 import httpx
 
+from blue_bench_eval import reanchor as _reanchor
+from blue_bench_eval.reanchor import AnchorDoc, ReanchorError, ReanchorResult
 from blue_bench_mcp.config import ServerConfig, load_config
 
 # --- tool -> ES index resolution --------------------------------------------
@@ -175,6 +185,12 @@ class ESClient(Protocol):
     def probe_hits(self, indices: list[str], window_hours: int) -> int:
         """Count docs in [now-window_hours, now] across indices (0 if none)."""
 
+    def read_anchor(self) -> AnchorDoc | None:
+        """The persisted corpus anchor (bb-meta/corpus-anchor), or None if absent."""
+
+    def reanchor(self, *, tolerance_hours: float, dry_run: bool) -> ReanchorResult | None:
+        """Shift the corpus to now; None when already within tolerance."""
+
 
 class HttpxESClient:
     """Real ESClient over sync httpx — same dependency as scripts/ingest_ef.py.
@@ -194,6 +210,9 @@ class HttpxESClient:
             else None
         )
         self.timeout = timeout if timeout is not None else float(cfg.limits.query_timeout)
+        self._admin = _reanchor.ESAdmin(
+            self.url, auth=self._auth, verify_ssl=self.verify_ssl, timeout=self.timeout
+        )
 
     def _client(self, timeout: float | None = None) -> httpx.Client:
         return httpx.Client(
@@ -251,6 +270,18 @@ class HttpxESClient:
         }
         data = self._search(indices, body)
         return int(data.get("hits", {}).get("total", {}).get("value", 0))
+
+    def read_anchor(self) -> AnchorDoc | None:
+        try:
+            return self._admin.read_anchor()
+        except ReanchorError as e:
+            raise ESError(str(e)) from e
+
+    def reanchor(self, *, tolerance_hours: float, dry_run: bool) -> ReanchorResult | None:
+        """Shift the corpus to now (see blue_bench_eval.reanchor.reanchor)."""
+        return _reanchor.reanchor(
+            self._admin, tolerance_hours=tolerance_hours, dry_run=dry_run, log=print
+        )
 
 
 class ESError(RuntimeError):
@@ -316,12 +347,15 @@ def run_preflight(
     probe_window_hours: int | None = None,
     prompts_prefix: str = "p",
     client: ESClient | None = None,
+    reanchor: bool = False,
+    reanchor_dry_run: bool = False,
+    reanchor_tolerance_hours: float | None = None,
 ) -> PreflightReport:
     """Run the fail-closed readiness checks and return a structured report.
 
     Args:
         config_path: path to the MCP server config.yaml (ElasticConfig lives here).
-        prompts_dir: if given, run the per-prompt probe (check 4) over these prompts.
+        prompts_dir: if given, run the per-prompt probe (check 5) over these prompts.
         now_tolerance_hours: max allowed gap between now and the corpus max
             @timestamp before the window check fails.
         probe_window_hours: now-relative lookback for per-prompt probes. Defaults
@@ -333,6 +367,16 @@ def run_preflight(
             phase-2 run does not demand phase-1/3 indices be populated too.
         client: injectable ESClient (tests supply a stub). Defaults to a real
             httpx-backed client built from the config.
+        reanchor: when the persisted corpus anchor is more than
+            ``reanchor_tolerance_hours`` behind now, shift the corpus in place
+            so it ends at now (``blue_bench_eval.reanchor``) and re-run the
+            window check on the result. Off: the anchor check fails instead and
+            names the command. Slate runs (``qualify``) default this ON -- the
+            guard is mechanical, not remembered.
+        reanchor_dry_run: report the delta a re-anchor would apply, write
+            nothing; the check fails as stale so nothing runs on it.
+        reanchor_tolerance_hours: overrides ``preflight.reanchor_tolerance_hours``
+            from the config (default 2h; see PreflightConfig for why).
     """
     config_path = Path(config_path)
     report = PreflightReport(config_path=str(config_path))
@@ -373,6 +417,7 @@ def run_preflight(
         # (not silently skipped) so the guard stays fail-closed and legible.
         report.add("indices_populated", False, "skipped: ES unreachable")
         report.add("window_covers_now", False, "skipped: ES unreachable")
+        report.add("corpus_anchor", False, "skipped: ES unreachable")
         if prompts_dir is not None:
             report.add("prompt_probes", False, "skipped: ES unreachable")
         return report
@@ -383,7 +428,19 @@ def run_preflight(
     # --- check 3: corpus window covers now (per-index, scoped) ---
     _check_window_covers_now(cfg, client, report, now_tolerance_hours, scoped_indices)
 
-    # --- check 4: per-prompt probes ---
+    # --- check 4: corpus anchor fresh (re-anchor in place when asked) ---
+    tol = (
+        reanchor_tolerance_hours
+        if reanchor_tolerance_hours is not None
+        else cfg.preflight.reanchor_tolerance_hours
+    )
+    _check_corpus_anchor(
+        cfg, client, report, scoped_indices,
+        reanchor=reanchor, dry_run=reanchor_dry_run,
+        tolerance_hours=tol, now_tolerance_hours=now_tolerance_hours,
+    )
+
+    # --- check 5: per-prompt probes ---
     if prompts_dir is not None:
         _check_prompt_probes(
             cfg, client, report, specs, probe_window_hours
@@ -491,10 +548,130 @@ def _check_window_covers_now(
     if stale:
         detail += (
             f" — STALE: {', '.join(stale)} end before now, so lookback-from-now "
-            "queries will miss data (un-anchored ingest? re-run ingest with "
-            "--anchor-end-to-now)"
+            "queries will miss data. Fix in place: "
+            "`python -m blue_bench_eval.reanchor --config config.yaml` "
+            "(or run preflight/qualify with --reanchor); if the corpus was never "
+            "anchored, re-run ingest with --anchor-end-to-now"
         )
     report.add("window_covers_now", passed, detail)
+
+
+def _check_corpus_anchor(
+    cfg: ServerConfig,
+    client: ESClient,
+    report: PreflightReport,
+    indices: list[str],
+    *,
+    reanchor: bool,
+    dry_run: bool,
+    tolerance_hours: float,
+    now_tolerance_hours: int,
+) -> None:
+    """Check 4: the persisted anchor is within tolerance of now; fix it if asked.
+
+    Why a separate check from the window check: check 3 measures max
+    ``@timestamp`` per index against a 48h tolerance, which is the right test
+    for "was this ingested anchored at all" but far too loose for "will a
+    240-minute default lookback see anything". The anchor is the exact place
+    the window end sits (not the max, which the clock-skew outliers inflate by
+    ~3h), and its tolerance is set for our tools.
+
+    Report shape when a re-anchor runs: the pre-shift ``window_covers_now`` is
+    kept as a NON-critical "before" record (it described a corpus that no
+    longer exists, and leaving it critical would veto the run it just fixed),
+    ``corpus_anchor`` carries the delta / gaps / per-index counts, and a fresh
+    ``window_covers_now`` on the shifted corpus is the critical one.
+    """
+    fix_cmd = (
+        "python -m blue_bench_eval.reanchor --config config.yaml "
+        "(or run preflight/qualify with --reanchor)"
+    )
+    try:
+        anchor = client.read_anchor()
+    except ESError as e:
+        report.add("corpus_anchor", False, str(e))
+        return
+    if anchor is None:
+        bootstrap = (
+            "no bb-meta/corpus-anchor document (corpus ingested before the anchor "
+            "existed). Derive it once: python -m blue_bench_eval.reanchor --config "
+            "config.yaml --bootstrap-anchor --manifest <corpus>/corpus-manifest.yaml"
+        )
+        # With re-anchor requested we cannot do what was asked, so this is a
+        # hard failure. Without it the window check (3) is still the authority
+        # on staleness, so the missing anchor is only a warning.
+        report.add("corpus_anchor", not reanchor, bootstrap, critical=reanchor)
+        return
+    gap = _reanchor.gap_hours(anchor)
+    base = (
+        f"current_window_end={anchor.current_window_end} ({gap:.2f}h ago); "
+        f"tolerance = {tolerance_hours}h"
+    )
+    if gap <= tolerance_hours:
+        # A fresh anchor with a stale index is not decay: the corpus is mixed
+        # (a re-anchor that did not finish, or a partial re-ingest). Say so,
+        # because the window check's "fix in place" advice would loop here --
+        # a re-anchor under tolerance is a no-op.
+        stale_now = [
+            c for c in report.checks if c.name == "window_covers_now" and not c.passed
+        ]
+        if stale_now and "STALE" in stale_now[0].detail:
+            report.add(
+                "corpus_anchor", False,
+                base + " — anchor is fresh but indices are STALE: the corpus is mixed "
+                "(a re-anchor that did not finish, or indices ingested at different "
+                "times). --reanchor cannot fix that; re-ingest.",
+            )
+            return
+        report.add("corpus_anchor", True, base + " — fresh, no re-anchor needed")
+        return
+    if not reanchor:
+        report.add(
+            "corpus_anchor", False,
+            base + f" — STALE: the tools' default lookback (240m) would see nothing. "
+            f"Fix in place: {fix_cmd}",
+        )
+        return
+    try:
+        result = client.reanchor(tolerance_hours=tolerance_hours, dry_run=dry_run)
+    except ReanchorError as e:
+        report.add("corpus_anchor", False, base + f" — re-anchor FAILED: {e}")
+        return
+    if result is None:  # raced under tolerance between the read and the run
+        report.add("corpus_anchor", True, base + " — fresh, no re-anchor needed")
+        return
+    if dry_run:
+        report.add(
+            "corpus_anchor", False,
+            base + f" — DRY RUN: would apply +{result.delta_seconds}s "
+            f"({result.delta_seconds / 3600:.2f}h) to "
+            f"{sum(1 for s in result.shifts if not s.skipped_reason)} indices, "
+            f"{sum(s.total for s in result.shifts if not s.skipped_reason)} docs; "
+            f"gap after would be {result.gap_after_hours:.2f}h. Nothing written; "
+            f"apply with: {fix_cmd}",
+        )
+        return
+    # Demote the pre-shift window check to a "before" record.
+    for chk in report.checks:
+        if chk.name == "window_covers_now":
+            chk.name = "window_covers_now_before_reanchor"
+            chk.critical = False
+    per_index = ", ".join(
+        f"{s.index}={s.updated}" for s in result.shifts if not s.skipped_reason
+    )
+    skipped = ", ".join(
+        f"{s.index} ({s.skipped_reason})" for s in result.shifts if s.skipped_reason
+    )
+    report.add(
+        "corpus_anchor", True,
+        f"re-anchored: delta +{result.delta_seconds}s ({result.delta_seconds / 3600:.2f}h); "
+        f"gap before {result.gap_before_hours:.2f}h, after {result.gap_after_hours:.2f}h; "
+        f"anchor {result.anchor_before} -> {result.anchor_after}; "
+        f"{result.docs_updated} docs updated in {result.wall_seconds:.0f}s [{per_index}]"
+        + (f"; skipped: {skipped}" if skipped else ""),
+    )
+    # The critical window check, on the corpus as it is now.
+    _check_window_covers_now(cfg, client, report, now_tolerance_hours, indices)
 
 
 def _check_prompt_probes(
@@ -580,12 +757,34 @@ def main(argv: list[str] | None = None) -> int:
         default=48,
         help="Max gap (hours) between now and corpus max @timestamp (default: 48)",
     )
+    p.add_argument(
+        "--reanchor",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Shift the corpus in place to end at now when its anchor is stale "
+             "(default: off here; on for `blue-bench qualify`)",
+    )
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="With --reanchor: print the delta it would apply, write nothing",
+    )
+    p.add_argument(
+        "--reanchor-tolerance-hours",
+        type=float,
+        default=None,
+        help="Re-anchor when the anchor is more than this behind now "
+             "(default: preflight.reanchor_tolerance_hours in config, 2)",
+    )
     args = p.parse_args(argv)
 
     report = run_preflight(
         args.config,
         prompts_dir=args.prompts,
         now_tolerance_hours=args.now_tolerance_hours,
+        reanchor=args.reanchor,
+        reanchor_dry_run=args.dry_run,
+        reanchor_tolerance_hours=args.reanchor_tolerance_hours,
     )
     print(report.summary())
     return 0 if report.ok else 1

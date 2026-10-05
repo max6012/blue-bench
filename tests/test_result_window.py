@@ -53,8 +53,11 @@ MAX_RESULTS = 500
 MAX_CHARS = 8000
 TOTAL_MATCHED = 192_624
 INJECTED_HOST = "wkst-03.corp.example.invalid"
-# get_process_tree, live 2026-09-11, guid {f5d9ec1b-24d8-69a1-9c00-0010167845df}:
-# 4,481 distinct docs match self-or-children; 4,173 of them are children.
+# get_process_tree, live, guid {f5d9ec1b-24d8-69a1-9c00-0010167845df}, at
+# timerange_minutes=43200 (at the 240 default this guid returns nothing, so the
+# window is part of the measurement): 4,481 distinct docs match self-or-children
+# -- 308 carrying the guid as ProcessGuid, 4,173 naming it as parent. The self
+# query matches both roles, so 4,481 IS its total and the children are inside it.
 TREE_SELF_TOTAL = 4_481
 TREE_CHILD_TOTAL = 4_173
 
@@ -228,7 +231,8 @@ async def test_injected_records_inside_the_fetched_page_survive_the_cut(monkeypa
 async def test_tree_footer_reports_distinct_matches_and_the_oldest_page(monkeypatch):
     """Defect A on ``get_process_tree``: two overlapping queries, ``asc`` sort.
 
-    Live: self 4,481 / children 4,173 (children are a subset of self). The
+    Live at timerange_minutes=43200: self 4,481 / children 4,173 (the children
+    are a subset of the self query, which matches the guid in either role). The
     footer must say 4,481, not the 8,654 sum, and ``oldest`` -- both tree
     queries sort ``@timestamp asc``, so the fetched page is the oldest 500 of
     each list, not the newest.

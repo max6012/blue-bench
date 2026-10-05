@@ -157,6 +157,16 @@ def test_tree_children_query_matches_parent_guid(tool):
     assert {"term": {"ParentProcessGuid.keyword": "{GUID-A}"}} in must
 
 
+def test_tree_queries_sort_oldest_first(tool):
+    """asc is a decision, not a leftover: the guid already scopes the result to
+    one process, so recency is not the privileged slice -- causal order is. The
+    footer says ``fetched the oldest N``, which is only true while this holds.
+    """
+    for body in (tool._build_process_tree_self_query("{G}", "", 240),
+                 tool._build_process_tree_children_query("{G}", "", 240)):
+        assert body["sort"] == [{"@timestamp": "asc"}], body["sort"]
+
+
 def test_tree_host_scopes_both_queries(tool):
     self_b = tool._build_process_tree_self_query("{G}", "h.invalid", 240)
     child_b = tool._build_process_tree_children_query("{G}", "h.invalid", 240)

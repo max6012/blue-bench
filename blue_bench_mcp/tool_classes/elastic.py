@@ -527,8 +527,11 @@ class ElasticTool:
     def _build_process_tree_self_query(
         self, process_guid: str, host: str, timerange_minutes: int
     ) -> dict:
-        # The process itself + its parent: any event carrying this ProcessGuid, or
-        # any event whose ChildProcessGuid is this guid (the parent's create event).
+        # Every event in which this guid appears in either role: carrying it as
+        # ProcessGuid (its own activity), or naming it as ParentProcessGuid (the
+        # creations it caused). The parent's own create event is NOT reachable:
+        # it would need ChildProcessGuid, which Sysmon does not emit and which
+        # is absent from every document in the corpus -- see #50.
         should: list[dict[str, Any]] = [
             {"term": {"ProcessGuid.keyword": process_guid}},
             {"term": {"ParentProcessGuid.keyword": process_guid}},
@@ -541,6 +544,12 @@ class ElasticTool:
             must.append({"term": {"Computer.keyword": host}})
         return {
             "query": {"bool": {"must": must}},
+            # asc, unlike every other list tool, and deliberately. Those page a
+            # stream where recency is what is unknown, so newest-first is the
+            # privileged slice. Here the guid already scopes the result to one
+            # process's life: "newest" has no privileged meaning, and a tree is
+            # read causally -- the first thing the process did is what explains
+            # the rest. Pinned by test_tree_queries_sort_oldest_first.
             "sort": [{"@timestamp": "asc"}],
             "size": self.max_results,
         }
@@ -557,7 +566,7 @@ class ElasticTool:
             must.append({"term": {"Computer.keyword": host}})
         return {
             "query": {"bool": {"must": must}},
-            "sort": [{"@timestamp": "asc"}],
+            "sort": [{"@timestamp": "asc"}],  # see the self query: causal order
             "size": self.max_results,
         }
 

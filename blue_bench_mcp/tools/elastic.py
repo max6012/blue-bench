@@ -129,9 +129,15 @@ def register(server: MCPServer, cfg: ServerConfig) -> None:
           host: optional Computer FQDN to scope the walk; empty = all hosts.
           timerange_minutes: lookback window from now, default 240.
         Returns a JSON object with keys: 'process_guid' (the anchor),
-        'self_and_parent' (events carrying this ProcessGuid plus the parent's
-        create event), and 'children' (events whose ParentProcessGuid is this
-        guid). Each list is [] on no match.
+        'self_and_parent' (every event in which the guid appears in either
+        role: carrying it as ProcessGuid, or naming it as ParentProcessGuid --
+        so the children are in this list too), and 'children' (events whose
+        ParentProcessGuid is this guid). Each list is [] on no match.
+
+        No event for the PARENT process is returned, despite the key name:
+        reaching it needs a second lookup on a self create-event's
+        ParentProcessGuid (#50). Both lists are oldest-first, not newest-first
+        like the other list tools -- a tree reads causally.
         """
         return await tool.get_process_tree(
             process_guid=process_guid,

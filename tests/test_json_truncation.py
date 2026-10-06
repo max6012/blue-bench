@@ -9,7 +9,7 @@ results were affected.
 
 Every tool here promises "Returns JSON-formatted array/object" in its docstring.
 These tests hold them to it. No live ES: the defect is in serialization, not
-retrieval, so `_query` is mocked and the tests always run.
+retrieval, so `_search` is mocked and the tests always run.
 """
 from __future__ import annotations
 
@@ -133,7 +133,7 @@ async def test_elastic_list_tools_return_parseable_json_when_truncated(
     monkeypatch, method, kwargs
 ):
     tool = ElasticTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records()))
     out = await getattr(tool, method)(timerange_minutes=60, **kwargs)
     body = _json_part(out)
     records = json.loads(body)                     # the assertion that matters
@@ -143,7 +143,7 @@ async def test_elastic_list_tools_return_parseable_json_when_truncated(
 
 async def test_get_process_tree_returns_parseable_json_when_truncated(monkeypatch):
     tool = ElasticTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records()))
     out = await tool.get_process_tree(process_guid="{abc}", timerange_minutes=60)
     parsed = json.loads(_json_part(out))
     assert parsed["process_guid"] == "{abc}"
@@ -152,7 +152,7 @@ async def test_get_process_tree_returns_parseable_json_when_truncated(monkeypatc
 
 async def test_search_auth_events_returns_parseable_json_when_truncated(monkeypatch):
     tool = AuthTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records()))
     out = await tool.search_auth_events(timerange_minutes=60)
     records = json.loads(_json_part(out))
     assert isinstance(records, list) and records
@@ -169,6 +169,11 @@ async def test_get_agent_alerts_returns_parseable_json_when_truncated(monkeypatc
     assert out.startswith("[source:")
     records = json.loads(_json_part(out))
     assert isinstance(records, list) and records
+
+
+def _async_page(records: list):
+    """Stub for ``_search``: the page plus a total equal to it (nothing beyond)."""
+    return _async((records, len(records)))
 
 
 def _async(value):
@@ -325,19 +330,19 @@ async def test_footer_reports_the_real_count_when_the_size_limit_truncates(monke
     "Showing first 50 results" while returning 7.
     """
     tool = ElasticTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records()))
     out = await tool.search_alerts(timerange_minutes=60)
     records = json.loads(_json_part(out))
     footer = out[len(_json_part(out)):]
     # 60 fetched -> 50 (max_results cap) -> 7 (size cap): BOTH must be reported,
     # and the count must be what was actually returned.
     assert "capped at first 50" in footer, footer
-    assert f"showing {len(records)} of those 50" in footer, footer
+    assert f"showing {len(records)} of the 50 fetched" in footer, footer
 
 
 async def test_no_footer_when_nothing_was_dropped(monkeypatch):
     tool = ElasticTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records(2)))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records(2)))
     out = await tool.search_alerts(timerange_minutes=60)
     assert "---" not in out
     assert len(json.loads(out)) == 2
@@ -368,7 +373,7 @@ def test_dropped_count_sums_every_shrunk_list():
 
 async def test_process_tree_footer_counts_both_lists(monkeypatch):
     tool = ElasticTool(_cfg())
-    monkeypatch.setattr(tool, "_query", lambda *a, **k: _async(_fat_records()))
+    monkeypatch.setattr(tool, "_search", lambda *a, **k: _async_page(_fat_records()))
     out = await tool.get_process_tree(process_guid="{abc}", timerange_minutes=60)
     parsed = json.loads(_json_part(out))
     footer = out[len(_json_part(out)):]

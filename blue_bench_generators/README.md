@@ -63,7 +63,7 @@ python -m blue_bench_generators.merge build --tier S --out ./out/s
 | Tier | Use | Baseline | Size | Build time | Default adversaries |
 | --- | --- | --- | --- | --- | --- |
 | L | Full corpus | 31 hosts × 18 days | ~26 GB | ~3.5 h | APT on wkst-03, foil on wkst-07, 6 credential/commodity attacks |
-| M | Mid-size | 16 hosts × 3 days | — | — | cybercrime foil on wkst-03 |
+| M | Mid-size | 16 hosts × 3 days | ~1.9 GB | ~6 min | cybercrime foil on wkst-03 |
 | S | Smoke test | 11 hosts × 1 day | ~300 MB | ~1.5 min | cybercrime foil on wkst-03 |
 
 ### Output

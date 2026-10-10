@@ -110,7 +110,7 @@ python scripts/ingest_ef.py --ef-dir ./out/l --anchor-end-to-now
 | Tier | Use | Baseline | Size | Default adversary |
 | --- | --- | --- | --- | --- |
 | L | Full corpus | 31 hosts × 18 days | ~26 GB | APT, cybercrime foil, 6 credential/commodity attacks |
-| M | Mid-size | 16 hosts × 3 days | — | cybercrime foil |
+| M | Mid-size | 16 hosts × 3 days | ~1.9 GB | cybercrime foil |
 | S | Smoke test | 11 hosts × 1 day | ~300 MB | cybercrime foil |
 
 ## Layout

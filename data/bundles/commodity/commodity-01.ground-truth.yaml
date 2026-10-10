@@ -1,0 +1,104 @@
+schema_version: '1.0'
+incident_id: commodity-01
+source_class: cybercrime
+segment_class: IT
+source:
+  kind: generated
+  reference: blue_bench_generators/cred_inject
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-08T11:00:00Z'
+  injection_end: '2026-01-08T11:39:00Z'
+  duration_seconds: 2340
+ttps:
+- T1059.001
+- T1003.001
+- T1071.001
+ttps_optional: []
+confidence: high
+events:
+- id: evt-commodity-01-0001
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 1
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-commodity-01-0002
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 2
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-commodity-01-0003
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 3
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-commodity-01-0004
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 4
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-commodity-01-0005
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 5
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-commodity-01-0006
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 6
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-commodity-01-0007
+  where:
+    fixture_line:
+      path: commodity-01.events.ndjson
+      line: 7
+  role: other
+  ttp_links:
+  - T1003.001
+expected_findings:
+  ttp_attribution:
+    required:
+    - T1059.001
+    - T1003.001
+    - T1071.001
+    accepted_alternates: {}
+  narrative_facts:
+  - 'Noisy commodity infection on wkst-11: encoded PowerShell loader + download cradle, comsvcs LSASS
+    dump, and loud beaconing to a known-bad C2 that trips ET MALWARE Suricata signatures (the true-positive
+    alerts for triage).'
+  - "This host is deliberately LOUD (network IDS alerts fire) \u2014 the opposite of the stealthy APT;\
+    \ it is NOT part of the APT-vs-cybercrime discrimination pair."
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: 'Noisy commodity infection on wkst-11: encoded PowerShell loader + download cradle, comsvcs LSASS
+  dump, and loud beaconing to a known-bad C2 that trips ET MALWARE Suricata signatures (the true-positive
+  alerts for triage).'

@@ -1,0 +1,185 @@
+schema_version: '1.0'
+incident_id: pw-spray-01
+source_class: cybercrime
+segment_class: IT
+source:
+  kind: generated
+  reference: blue_bench_generators/cred_inject
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-06T03:00:00Z'
+  injection_end: '2026-01-06T05:55:00Z'
+  duration_seconds: 10500
+ttps:
+- T1110.003
+ttps_optional: []
+confidence: high
+events:
+- id: evt-pw-spray-01-0001
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 1
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0002
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 2
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0003
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 3
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0004
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 4
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0005
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 5
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0006
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 6
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0007
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 7
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0008
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 8
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0009
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 9
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0010
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 10
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0011
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 11
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0012
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 12
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0013
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 13
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0014
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 14
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0015
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 15
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0016
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 16
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0017
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 17
+  role: initial-access
+  ttp_links:
+  - T1110.003
+- id: evt-pw-spray-01-0018
+  where:
+    fixture_line:
+      path: pw-spray-01.events.ndjson
+      line: 18
+  role: initial-access
+  ttp_links:
+  - T1110.003
+expected_findings:
+  ttp_attribution:
+    required:
+    - T1110.003
+    accepted_alternates: {}
+  narrative_facts:
+  - 'Low-and-slow password spray against dc-01: one source IP attempts a single password across ~15 domain
+    accounts, plus Kerberos pre-auth failures.'
+  - Detect via one source hitting many distinct TargetUserName with 4625/4771, low per-account count.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: 'Low-and-slow password spray against dc-01: one source IP attempts a single password across ~15
+  domain accounts, plus Kerberos pre-auth failures.'

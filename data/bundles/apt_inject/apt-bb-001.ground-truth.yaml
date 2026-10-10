@@ -1,0 +1,4768 @@
+schema_version: '1.0'
+incident_id: apt-bb-001
+source_class: apt
+segment_class: IT
+source:
+  kind: sandbox-atomic
+  reference: sandbox/vm/capture-killchain.sh + generators/apt_inject/killchain.tsv
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-05T09:00:00Z'
+  injection_end: '2026-01-15T09:00:00Z'
+  duration_seconds: 864000
+ttps:
+- T1566.001
+- T1059.001
+- T1057
+- T1218.005
+- T1547.001
+- T1071.001
+- T1003.001
+- T1021.002
+- T1560.001
+- T1041
+ttps_optional: []
+confidence: high
+events:
+- id: evt-apt-bb-001-0001
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 1
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0002
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 2
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0003
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 3
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0004
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 4
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0005
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 5
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0006
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 6
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0007
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 7
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0008
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 8
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0009
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 9
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0010
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 10
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0011
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 11
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0012
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 12
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0013
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 13
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0014
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 14
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0015
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 15
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0016
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 16
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0017
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 17
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0018
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 18
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0019
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 19
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0020
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 20
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0021
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 21
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0022
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 22
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0023
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 23
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0024
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 24
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0025
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 25
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0026
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 26
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0027
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 27
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0028
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 28
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0029
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 29
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0030
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 30
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0031
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 31
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0032
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 32
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0033
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 33
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0034
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 34
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0035
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 35
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0036
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 36
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0037
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 37
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0038
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 38
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0039
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 39
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0040
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 40
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0041
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 41
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0042
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 42
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0043
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 43
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0044
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 44
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0045
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 45
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0046
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 46
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0047
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 47
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0048
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 48
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0049
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 49
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0050
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 50
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0051
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 51
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0052
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 52
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0053
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 53
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0054
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 54
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0055
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 55
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0056
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 56
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0057
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 57
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0058
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 58
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0059
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 59
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0060
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 60
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0061
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 61
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0062
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 62
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0063
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 63
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0064
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 64
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0065
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 65
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0066
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 66
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0067
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 67
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0068
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 68
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0069
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 69
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0070
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 70
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0071
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 71
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0072
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 72
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0073
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 73
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0074
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 74
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0075
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 75
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0076
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 76
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0077
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 77
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0078
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 78
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0079
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 79
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0080
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 80
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0081
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 81
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0082
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 82
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0083
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 83
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0084
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 84
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0085
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 85
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0086
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 86
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0087
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 87
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0088
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 88
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0089
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 89
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0090
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 90
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0091
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 91
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0092
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 92
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0093
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 93
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0094
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 94
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-apt-bb-001-0095
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 95
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0096
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 96
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0097
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 97
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0098
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 98
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0099
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 99
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0100
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 100
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0101
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 101
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0102
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 102
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0103
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 103
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0104
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 104
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0105
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 105
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0106
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 106
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0107
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 107
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0108
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 108
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0109
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 109
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0110
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 110
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0111
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 111
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0112
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 112
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0113
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 113
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0114
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 114
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0115
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 115
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0116
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 116
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0117
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 117
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0118
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 118
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0119
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 119
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0120
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 120
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0121
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 121
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0122
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 122
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0123
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 123
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0124
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 124
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0125
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 125
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0126
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 126
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0127
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 127
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0128
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 128
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0129
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 129
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0130
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 130
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0131
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 131
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0132
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 132
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0133
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 133
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0134
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 134
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0135
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 135
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0136
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 136
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0137
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 137
+  role: discovery
+  ttp_links:
+  - T1057
+- id: evt-apt-bb-001-0138
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 138
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0139
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 139
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0140
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 140
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0141
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 141
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0142
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 142
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0143
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 143
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0144
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 144
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0145
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 145
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0146
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 146
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0147
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 147
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0148
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 148
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0149
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 149
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0150
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 150
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0151
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 151
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0152
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 152
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0153
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 153
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0154
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 154
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0155
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 155
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0156
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 156
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0157
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 157
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0158
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 158
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0159
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 159
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0160
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 160
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0161
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 161
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0162
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 162
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0163
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 163
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0164
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 164
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-apt-bb-001-0165
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 165
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0166
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 166
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0167
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 167
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0168
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 168
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0169
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 169
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0170
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 170
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0171
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 171
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0172
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 172
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0173
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 173
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0174
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 174
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0175
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 175
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0176
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 176
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0177
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 177
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0178
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 178
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0179
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 179
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0180
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 180
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0181
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 181
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0182
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 182
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0183
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 183
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-apt-bb-001-0184
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 184
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0185
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 185
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0186
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 186
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0187
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 187
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0188
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 188
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0189
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 189
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-apt-bb-001-0190
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 190
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0191
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 191
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0192
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 192
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0193
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 193
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0194
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 194
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0195
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 195
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0196
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 196
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0197
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 197
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0198
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 198
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0199
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 199
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0200
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 200
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0201
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 201
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0202
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 202
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0203
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 203
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0204
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 204
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0205
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 205
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0206
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 206
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0207
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 207
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0208
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 208
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0209
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 209
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0210
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 210
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0211
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 211
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0212
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 212
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0213
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 213
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0214
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 214
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0215
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 215
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0216
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 216
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0217
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 217
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0218
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 218
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0219
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 219
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0220
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 220
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0221
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 221
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0222
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 222
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0223
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 223
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0224
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 224
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0225
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 225
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0226
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 226
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0227
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 227
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0228
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 228
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0229
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 229
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0230
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 230
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0231
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 231
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0232
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 232
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0233
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 233
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0234
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 234
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0235
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 235
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0236
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 236
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0237
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 237
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0238
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 238
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0239
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 239
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0240
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 240
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0241
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 241
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0242
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 242
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0243
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 243
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0244
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 244
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0245
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 245
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0246
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 246
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0247
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 247
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0248
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 248
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0249
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 249
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0250
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 250
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0251
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 251
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0252
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 252
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0253
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 253
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0254
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 254
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0255
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 255
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0256
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 256
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0257
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 257
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0258
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 258
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0259
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 259
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0260
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 260
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0261
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 261
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0262
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 262
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0263
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 263
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0264
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 264
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0265
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 265
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0266
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 266
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0267
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 267
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0268
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 268
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0269
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 269
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-apt-bb-001-0270
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 270
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0271
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 271
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0272
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 272
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0273
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 273
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0274
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 274
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0275
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 275
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0276
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 276
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0277
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 277
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0278
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 278
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0279
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 279
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0280
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 280
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0281
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 281
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0282
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 282
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0283
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 283
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0284
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 284
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0285
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 285
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0286
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 286
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0287
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 287
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0288
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 288
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0289
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 289
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0290
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 290
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0291
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 291
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0292
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 292
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0293
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 293
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0294
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 294
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0295
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 295
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0296
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 296
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0297
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 297
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0298
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 298
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0299
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 299
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0300
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 300
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0301
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 301
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0302
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 302
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0303
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 303
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0304
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 304
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0305
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 305
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0306
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 306
+  role: lateral
+  ttp_links:
+  - T1021.002
+- id: evt-apt-bb-001-0307
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 307
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0308
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 308
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0309
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 309
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0310
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 310
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0311
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 311
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0312
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 312
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0313
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 313
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0314
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 314
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0315
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 315
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0316
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 316
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0317
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 317
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0318
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 318
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0319
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 319
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0320
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 320
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0321
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 321
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0322
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 322
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0323
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 323
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0324
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 324
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0325
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 325
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0326
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 326
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0327
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 327
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0328
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 328
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0329
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 329
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0330
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 330
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0331
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 331
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0332
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 332
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0333
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 333
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0334
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 334
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0335
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 335
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0336
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 336
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0337
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 337
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0338
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 338
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0339
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 339
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0340
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 340
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0341
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 341
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0342
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 342
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0343
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 343
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0344
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 344
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0345
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 345
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0346
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 346
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0347
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 347
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0348
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 348
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0349
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 349
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0350
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 350
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0351
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 351
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0352
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 352
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0353
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 353
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0354
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 354
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0355
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 355
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0356
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 356
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0357
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 357
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0358
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 358
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0359
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 359
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0360
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 360
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-apt-bb-001-0361
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 361
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-apt-bb-001-0362
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 362
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-apt-bb-001-0363
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 363
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-apt-bb-001-0364
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 364
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0365
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 365
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0366
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 366
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0367
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 367
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0368
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 368
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0369
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 369
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0370
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 370
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0371
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 371
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0372
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 372
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0373
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 373
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0374
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 374
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0375
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 375
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0376
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 376
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0377
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 377
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0378
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 378
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0379
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 379
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0380
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 380
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0381
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 381
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0382
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 382
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0383
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 383
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0384
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 384
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0385
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 385
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-apt-bb-001-0386
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 386
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0387
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 387
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0388
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 388
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0389
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 389
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0390
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 390
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0391
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 391
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0392
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 392
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0393
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 393
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0394
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 394
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0395
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 395
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0396
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 396
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0397
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 397
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0398
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 398
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0399
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 399
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0400
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 400
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0401
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 401
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0402
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 402
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0403
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 403
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0404
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 404
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0405
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 405
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0406
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 406
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0407
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 407
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0408
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 408
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0409
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 409
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0410
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 410
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0411
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 411
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0412
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 412
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0413
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 413
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0414
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 414
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0415
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 415
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0416
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 416
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0417
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 417
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0418
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 418
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0419
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 419
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0420
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 420
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0421
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 421
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0422
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 422
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0423
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 423
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0424
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 424
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0425
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 425
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0426
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 426
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0427
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 427
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0428
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 428
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0429
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 429
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0430
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 430
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0431
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 431
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0432
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 432
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0433
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 433
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0434
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 434
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0435
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 435
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0436
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 436
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0437
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 437
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0438
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 438
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0439
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 439
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0440
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 440
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0441
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 441
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0442
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 442
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0443
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 443
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0444
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 444
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0445
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 445
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0446
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 446
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0447
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 447
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0448
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 448
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0449
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 449
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0450
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 450
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0451
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 451
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0452
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 452
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0453
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 453
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0454
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 454
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0455
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 455
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0456
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 456
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0457
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 457
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0458
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 458
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0459
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 459
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0460
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 460
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0461
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 461
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0462
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 462
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0463
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 463
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0464
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 464
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0465
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 465
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0466
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 466
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0467
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 467
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0468
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 468
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0469
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 469
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0470
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 470
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0471
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 471
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0472
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 472
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0473
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 473
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0474
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 474
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0475
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 475
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0476
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 476
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0477
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 477
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0478
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 478
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0479
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 479
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0480
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 480
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0481
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 481
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0482
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 482
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0483
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 483
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0484
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 484
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0485
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 485
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0486
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 486
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0487
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 487
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0488
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 488
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0489
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 489
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0490
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 490
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0491
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 491
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0492
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 492
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0493
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 493
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0494
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 494
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0495
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 495
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0496
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 496
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0497
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 497
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0498
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 498
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0499
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 499
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0500
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 500
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0501
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 501
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0502
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 502
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0503
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 503
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0504
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 504
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0505
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 505
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0506
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 506
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0507
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 507
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0508
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 508
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0509
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 509
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0510
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 510
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0511
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 511
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0512
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 512
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0513
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 513
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0514
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 514
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0515
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 515
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0516
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 516
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0517
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 517
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0518
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 518
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0519
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 519
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0520
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 520
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0521
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 521
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0522
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 522
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0523
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 523
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0524
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 524
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0525
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 525
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0526
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 526
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0527
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 527
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0528
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 528
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0529
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 529
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0530
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 530
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0531
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 531
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0532
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 532
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0533
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 533
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0534
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 534
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0535
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 535
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0536
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 536
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0537
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 537
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0538
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 538
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0539
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 539
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0540
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 540
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0541
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 541
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0542
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 542
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0543
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 543
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0544
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 544
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0545
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 545
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0546
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 546
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0547
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 547
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0548
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 548
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0549
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 549
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0550
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 550
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0551
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 551
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0552
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 552
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0553
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 553
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0554
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 554
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0555
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 555
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0556
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 556
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0557
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 557
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0558
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 558
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0559
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 559
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0560
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 560
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0561
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 561
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0562
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 562
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0563
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 563
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0564
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 564
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0565
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 565
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0566
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 566
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0567
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 567
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0568
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 568
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0569
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 569
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0570
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 570
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0571
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 571
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0572
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 572
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0573
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 573
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0574
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 574
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0575
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 575
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0576
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 576
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0577
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 577
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0578
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 578
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0579
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 579
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0580
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 580
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0581
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 581
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0582
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 582
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0583
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 583
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0584
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 584
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0585
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 585
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-apt-bb-001-0586
+  where:
+    fixture_line:
+      path: apt-bb-001.events.ndjson
+      line: 586
+  role: exfil
+  ttp_links:
+  - T1041
+expected_findings:
+  iocs:
+    sha256: []
+    sha1: []
+    md5: []
+    ipv4: []
+    domains: []
+    urls: []
+    file_names: []
+    process_names: []
+    email_headers: []
+    registry_keys: []
+    mutex_names: []
+  ttp_attribution:
+    required:
+    - T1566.001
+    - T1059.001
+    - T1057
+    - T1218.005
+    - T1547.001
+    - T1071.001
+    - T1003.001
+    - T1021.002
+    - T1560.001
+    - T1041
+    accepted_alternates: {}
+  narrative_facts:
+  - Single-host APT kill chain captured from Atomic Red Team in an isolated AWS sandbox,
+    then time-shifted into a low-and-slow campaign and host-remapped onto a baseline
+    corpus host.
+  - 'Dwell is measured in days: initial access and execution land early, lateral movement
+    spreads across the middle of the window, and collection/exfiltration occur near
+    the end.'
+  - C2 appears as sparse web beacons distributed across the dwell window rather than
+    a single burst.
+  - Lateral movement is source-side only (single-host capture); the destination host
+    is not represented in this bundle.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: "APT campaign stitched from a 10-stage Atomic Red Team kill chain (initial-access\
+  \ \u2192 exfil) captured in the AWS sandbox substrate. Signal selected by Sysmon\
+  \ process-GUID subtree per stage; injected as a thin needle at low-and-slow pacing.\
+  \ Per-event role is the coarse kill-chain phase; the precise technique is in ttp_links."

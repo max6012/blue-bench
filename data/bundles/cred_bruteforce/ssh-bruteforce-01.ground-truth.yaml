@@ -1,0 +1,377 @@
+schema_version: '1.0'
+incident_id: ssh-bruteforce-01
+source_class: cybercrime
+segment_class: IT
+source:
+  kind: generated
+  reference: blue_bench_generators/cred_inject
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-05T02:00:00Z'
+  injection_end: '2026-01-05T02:04:40Z'
+  duration_seconds: 280
+ttps:
+- T1110.001
+ttps_optional: []
+confidence: high
+events:
+- id: evt-ssh-bruteforce-01-0001
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 1
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0002
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 2
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0003
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 3
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0004
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 4
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0005
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 5
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0006
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 6
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0007
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 7
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0008
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 8
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0009
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 9
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0010
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 10
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0011
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 11
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0012
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 12
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0013
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 13
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0014
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 14
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0015
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 15
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0016
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 16
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0017
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 17
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0018
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 18
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0019
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 19
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0020
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 20
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0021
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 21
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0022
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 22
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0023
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 23
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0024
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 24
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0025
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 25
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0026
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 26
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0027
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 27
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0028
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 28
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0029
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 29
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0030
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 30
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0031
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 31
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0032
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 32
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0033
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 33
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0034
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 34
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0035
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 35
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0036
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 36
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0037
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 37
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0038
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 38
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0039
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 39
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0040
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 40
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0041
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 41
+  role: initial-access
+  ttp_links:
+  - T1110.001
+- id: evt-ssh-bruteforce-01-0042
+  where:
+    fixture_line:
+      path: ssh-bruteforce-01.events.ndjson
+      line: 42
+  role: other
+  ttp_links:
+  - T1110.001
+expected_findings:
+  ttp_attribution:
+    required:
+    - T1110.001
+    accepted_alternates: {}
+  narrative_facts:
+  - SSH brute-force against srv-app-01 from a single external source, ~40 failed logons for a nonexistent
+    user then a successful login; Wazuh rule 5710 fires.
+  - Detect via the auth-log burst from one source IP and the Wazuh authentication_failed alerts.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: SSH brute-force against srv-app-01 from a single external source, ~40 failed logons for a nonexistent
+  user then a successful login; Wazuh rule 5710 fires.

@@ -92,24 +92,26 @@ Adversary bundles: `data/bundles/`. Full guide:
 [blue_bench_generators/README.md](blue_bench_generators/README.md).
 
 ```bash
-# Install (EvidenceForge needs Python >= 3.11)
+# Install (python3 --version must be >= 3.11)
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-git clone https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
-python3.11 -m venv ~/ef-venv && ~/ef-venv/bin/pip install -e ~/EvidenceForge
+git clone --branch v1.3.2 https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
+python3 -m venv ~/ef-venv && ~/ef-venv/bin/pip install -e ~/EvidenceForge
 
 # Build the full corpus (L tier)
 export TZ=UTC
 python -m blue_bench_generators.merge build --tier L --out ./out/l
 
 # Load into Elasticsearch
+docker compose -f docker/compose.tools.yml up -d elasticsearch
 python scripts/ingest_ef.py --ef-dir ./out/l --anchor-end-to-now
 ```
 
 | Tier | Use | Baseline | Size | Default adversary |
 | --- | --- | --- | --- | --- |
-| L | Full corpus | 30 hosts × 18 days | ~24 GB | APT, cybercrime foil, 5 credential/commodity attacks |
-| M | Mid-size | 15 hosts × 3 days | — | cybercrime foil |
-| S | Smoke test | 10 hosts × 1 day | ~290 MB | cybercrime foil |
+| L | Full corpus | 31 hosts × 18 days | ~26 GB | APT, cybercrime foil, 6 credential/commodity attacks |
+| M | Mid-size | 16 hosts × 3 days | — | cybercrime foil |
+| S | Smoke test | 11 hosts × 1 day | ~300 MB | cybercrime foil |
 
 ## Layout
 

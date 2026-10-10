@@ -9,10 +9,10 @@ bridge, and injected adversary activity with ground-truth answer keys.
 | --- | --- |
 | `merge/` | Build orchestrator (`build`), injector, RQ3 gates, coherence checks |
 | `it_baseline/` | Topology and Suricata-noise code used by `merge`; standalone `build` CLI not used by `merge build` |
-| `ot_hosts/`, `ot_protocols/` | OT hosts; Modbus, S7comm, DNP3, IEC-104 traffic |
-| `it_ot_bridge/` | IT↔OT crossing traffic |
-| `apt_inject/` | APT bundle from sandbox kill-chain captures |
-| `cybercrime_foil/` | Cybercrime bundles from public PCAPs via Zeek and Suricata |
+| `ot_hosts/`, `ot_protocols/` | OT host event logs; Modbus, S7comm, DNP3, IEC-104 traffic |
+| `it_ot_bridge/` | Matched-pair telemetry at the IT/OT boundary |
+| `apt_inject/` | Injection bundles from sandbox kill-chain captures (source of `apt-bb-001` and `cybercrime-bb-001`) |
+| `cybercrime_foil/` | Bundle schema and validator used by all injectors; bundles from public PCAPs via Zeek and Suricata |
 | `cred_inject/` | Credential-abuse and commodity bundles |
 | `c2/` | Synthetic C2 beacon generator |
 
@@ -20,15 +20,15 @@ Scenario YAMLs: `scenarios/heavy-telemetry/`. Adversary bundles: `data/bundles/`
 
 ## Install
 
-Requires Python >= 3.11 (EvidenceForge), git, and ~24 GB free disk for L.
+Requires Python >= 3.11 (check `python3 --version`), git, and ~26 GB free disk for L.
 Elasticsearch 8.x is needed for ingest (`docker/compose.tools.yml`).
 
 ```bash
-python3.11 -m venv .venv && source .venv/bin/activate
+python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
-git clone https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
-python3.11 -m venv ~/ef-venv
+git clone --branch v1.3.2 https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
+python3 -m venv ~/ef-venv
 ~/ef-venv/bin/pip install -e ~/EvidenceForge
 ~/ef-venv/bin/eforge --help
 ```
@@ -60,16 +60,16 @@ python -m blue_bench_generators.merge build --tier S --out ./out/s
 | `--inject INCIDENT:SUBDIR:HOST` | Replace default adversaries; repeatable |
 | `--no-enforce-gates` | Report RQ3 gate results without failing |
 
-| Tier | Use | Baseline | Size | EvidenceForge time | Default adversaries |
+| Tier | Use | Baseline | Size | Build time | Default adversaries |
 | --- | --- | --- | --- | --- | --- |
-| L | Full corpus | 30 hosts × 18 days | ~24 GB | ~70 min | APT on wkst-03, foil on wkst-07, 5 credential/commodity attacks |
-| M | Mid-size | 15 hosts × 3 days | — | — | cybercrime foil on wkst-03 |
-| S | Smoke test | 10 hosts × 1 day | ~290 MB | ~90 s | cybercrime foil on wkst-03 |
+| L | Full corpus | 31 hosts × 18 days | ~26 GB | ~3.5 h | APT on wkst-03, foil on wkst-07, 6 credential/commodity attacks |
+| M | Mid-size | 16 hosts × 3 days | — | — | cybercrime foil on wkst-03 |
+| S | Smoke test | 11 hosts × 1 day | ~300 MB | ~1.5 min | cybercrime foil on wkst-03 |
 
 ### Output
 
 - Per-host EvidenceForge data plus OT and bridge telemetry under `<out>/`
-- `corpus-manifest.yaml`: tier, seed, `build_hash`, injected incidents, RQ3 gate verdicts
+- `corpus-manifest.yaml`: `tier`, `ot_seed`, `build_hash`, `window`, `file_count`, `total_bytes`, `injected`, `rq3_gates`
 - `<out>/ground-truth/`: one answer key per injected incident
 
 ### RQ3 gates
@@ -95,7 +95,7 @@ pairs from `data/bundles/<subdir>/`.
 | Subdir | Incident | Tiers | Regenerate |
 | --- | --- | --- | --- |
 | `cybercrime_foil` | `cybercrime-bb-001` | S, M, L | — |
-| `apt_inject` | `apt-bb-001` | L | `python -m blue_bench_generators.apt_inject build` (needs `data/raw/sandbox/` captures) |
+| `apt_inject` | `apt-bb-001` | L | — |
 | `cred_bruteforce`, `cred_spray`, `cred_dormant`, `cred_pth`, `cred_travel`, `commodity` | credential / commodity | L | `python -m blue_bench_generators.cred_inject build` |
 
 ## Tests

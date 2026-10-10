@@ -1,0 +1,89 @@
+schema_version: '1.0'
+incident_id: dormant-cred-01
+source_class: benign-anomaly
+segment_class: IT
+source:
+  kind: generated
+  reference: blue_bench_generators/cred_inject
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-05T01:05:00Z'
+  injection_end: '2026-01-10T03:37:00Z'
+  duration_seconds: 441120
+ttps:
+- T1078.002
+ttps_optional: []
+confidence: high
+events:
+- id: evt-dormant-cred-01-0001
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 1
+  role: other
+  ttp_links:
+  - T1078.002
+- id: evt-dormant-cred-01-0002
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 2
+  role: other
+  ttp_links:
+  - T1078.002
+- id: evt-dormant-cred-01-0003
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 3
+  role: other
+  ttp_links:
+  - T1078.002
+- id: evt-dormant-cred-01-0004
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 4
+  role: other
+  ttp_links:
+  - T1078.002
+- id: evt-dormant-cred-01-0005
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 5
+  role: other
+  ttp_links:
+  - T1078.002
+- id: evt-dormant-cred-01-0006
+  where:
+    fixture_line:
+      path: dormant-cred-01.events.ndjson
+      line: 6
+  role: initial-access
+  ttp_links:
+  - T1078.002
+expected_findings:
+  ttp_attribution:
+    required:
+    - T1078.002
+    accepted_alternates: {}
+  narrative_facts:
+  - Service account svc_backup normally logs on only as a nightly batch job (LogonType 4); here it performs
+    an off-hours RemoteInteractive logon (LogonType 10) from an unusual host.
+  - Detect via the off-baseline interactive logon for a service account that otherwise only runs scheduled.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: Service account svc_backup normally logs on only as a nightly batch job (LogonType 4); here it
+  performs an off-hours RemoteInteractive logon (LogonType 10) from an unusual host.

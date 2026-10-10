@@ -1,0 +1,65 @@
+schema_version: '1.0'
+incident_id: impossible-travel-01
+source_class: benign-anomaly
+segment_class: IT
+source:
+  kind: generated
+  reference: blue_bench_generators/cred_inject
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: L
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-07T09:00:00Z'
+  injection_end: '2026-01-07T09:40:00Z'
+  duration_seconds: 2400
+ttps:
+- T1078
+ttps_optional: []
+confidence: high
+events:
+- id: evt-impossible-travel-01-0001
+  where:
+    fixture_line:
+      path: impossible-travel-01.events.ndjson
+      line: 1
+  role: other
+  ttp_links:
+  - T1078
+- id: evt-impossible-travel-01-0002
+  where:
+    fixture_line:
+      path: impossible-travel-01.events.ndjson
+      line: 2
+  role: initial-access
+  ttp_links:
+  - T1078
+- id: evt-impossible-travel-01-0003
+  where:
+    fixture_line:
+      path: impossible-travel-01.events.ndjson
+      line: 3
+  role: initial-access
+  ttp_links:
+  - T1078
+expected_findings:
+  ttp_attribution:
+    required:
+    - T1078
+    accepted_alternates: {}
+  narrative_facts:
+  - 'Impossible travel for user ekim: two successful logons from geographically distant external IPs (203.0.113.50
+    then 198.51.100.77) within 35 minutes.'
+  - Detect via one account authenticating from two far-apart source IPs in a window too short to travel.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: false
+notes: 'Impossible travel for user ekim: two successful logons from geographically distant external IPs
+  (203.0.113.50 then 198.51.100.77) within 35 minutes.'

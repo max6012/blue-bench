@@ -1,0 +1,8090 @@
+schema_version: '1.0'
+incident_id: cybercrime-bb-001
+source_class: cybercrime
+segment_class: IT
+source:
+  kind: sandbox-atomic
+  reference: sandbox/vm/capture-killchain.sh + generators/apt_inject/killchain.tsv
+  ingestion_commit: '0000000000000000000000000000000000000000'
+  raw_artifact_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+corpus:
+  tier: S
+  build_hash: '0000000000000000000000000000000000000000000000000000000000000000'
+  baseline_generator_config: blue_bench_generators/it_baseline
+time_window:
+  injection_start: '2026-01-05T09:00:00Z'
+  injection_end: '2026-01-05T11:00:57Z'
+  duration_seconds: 7257
+ttps:
+- T1566.001
+- T1059.001
+- T1218.005
+- T1082
+- T1547.001
+- T1071.001
+- T1003.001
+- T1005
+- T1560.001
+- T1041
+ttps_optional: []
+confidence: high
+events:
+- id: evt-cybercrime-bb-001-0001
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 1
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0002
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 2
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0003
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 3
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0004
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 4
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0005
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 5
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0006
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 6
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0007
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 7
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0008
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 8
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0009
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 9
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0010
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 10
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0011
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 11
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0012
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 12
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0013
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 13
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0014
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 14
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0015
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 15
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0016
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 16
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0017
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 17
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0018
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 18
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0019
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 19
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0020
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 20
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0021
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 21
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0022
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 22
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0023
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 23
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0024
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 24
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0025
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 25
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0026
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 26
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0027
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 27
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0028
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 28
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0029
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 29
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0030
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 30
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0031
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 31
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0032
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 32
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0033
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 33
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0034
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 34
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0035
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 35
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0036
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 36
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0037
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 37
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0038
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 38
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0039
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 39
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0040
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 40
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0041
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 41
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0042
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 42
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0043
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 43
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0044
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 44
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0045
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 45
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0046
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 46
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0047
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 47
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0048
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 48
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0049
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 49
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0050
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 50
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0051
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 51
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0052
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 52
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0053
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 53
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0054
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 54
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0055
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 55
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0056
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 56
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0057
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 57
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0058
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 58
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0059
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 59
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0060
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 60
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0061
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 61
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0062
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 62
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0063
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 63
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0064
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 64
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0065
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 65
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0066
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 66
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0067
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 67
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0068
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 68
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0069
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 69
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0070
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 70
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0071
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 71
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0072
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 72
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0073
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 73
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0074
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 74
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0075
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 75
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0076
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 76
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0077
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 77
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0078
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 78
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0079
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 79
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0080
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 80
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0081
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 81
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0082
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 82
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0083
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 83
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0084
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 84
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0085
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 85
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0086
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 86
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0087
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 87
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0088
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 88
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0089
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 89
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0090
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 90
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0091
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 91
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0092
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 92
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0093
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 93
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0094
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 94
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0095
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 95
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0096
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 96
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0097
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 97
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0098
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 98
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0099
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 99
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0100
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 100
+  role: discovery
+  ttp_links:
+  - T1082
+- id: evt-cybercrime-bb-001-0101
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 101
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0102
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 102
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0103
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 103
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0104
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 104
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0105
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 105
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0106
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 106
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0107
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 107
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0108
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 108
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0109
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 109
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0110
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 110
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0111
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 111
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0112
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 112
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0113
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 113
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0114
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 114
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0115
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 115
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0116
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 116
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0117
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 117
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0118
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 118
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0119
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 119
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0120
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 120
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0121
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 121
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0122
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 122
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0123
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 123
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0124
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 124
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0125
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 125
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0126
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 126
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0127
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 127
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0128
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 128
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0129
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 129
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0130
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 130
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0131
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 131
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0132
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 132
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0133
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 133
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0134
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 134
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0135
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 135
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0136
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 136
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0137
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 137
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0138
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 138
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0139
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 139
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0140
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 140
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0141
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 141
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0142
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 142
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0143
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 143
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0144
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 144
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0145
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 145
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0146
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 146
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0147
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 147
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0148
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 148
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0149
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 149
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0150
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 150
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0151
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 151
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0152
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 152
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0153
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 153
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0154
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 154
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0155
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 155
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0156
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 156
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0157
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 157
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0158
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 158
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0159
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 159
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0160
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 160
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0161
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 161
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0162
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 162
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0163
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 163
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0164
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 164
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0165
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 165
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0166
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 166
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0167
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 167
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0168
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 168
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0169
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 169
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0170
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 170
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0171
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 171
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0172
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 172
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0173
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 173
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0174
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 174
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0175
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 175
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0176
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 176
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0177
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 177
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0178
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 178
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0179
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 179
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0180
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 180
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0181
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 181
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0182
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 182
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0183
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 183
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0184
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 184
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0185
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 185
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0186
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 186
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0187
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 187
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0188
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 188
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0189
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 189
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0190
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 190
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0191
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 191
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0192
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 192
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0193
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 193
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0194
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 194
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0195
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 195
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0196
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 196
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0197
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 197
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0198
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 198
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0199
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 199
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0200
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 200
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0201
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 201
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0202
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 202
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0203
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 203
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0204
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 204
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0205
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 205
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0206
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 206
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0207
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 207
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0208
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 208
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0209
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 209
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0210
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 210
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0211
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 211
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0212
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 212
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0213
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 213
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0214
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 214
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0215
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 215
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0216
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 216
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0217
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 217
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0218
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 218
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0219
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 219
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0220
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 220
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0221
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 221
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0222
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 222
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0223
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 223
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0224
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 224
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0225
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 225
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0226
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 226
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0227
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 227
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0228
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 228
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0229
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 229
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0230
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 230
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0231
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 231
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0232
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 232
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0233
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 233
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0234
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 234
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0235
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 235
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0236
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 236
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0237
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 237
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0238
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 238
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0239
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 239
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0240
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 240
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0241
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 241
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0242
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 242
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0243
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 243
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0244
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 244
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0245
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 245
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0246
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 246
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0247
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 247
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0248
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 248
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0249
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 249
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0250
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 250
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0251
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 251
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0252
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 252
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0253
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 253
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0254
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 254
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0255
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 255
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0256
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 256
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0257
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 257
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0258
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 258
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0259
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 259
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0260
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 260
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0261
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 261
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0262
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 262
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0263
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 263
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0264
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 264
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0265
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 265
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0266
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 266
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0267
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 267
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0268
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 268
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0269
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 269
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0270
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 270
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0271
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 271
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0272
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 272
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0273
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 273
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0274
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 274
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0275
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 275
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0276
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 276
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0277
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 277
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0278
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 278
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0279
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 279
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0280
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 280
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0281
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 281
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0282
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 282
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0283
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 283
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0284
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 284
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0285
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 285
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0286
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 286
+  role: other
+  ttp_links:
+  - T1005
+- id: evt-cybercrime-bb-001-0287
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 287
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0288
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 288
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0289
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 289
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0290
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 290
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0291
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 291
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0292
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 292
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0293
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 293
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0294
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 294
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0295
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 295
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0296
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 296
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0297
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 297
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0298
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 298
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0299
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 299
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0300
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 300
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0301
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 301
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0302
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 302
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0303
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 303
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0304
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 304
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0305
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 305
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0306
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 306
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0307
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 307
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0308
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 308
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0309
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 309
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0310
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 310
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0311
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 311
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0312
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 312
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0313
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 313
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0314
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 314
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0315
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 315
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0316
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 316
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0317
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 317
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0318
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 318
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0319
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 319
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0320
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 320
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0321
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 321
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0322
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 322
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0323
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 323
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0324
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 324
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0325
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 325
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0326
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 326
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0327
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 327
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0328
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 328
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0329
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 329
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0330
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 330
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0331
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 331
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0332
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 332
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0333
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 333
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0334
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 334
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0335
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 335
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0336
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 336
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0337
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 337
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0338
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 338
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0339
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 339
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0340
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 340
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0341
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 341
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0342
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 342
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0343
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 343
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0344
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 344
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0345
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 345
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0346
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 346
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0347
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 347
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0348
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 348
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0349
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 349
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0350
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 350
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0351
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 351
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0352
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 352
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0353
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 353
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0354
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 354
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0355
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 355
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0356
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 356
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0357
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 357
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0358
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 358
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0359
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 359
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0360
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 360
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0361
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 361
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0362
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 362
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0363
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 363
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0364
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 364
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0365
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 365
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0366
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 366
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0367
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 367
+  role: c2
+  ttp_links:
+  - T1071.001
+- id: evt-cybercrime-bb-001-0368
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 368
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0369
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 369
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0370
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 370
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0371
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 371
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0372
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 372
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0373
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 373
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0374
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 374
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0375
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 375
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0376
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 376
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0377
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 377
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0378
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 378
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0379
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 379
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0380
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 380
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0381
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 381
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0382
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 382
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0383
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 383
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0384
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 384
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0385
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 385
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0386
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 386
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0387
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 387
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0388
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 388
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0389
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 389
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0390
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 390
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0391
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 391
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0392
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 392
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0393
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 393
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0394
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 394
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0395
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 395
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0396
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 396
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0397
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 397
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0398
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 398
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0399
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 399
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0400
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 400
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0401
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 401
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0402
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 402
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0403
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 403
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0404
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 404
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0405
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 405
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0406
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 406
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0407
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 407
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0408
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 408
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0409
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 409
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0410
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 410
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0411
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 411
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0412
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 412
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0413
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 413
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0414
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 414
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0415
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 415
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0416
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 416
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0417
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 417
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0418
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 418
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0419
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 419
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0420
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 420
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0421
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 421
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0422
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 422
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0423
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 423
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0424
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 424
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0425
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 425
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0426
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 426
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0427
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 427
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0428
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 428
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0429
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 429
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0430
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 430
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0431
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 431
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0432
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 432
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0433
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 433
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0434
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 434
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0435
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 435
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0436
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 436
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0437
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 437
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0438
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 438
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0439
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 439
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0440
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 440
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0441
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 441
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0442
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 442
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0443
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 443
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0444
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 444
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0445
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 445
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0446
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 446
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0447
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 447
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0448
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 448
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0449
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 449
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0450
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 450
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0451
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 451
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0452
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 452
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0453
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 453
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0454
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 454
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0455
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 455
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0456
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 456
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0457
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 457
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0458
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 458
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0459
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 459
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0460
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 460
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0461
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 461
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0462
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 462
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0463
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 463
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0464
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 464
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0465
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 465
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0466
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 466
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0467
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 467
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0468
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 468
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0469
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 469
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0470
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 470
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0471
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 471
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0472
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 472
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0473
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 473
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0474
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 474
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0475
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 475
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0476
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 476
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0477
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 477
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0478
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 478
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0479
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 479
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0480
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 480
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0481
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 481
+  role: initial-access
+  ttp_links:
+  - T1566.001
+- id: evt-cybercrime-bb-001-0482
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 482
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0483
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 483
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0484
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 484
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0485
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 485
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0486
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 486
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0487
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 487
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0488
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 488
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0489
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 489
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0490
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 490
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0491
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 491
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0492
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 492
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0493
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 493
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0494
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 494
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0495
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 495
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0496
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 496
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0497
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 497
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0498
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 498
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0499
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 499
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0500
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 500
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0501
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 501
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0502
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 502
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0503
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 503
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0504
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 504
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0505
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 505
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0506
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 506
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0507
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 507
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0508
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 508
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0509
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 509
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0510
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 510
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0511
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 511
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0512
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 512
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0513
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 513
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0514
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 514
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0515
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 515
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0516
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 516
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0517
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 517
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0518
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 518
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0519
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 519
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0520
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 520
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0521
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 521
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0522
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 522
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0523
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 523
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0524
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 524
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0525
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 525
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0526
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 526
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0527
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 527
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0528
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 528
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0529
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 529
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0530
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 530
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0531
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 531
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0532
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 532
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0533
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 533
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0534
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 534
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0535
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 535
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0536
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 536
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0537
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 537
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0538
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 538
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0539
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 539
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0540
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 540
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0541
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 541
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0542
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 542
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0543
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 543
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0544
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 544
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0545
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 545
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0546
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 546
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0547
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 547
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0548
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 548
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0549
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 549
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0550
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 550
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0551
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 551
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0552
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 552
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0553
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 553
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0554
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 554
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0555
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 555
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0556
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 556
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0557
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 557
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0558
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 558
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0559
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 559
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0560
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 560
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0561
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 561
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0562
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 562
+  role: execution
+  ttp_links:
+  - T1059.001
+- id: evt-cybercrime-bb-001-0563
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 563
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0564
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 564
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0565
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 565
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0566
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 566
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0567
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 567
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0568
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 568
+  role: persistence
+  ttp_links:
+  - T1547.001
+- id: evt-cybercrime-bb-001-0569
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 569
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0570
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 570
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0571
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 571
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0572
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 572
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0573
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 573
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0574
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 574
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0575
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 575
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0576
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 576
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0577
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 577
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0578
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 578
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0579
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 579
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0580
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 580
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0581
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 581
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0582
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 582
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0583
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 583
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0584
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 584
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0585
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 585
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0586
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 586
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0587
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 587
+  role: other
+  ttp_links:
+  - T1218.005
+- id: evt-cybercrime-bb-001-0588
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 588
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0589
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 589
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0590
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 590
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0591
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 591
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0592
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 592
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0593
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 593
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0594
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 594
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0595
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 595
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0596
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 596
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0597
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 597
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0598
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 598
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0599
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 599
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0600
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 600
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0601
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 601
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0602
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 602
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0603
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 603
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0604
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 604
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0605
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 605
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0606
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 606
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0607
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 607
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0608
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 608
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0609
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 609
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0610
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 610
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0611
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 611
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0612
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 612
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0613
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 613
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0614
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 614
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0615
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 615
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0616
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 616
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0617
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 617
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0618
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 618
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0619
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 619
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0620
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 620
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0621
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 621
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0622
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 622
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0623
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 623
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0624
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 624
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0625
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 625
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0626
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 626
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0627
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 627
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0628
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 628
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0629
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 629
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0630
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 630
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0631
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 631
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0632
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 632
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0633
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 633
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0634
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 634
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0635
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 635
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0636
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 636
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0637
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 637
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0638
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 638
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0639
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 639
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0640
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 640
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0641
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 641
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0642
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 642
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0643
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 643
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0644
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 644
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0645
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 645
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0646
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 646
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0647
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 647
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0648
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 648
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0649
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 649
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0650
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 650
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0651
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 651
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0652
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 652
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0653
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 653
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0654
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 654
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0655
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 655
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0656
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 656
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0657
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 657
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0658
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 658
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0659
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 659
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0660
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 660
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0661
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 661
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0662
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 662
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0663
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 663
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0664
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 664
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0665
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 665
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0666
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 666
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0667
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 667
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0668
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 668
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0669
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 669
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0670
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 670
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0671
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 671
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0672
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 672
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0673
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 673
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0674
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 674
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0675
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 675
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0676
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 676
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0677
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 677
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0678
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 678
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0679
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 679
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0680
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 680
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0681
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 681
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0682
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 682
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0683
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 683
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0684
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 684
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0685
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 685
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0686
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 686
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0687
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 687
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0688
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 688
+  role: other
+  ttp_links:
+  - T1003.001
+- id: evt-cybercrime-bb-001-0689
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 689
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0690
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 690
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0691
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 691
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0692
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 692
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0693
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 693
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0694
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 694
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0695
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 695
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0696
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 696
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0697
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 697
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0698
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 698
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0699
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 699
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0700
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 700
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0701
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 701
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0702
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 702
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0703
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 703
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0704
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 704
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0705
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 705
+  role: other
+  ttp_links:
+  - T1560.001
+- id: evt-cybercrime-bb-001-0706
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 706
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0707
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 707
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0708
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 708
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0709
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 709
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0710
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 710
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0711
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 711
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0712
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 712
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0713
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 713
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0714
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 714
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0715
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 715
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0716
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 716
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0717
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 717
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0718
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 718
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0719
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 719
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0720
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 720
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0721
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 721
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0722
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 722
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0723
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 723
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0724
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 724
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0725
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 725
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0726
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 726
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0727
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 727
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0728
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 728
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0729
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 729
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0730
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 730
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0731
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 731
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0732
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 732
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0733
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 733
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0734
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 734
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0735
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 735
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0736
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 736
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0737
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 737
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0738
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 738
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0739
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 739
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0740
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 740
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0741
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 741
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0742
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 742
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0743
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 743
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0744
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 744
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0745
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 745
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0746
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 746
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0747
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 747
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0748
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 748
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0749
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 749
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0750
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 750
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0751
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 751
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0752
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 752
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0753
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 753
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0754
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 754
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0755
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 755
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0756
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 756
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0757
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 757
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0758
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 758
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0759
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 759
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0760
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 760
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0761
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 761
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0762
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 762
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0763
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 763
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0764
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 764
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0765
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 765
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0766
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 766
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0767
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 767
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0768
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 768
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0769
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 769
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0770
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 770
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0771
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 771
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0772
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 772
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0773
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 773
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0774
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 774
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0775
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 775
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0776
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 776
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0777
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 777
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0778
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 778
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0779
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 779
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0780
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 780
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0781
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 781
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0782
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 782
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0783
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 783
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0784
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 784
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0785
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 785
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0786
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 786
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0787
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 787
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0788
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 788
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0789
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 789
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0790
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 790
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0791
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 791
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0792
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 792
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0793
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 793
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0794
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 794
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0795
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 795
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0796
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 796
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0797
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 797
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0798
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 798
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0799
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 799
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0800
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 800
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0801
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 801
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0802
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 802
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0803
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 803
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0804
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 804
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0805
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 805
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0806
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 806
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0807
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 807
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0808
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 808
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0809
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 809
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0810
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 810
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0811
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 811
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0812
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 812
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0813
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 813
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0814
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 814
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0815
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 815
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0816
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 816
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0817
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 817
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0818
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 818
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0819
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 819
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0820
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 820
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0821
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 821
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0822
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 822
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0823
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 823
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0824
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 824
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0825
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 825
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0826
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 826
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0827
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 827
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0828
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 828
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0829
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 829
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0830
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 830
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0831
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 831
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0832
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 832
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0833
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 833
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0834
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 834
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0835
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 835
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0836
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 836
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0837
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 837
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0838
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 838
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0839
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 839
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0840
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 840
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0841
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 841
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0842
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 842
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0843
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 843
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0844
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 844
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0845
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 845
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0846
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 846
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0847
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 847
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0848
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 848
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0849
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 849
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0850
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 850
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0851
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 851
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0852
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 852
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0853
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 853
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0854
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 854
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0855
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 855
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0856
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 856
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0857
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 857
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0858
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 858
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0859
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 859
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0860
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 860
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0861
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 861
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0862
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 862
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0863
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 863
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0864
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 864
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0865
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 865
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0866
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 866
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0867
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 867
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0868
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 868
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0869
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 869
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0870
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 870
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0871
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 871
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0872
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 872
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0873
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 873
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0874
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 874
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0875
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 875
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0876
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 876
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0877
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 877
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0878
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 878
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0879
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 879
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0880
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 880
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0881
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 881
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0882
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 882
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0883
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 883
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0884
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 884
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0885
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 885
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0886
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 886
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0887
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 887
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0888
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 888
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0889
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 889
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0890
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 890
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0891
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 891
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0892
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 892
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0893
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 893
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0894
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 894
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0895
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 895
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0896
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 896
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0897
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 897
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0898
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 898
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0899
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 899
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0900
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 900
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0901
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 901
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0902
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 902
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0903
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 903
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0904
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 904
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0905
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 905
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0906
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 906
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0907
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 907
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0908
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 908
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0909
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 909
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0910
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 910
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0911
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 911
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0912
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 912
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0913
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 913
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0914
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 914
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0915
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 915
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0916
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 916
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0917
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 917
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0918
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 918
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0919
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 919
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0920
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 920
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0921
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 921
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0922
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 922
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0923
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 923
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0924
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 924
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0925
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 925
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0926
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 926
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0927
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 927
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0928
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 928
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0929
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 929
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0930
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 930
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0931
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 931
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0932
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 932
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0933
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 933
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0934
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 934
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0935
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 935
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0936
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 936
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0937
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 937
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0938
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 938
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0939
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 939
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0940
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 940
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0941
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 941
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0942
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 942
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0943
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 943
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0944
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 944
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0945
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 945
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0946
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 946
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0947
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 947
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0948
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 948
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0949
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 949
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0950
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 950
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0951
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 951
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0952
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 952
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0953
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 953
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0954
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 954
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0955
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 955
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0956
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 956
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0957
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 957
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0958
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 958
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0959
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 959
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0960
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 960
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0961
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 961
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0962
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 962
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0963
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 963
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0964
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 964
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0965
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 965
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0966
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 966
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0967
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 967
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0968
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 968
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0969
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 969
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0970
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 970
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0971
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 971
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0972
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 972
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0973
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 973
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0974
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 974
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0975
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 975
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0976
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 976
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0977
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 977
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0978
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 978
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0979
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 979
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0980
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 980
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0981
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 981
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0982
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 982
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0983
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 983
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0984
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 984
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0985
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 985
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0986
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 986
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0987
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 987
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0988
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 988
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0989
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 989
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0990
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 990
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0991
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 991
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0992
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 992
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0993
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 993
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0994
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 994
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0995
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 995
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0996
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 996
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0997
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 997
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0998
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 998
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-0999
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 999
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-1000
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 1000
+  role: exfil
+  ttp_links:
+  - T1041
+- id: evt-cybercrime-bb-001-1001
+  where:
+    fixture_line:
+      path: cybercrime-bb-001.events.ndjson
+      line: 1001
+  role: exfil
+  ttp_links:
+  - T1041
+expected_findings:
+  iocs:
+    sha256: []
+    sha1: []
+    md5: []
+    ipv4: []
+    domains: []
+    urls: []
+    file_names: []
+    process_names: []
+    email_headers: []
+    registry_keys: []
+    mutex_names: []
+  ttp_attribution:
+    required:
+    - T1566.001
+    - T1059.001
+    - T1218.005
+    - T1082
+    - T1547.001
+    - T1071.001
+    - T1003.001
+    - T1005
+    - T1560.001
+    - T1041
+    accepted_alternates: {}
+  narrative_facts:
+  - Single-host APT kill chain captured from Atomic Red Team in an isolated AWS sandbox,
+    then time-shifted into a low-and-slow campaign and host-remapped onto a baseline
+    corpus host.
+  - 'Dwell is measured in days: initial access and execution land early, lateral movement
+    spreads across the middle of the window, and collection/exfiltration occur near
+    the end.'
+  - C2 appears as sparse web beacons distributed across the dwell window rather than
+    a single burst.
+  - Lateral movement is source-side only (single-host capture); the destination host
+    is not represented in this bundle.
+scoring:
+  detection:
+    found_threshold: 0.7
+    partial_threshold: 0.3
+  attribution:
+    weight: 0.5
+  discrimination:
+    required: true
+notes: Commodity loader/info-stealer captured from Atomic Red Team in the AWS sandbox
+  (multi-modal host+network), per the 2026-06-17 foil-modality decision. Matched-surface
+  techniques shared with the APT (phishing/powershell/run-key/mshta/LSASS/makecab/web-C2/exfil)
+  plus commodity character (T1082 host recon, T1005 local-data collection). Smash-and-grab
+  cadence (~2h, dense beacons) is the behavioral discriminator vs the APT's days-long
+  dwell.

@@ -87,30 +87,31 @@ The MCP server speaks two transports (stdio and SSE) from the same process. Depl
 
 ## The corpus
 
-The corpus is built to answer **three research questions** about open-weight capability — every generator and the scoring rubric trace back to one of them:
-
-1. **IT ↔ OT discrimination.** Does the model recognize OT protocols and communication norms (predictable polling, rare writes), and *not* apply IT heuristics to OT — where "rare destination" or "low volume" can be entirely normal?
-2. **APT detection.** Can it pick up targeted, low-and-slow, Living-off-the-Land activity — native admin tools, signed LOLBins, sparse C2, dwell measured in days?
-3. **APT ↔ cybercrime discrimination.** With both signals present, can it tell them apart and *attribute* each (per-incident MITRE ATT&CK TTPs) — discrimination, not suppression? Cybercrime is the ambient foil, not a labeled scenario.
-
-**One command builds a tiered corpus.** It composes the tested pieces into one deterministic build: an [EvidenceForge](https://github.com/Cisco-Talos/EvidenceForge) benign-IT baseline → OT + IT/OT-bridge merge → adversary injection (APT and/or cybercrime foil, each remapped onto a real corpus host) → a single content `build_hash` stamped into every ground-truth bundle.
+Code: `blue_bench_generators/`. Benign-IT scenarios: `scenarios/heavy-telemetry/`.
+Adversary bundles: `data/bundles/`. Full guide:
+[blue_bench_generators/README.md](blue_bench_generators/README.md).
 
 ```bash
-python -m blue_bench_generators.merge build --tier S --out ./out/s
-python -m blue_bench_generators.merge build --tier L --out ./out/l --seed 0
-# then ingest into Elasticsearch for the MCP tools:
-python scripts/ingest_ef.py --ef-dir ./out/s --anchor-end-to-now
+# Install (python3 --version must be >= 3.11)
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+git clone --branch v1.3.2 https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
+python3 -m venv ~/ef-venv && ~/ef-venv/bin/pip install -e ~/EvidenceForge
+
+# Build the full corpus (L tier)
+export TZ=UTC
+python -m blue_bench_generators.merge build --tier L --out ./out/l
+
+# Load into Elasticsearch
+docker compose -f docker/compose.tools.yml up -d elasticsearch
+python scripts/ingest_ef.py --ef-dir ./out/l --anchor-end-to-now
 ```
 
-| Tier | Benign baseline | Generated size | Default adversary |
-| --- | --- | --- | --- |
-| S | 10 hosts × 1 day | ~165 MB | cybercrime foil |
-| M | 15 hosts × 3 days | ~660 MB | cybercrime foil |
-| L | 30 hosts × 18 days | ~7–8 GB | APT (low-and-slow) + cybercrime foil |
-
-The dwell must fit the window: the ~2 h cybercrime burst (≈7 h total footprint) fits every tier; the ~10-day APT only fits L. Override the default mapping with `--inject <incident>:<bundle_subdir>:<host>`.
-
-**RQ3 anti-giveaway gates.** When both an APT-class and a cybercrime-class adversary are present, the build runs four gates on the injected events and **fails the build** unless the corpus is non-separable on surface features and separable on behaviour — so "it's on port X" or "it beacons" can't classify, but inter-event timing and dwell can. Gate verdicts land in `corpus-manifest.yaml`. (`--no-enforce-gates` reports without failing.) See `blue_bench_generators/merge/gates.py` and `scenarios/heavy-telemetry/README.md`.
+| Tier | Use | Baseline | Size | Default adversary |
+| --- | --- | --- | --- | --- |
+| L | Full corpus | 31 hosts × 18 days | ~26 GB | APT, cybercrime foil, 6 credential/commodity attacks |
+| M | Mid-size | 16 hosts × 3 days | ~1.9 GB | cybercrime foil |
+| S | Smoke test | 11 hosts × 1 day | ~300 MB | cybercrime foil |
 
 ## Layout
 

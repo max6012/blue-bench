@@ -20,7 +20,7 @@ Scenario YAMLs: `scenarios/heavy-telemetry/`. Adversary bundles: `data/bundles/`
 
 ## Install
 
-Requires Python >= 3.11 (EvidenceForge), git, and free disk for the tier.
+Requires Python >= 3.11 (EvidenceForge), git, and ~24 GB free disk for L.
 Elasticsearch 8.x is needed for ingest (`docker/compose.tools.yml`).
 
 ```bash
@@ -42,8 +42,11 @@ python3.11 -m venv ~/ef-venv
 ## Build
 
 ```bash
+# Full corpus
+python -m blue_bench_generators.merge build --tier L --out ./out/l
+
+# Smoke test
 python -m blue_bench_generators.merge build --tier S --out ./out/s
-python -m blue_bench_generators.merge build --tier L --out ./out/l --seed 0
 ```
 
 | Flag | Meaning |
@@ -57,11 +60,11 @@ python -m blue_bench_generators.merge build --tier L --out ./out/l --seed 0
 | `--inject INCIDENT:SUBDIR:HOST` | Replace default adversaries; repeatable |
 | `--no-enforce-gates` | Report RQ3 gate results without failing |
 
-| Tier | Baseline | Size | EvidenceForge time | Default adversaries |
-| --- | --- | --- | --- | --- |
-| S | 10 hosts × 1 day | ~165 MB | ~90 s | cybercrime foil on wkst-03 |
-| M | 15 hosts × 3 days | ~660 MB | ~6 min | cybercrime foil on wkst-03 |
-| L | 30 hosts × 18 days | ~24 GB | ~70 min | APT on wkst-03, foil on wkst-07, 5 credential/commodity attacks |
+| Tier | Use | Baseline | Size | EvidenceForge time | Default adversaries |
+| --- | --- | --- | --- | --- | --- |
+| L | Full corpus | 30 hosts × 18 days | ~24 GB | ~70 min | APT on wkst-03, foil on wkst-07, 5 credential/commodity attacks |
+| M | Mid-size | 15 hosts × 3 days | — | — | cybercrime foil on wkst-03 |
+| S | Smoke test | 10 hosts × 1 day | ~290 MB | ~90 s | cybercrime foil on wkst-03 |
 
 ### Output
 
@@ -79,7 +82,7 @@ Code: `merge/gates.py`.
 
 ```bash
 docker compose -f docker/compose.tools.yml up -d elasticsearch
-python scripts/ingest_ef.py --ef-dir ./out/s --anchor-end-to-now
+python scripts/ingest_ef.py --ef-dir ./out/l --anchor-end-to-now
 ```
 
 Flags: `--es-url`, `--anchor-end-to-now`, `--ot-sample-rate`, `-v`.

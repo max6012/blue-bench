@@ -97,19 +97,19 @@ pip install -e ".[dev]"
 git clone https://github.com/Cisco-Talos/EvidenceForge ~/EvidenceForge
 python3.11 -m venv ~/ef-venv && ~/ef-venv/bin/pip install -e ~/EvidenceForge
 
-# Build a tier
+# Build the full corpus (L tier)
 export TZ=UTC
-python -m blue_bench_generators.merge build --tier S --out ./out/s
+python -m blue_bench_generators.merge build --tier L --out ./out/l
 
 # Load into Elasticsearch
-python scripts/ingest_ef.py --ef-dir ./out/s --anchor-end-to-now
+python scripts/ingest_ef.py --ef-dir ./out/l --anchor-end-to-now
 ```
 
-| Tier | Baseline | Size | Default adversary |
-| --- | --- | --- | --- |
-| S | 10 hosts × 1 day | ~165 MB | cybercrime foil |
-| M | 15 hosts × 3 days | ~660 MB | cybercrime foil |
-| L | 30 hosts × 18 days | ~24 GB | APT, cybercrime foil, 5 credential/commodity attacks |
+| Tier | Use | Baseline | Size | Default adversary |
+| --- | --- | --- | --- | --- |
+| L | Full corpus | 30 hosts × 18 days | ~24 GB | APT, cybercrime foil, 5 credential/commodity attacks |
+| M | Mid-size | 15 hosts × 3 days | — | cybercrime foil |
+| S | Smoke test | 10 hosts × 1 day | ~290 MB | cybercrime foil |
 
 ## Layout
 
